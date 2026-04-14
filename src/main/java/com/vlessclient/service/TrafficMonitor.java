@@ -34,6 +34,7 @@ public class TrafficMonitor {
     private final LongProperty totalDownload = new SimpleLongProperty(0);
 
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final Object lifecycleLock = new Object();
     private volatile Thread sseThread;
 
     public ReadOnlyLongProperty uploadSpeedProperty() {
@@ -53,32 +54,47 @@ public class TrafficMonitor {
     }
 
     public void start(int clashApiPort) {
-        if (running.getAndSet(true)) {
-            log.warn("TrafficMonitor is already running");
-            return;
-        }
-
-        sseThread = Thread.ofVirtual().name("traffic-monitor").start(() -> {
-            log.info("TrafficMonitor started, connecting to Clash API on port {}", clashApiPort);
-            try {
-                connectAndStream(clashApiPort);
-            } catch (Exception e) {
-                if (running.get()) {
-                    log.error("TrafficMonitor SSE stream failed", e);
-                }
-            } finally {
-                running.set(false);
-                log.info("TrafficMonitor stopped");
+        synchronized (lifecycleLock) {
+            if (running.getAndSet(true)) {
+                log.warn("TrafficMonitor is already running");
+                return;
             }
-        });
+
+            sseThread = Thread.ofVirtual().name("traffic-monitor").start(() -> {
+                log.info("TrafficMonitor started, connecting to Clash API on port {}", clashApiPort);
+                try {
+                    connectAndStream(clashApiPort);
+                } catch (Exception e) {
+                    if (running.get()) {
+                        log.error("TrafficMonitor SSE stream failed", e);
+                    }
+                } finally {
+                    running.set(false);
+                    log.info("TrafficMonitor stopped");
+                }
+            });
+        }
     }
 
     public void stop() {
-        running.set(false);
-        Thread thread = sseThread;
+        Thread thread;
+        synchronized (lifecycleLock) {
+            if (!running.getAndSet(false)) {
+                // Not running; nothing to do.
+                return;
+            }
+            thread = sseThread;
+            sseThread = null;
+        }
         if (thread != null) {
             thread.interrupt();
-            sseThread = null;
+            try {
+                // Wait for the SSE thread to finish before returning so callers
+                // can rely on stop() being synchronous.
+                thread.join(Duration.ofSeconds(2).toMillis());
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
         }
         Platform.runLater(() -> {
             uploadSpeed.set(0);
@@ -124,6 +140,11 @@ public class TrafficMonitor {
             long down = node.path("down").asLong(0);
 
             Platform.runLater(() -> {
+                // Safety note: the read-modify-write on totalUpload/totalDownload is
+                // not atomic in isolation, but all mutations to these JavaFX
+                // properties are funneled through Platform.runLater, so they execute
+                // serially on the JavaFX application thread. No additional
+                // synchronization is required.
                 uploadSpeed.set(up);
                 downloadSpeed.set(down);
                 totalUpload.set(totalUpload.get() + up);

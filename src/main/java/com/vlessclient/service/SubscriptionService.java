@@ -40,6 +40,7 @@ public class SubscriptionService {
     private final ConfigStore configStore;
     private final ShareLinkParser shareLinkParser;
     private final HttpClient httpClient;
+    private final Object lifecycleLock = new Object();
     private ScheduledExecutorService scheduler;
 
     public SubscriptionService(ConfigStore configStore, ShareLinkParser shareLinkParser) {
@@ -120,24 +121,45 @@ public class SubscriptionService {
         }
     }
 
-    public synchronized void startAutoRefresh() {
-        if (scheduler != null && !scheduler.isShutdown()) {
-            return;
+    public void startAutoRefresh() {
+        synchronized (lifecycleLock) {
+            if (scheduler != null && !scheduler.isShutdown()) {
+                return;
+            }
+            scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "subscription-auto-refresh");
+                t.setDaemon(true);
+                return t;
+            });
+            scheduler.scheduleAtFixedRate(this::refreshAll, 1, 1, TimeUnit.HOURS);
+            log.info("Started subscription auto-refresh");
         }
-        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "subscription-auto-refresh");
-            t.setDaemon(true);
-            return t;
-        });
-        scheduler.scheduleAtFixedRate(this::refreshAll, 1, 1, TimeUnit.HOURS);
-        log.info("Started subscription auto-refresh");
     }
 
-    public synchronized void stopAutoRefresh() {
-        if (scheduler != null && !scheduler.isShutdown()) {
-            scheduler.shutdown();
-            log.info("Stopped subscription auto-refresh");
+    public void stopAutoRefresh() {
+        ScheduledExecutorService toShutdown;
+        synchronized (lifecycleLock) {
+            if (scheduler == null || scheduler.isShutdown()) {
+                return;
+            }
+            toShutdown = scheduler;
+            scheduler = null;
         }
+        // shutdown() lets any in-flight refresh run to completion. We then wait
+        // for the scheduler thread to finish before returning so callers can
+        // rely on stopAutoRefresh() being synchronous with respect to any
+        // currently-executing refresh.
+        toShutdown.shutdown();
+        try {
+            if (!toShutdown.awaitTermination(60, TimeUnit.SECONDS)) {
+                log.warn("Subscription auto-refresh did not terminate within timeout; forcing shutdown");
+                toShutdown.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            toShutdown.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        log.info("Stopped subscription auto-refresh");
     }
 
     String fetchContent(String url) throws IOException, InterruptedException {

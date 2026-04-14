@@ -55,8 +55,22 @@ public class LatencyTester {
     }
 
     private long measureLatency(ServerConfig server) {
+        if (server == null) {
+            log.warn("Latency test skipped: server is null");
+            return -1;
+        }
         String address = server.getAddress();
         int port = server.getPort();
+        if (address == null || address.isBlank()) {
+            log.warn("Latency test skipped for server '{}': address is null or blank",
+                    server.getName());
+            return -1;
+        }
+        if (port < 1 || port > 65535) {
+            log.warn("Latency test skipped for server {} ({}): invalid port {}",
+                    server.getName(), address, port);
+            return -1;
+        }
         long start = System.nanoTime();
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(address, port), CONNECT_TIMEOUT_MS);
@@ -64,7 +78,8 @@ public class LatencyTester {
             log.debug("Latency to {}:{} = {} ms", address, port, elapsed);
             return elapsed;
         } catch (Exception e) {
-            log.debug("Latency test failed for {}:{}: {}", address, port, e.getMessage());
+            log.debug("Latency test failed for server {} ({}:{}): {}",
+                    server.getName(), address, port, e.getMessage());
             return -1;
         }
     }

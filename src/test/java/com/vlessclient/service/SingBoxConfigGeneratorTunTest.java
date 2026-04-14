@@ -159,4 +159,59 @@ class SingBoxConfigGeneratorTunTest {
 
         assertThat(root.has("dns")).isFalse();
     }
+
+    @Test
+    void tunMode_customDnsServersAreReflectedInConfig() throws Exception {
+        AppSettings settings = tunSettings();
+        settings.setProxyDns("https://8.8.8.8/dns-query");
+        settings.setDirectDns("https://9.9.9.9/dns-query");
+        settings.setDnsStrategy("prefer_ipv6");
+
+        String json = generator.generate(createVlessServer(), settings);
+        JsonNode dns = parse(json).get("dns");
+
+        assertThat(dns.get("servers").get(0).get("address").asText())
+                .isEqualTo("https://8.8.8.8/dns-query");
+        assertThat(dns.get("servers").get(1).get("address").asText())
+                .isEqualTo("https://9.9.9.9/dns-query");
+        assertThat(dns.get("strategy").asText()).isEqualTo("prefer_ipv6");
+    }
+
+    @Test
+    void tunMode_customTunInterfaceNameIsReflectedInConfig() throws Exception {
+        AppSettings settings = tunSettings();
+        settings.setTunInterfaceName("utun42");
+
+        String json = generator.generate(createVlessServer(), settings);
+        JsonNode inbounds = parse(json).get("inbounds");
+
+        JsonNode tun = null;
+        for (JsonNode inbound : inbounds) {
+            if ("tun".equals(inbound.get("type").asText())) {
+                tun = inbound;
+                break;
+            }
+        }
+        assertThat(tun).isNotNull();
+        assertThat(tun.get("interface_name").asText()).isEqualTo("utun42");
+    }
+
+    @Test
+    void tunMode_customTunIpv4AddressIsReflectedInConfig() throws Exception {
+        AppSettings settings = tunSettings();
+        settings.setTunIpv4Address("10.10.0.1/24");
+
+        String json = generator.generate(createVlessServer(), settings);
+        JsonNode inbounds = parse(json).get("inbounds");
+
+        JsonNode tun = null;
+        for (JsonNode inbound : inbounds) {
+            if ("tun".equals(inbound.get("type").asText())) {
+                tun = inbound;
+                break;
+            }
+        }
+        assertThat(tun).isNotNull();
+        assertThat(tun.get("inet4_address").asText()).isEqualTo("10.10.0.1/24");
+    }
 }

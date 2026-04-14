@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class NetworkManagerTest {
 
@@ -80,6 +81,46 @@ class NetworkManagerTest {
 
         // HTTPS uses httpPort
         assertThat(executedCommands.get(4).get(4)).isEqualTo("8080");
+    }
+
+    @Test
+    void setSystemProxy_nullHost_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> networkManager.setSystemProxy(null, 1080, 1081))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("host");
+        assertThat(executedCommands).isEmpty();
+    }
+
+    @Test
+    void setSystemProxy_blankHost_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> networkManager.setSystemProxy("   ", 1080, 1081))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("host");
+        assertThat(executedCommands).isEmpty();
+    }
+
+    @Test
+    void setSystemProxy_invalidSocksPortZero_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> networkManager.setSystemProxy("127.0.0.1", 0, 1081))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SOCKS port");
+        assertThat(executedCommands).isEmpty();
+    }
+
+    @Test
+    void setSystemProxy_invalidSocksPortTooLarge_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> networkManager.setSystemProxy("127.0.0.1", 70000, 1081))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SOCKS port");
+        assertThat(executedCommands).isEmpty();
+    }
+
+    @Test
+    void setSystemProxy_invalidHttpPort_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> networkManager.setSystemProxy("127.0.0.1", 1080, -1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("HTTP port");
+        assertThat(executedCommands).isEmpty();
     }
 
     @Test

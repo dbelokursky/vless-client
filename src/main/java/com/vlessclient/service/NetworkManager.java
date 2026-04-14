@@ -29,7 +29,22 @@ public class NetworkManager {
     }
 
     public void setSystemProxy(String host, int socksPort, int httpPort) {
+        validateProxyArgs(host, socksPort, httpPort);
         setProxyForService("Wi-Fi", host, socksPort, httpPort);
+    }
+
+    private static void validateProxyArgs(String host, int socksPort, int httpPort) {
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("Proxy host must not be null or blank");
+        }
+        if (socksPort < 1 || socksPort > 65535) {
+            throw new IllegalArgumentException(
+                    "SOCKS port must be in range 1-65535, got: " + socksPort);
+        }
+        if (httpPort < 1 || httpPort > 65535) {
+            throw new IllegalArgumentException(
+                    "HTTP port must be in range 1-65535, got: " + httpPort);
+        }
     }
 
     public void clearSystemProxy() {
@@ -76,6 +91,7 @@ public class NetworkManager {
     }
 
     public void setProxyForAllServices(String host, int socksPort, int httpPort) {
+        validateProxyArgs(host, socksPort, httpPort);
         List<String> services = getNetworkServices();
         log.info("Setting proxy for all {} network services: {}:{} (SOCKS), {}:{} (HTTP)",
                 services.size(), host, socksPort, host, httpPort);

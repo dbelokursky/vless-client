@@ -14,10 +14,12 @@ import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.fxml.FXML;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
+import javafx.scene.control.Tooltip;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import org.slf4j.Logger;
@@ -107,6 +109,8 @@ public class DashboardViewController {
             connectionState.addListener((obs, oldState, newState) -> updateUI(newState));
             updateUI(ConnectionState.DISCONNECTED);
         }
+
+        refreshConnectButtonAvailability();
     }
 
     private void initProxyModeCombo() {
@@ -205,8 +209,28 @@ public class DashboardViewController {
 
         if (current == ConnectionState.CONNECTED || current == ConnectionState.CONNECTING) {
             disconnect();
-        } else {
-            connect();
+            return;
+        }
+
+        if (singBoxEngine == null) {
+            showError("sing-box binary not found",
+                    "sing-box binary not found. Please install sing-box or reinstall the app.");
+            return;
+        }
+
+        connect();
+    }
+
+    private void showError(String header, String message) {
+        log.error("{}: {}", header, message);
+        try {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText(header);
+            alert.setContentText(message);
+            alert.showAndWait();
+        } catch (Exception e) {
+            log.error("Failed to show error dialog", e);
         }
     }
 
@@ -268,12 +292,14 @@ public class DashboardViewController {
         if (activeServer == null) {
             log.warn("No active server selected");
             statusLabel.setText("No server selected");
+            showError("No active server",
+                    "No server is selected. Please add a server and mark it active.");
             return;
         }
 
         if (singBoxEngine == null) {
-            log.error("sing-box binary not found; cannot connect");
-            statusLabel.setText("sing-box binary not found");
+            showError("sing-box binary not found",
+                    "sing-box binary not found. Please install sing-box or reinstall the app.");
             return;
         }
 
@@ -282,11 +308,21 @@ public class DashboardViewController {
         try {
             SingBoxConfigGenerator configGenerator = ServiceLocator.get(SingBoxConfigGenerator.class);
             AppSettings settings = ServiceLocator.get(AppSettings.class);
+            if (configGenerator == null || settings == null) {
+                showError("Configuration unavailable",
+                        "Required services are not available. Please restart the app.");
+                return;
+            }
             String configJson = configGenerator.generate(activeServer, settings);
             singBoxEngine.start(configJson, settings.getProxyMode());
+        } catch (IllegalArgumentException e) {
+            log.error("Service unavailable during connect", e);
+            showError("Service unavailable",
+                    "Required services are not available: " + e.getMessage());
         } catch (IOException e) {
             log.error("Failed to start sing-box", e);
             statusLabel.setText("Failed to start: " + e.getMessage());
+            showError("Failed to start sing-box", e.getMessage());
         } catch (IllegalStateException e) {
             log.warn("sing-box already running: {}", e.getMessage());
         }
@@ -305,12 +341,35 @@ public class DashboardViewController {
     private ServerConfig findActiveServer() {
         try {
             ConfigStore configStore = ServiceLocator.get(ConfigStore.class);
-            Optional<ServerConfig> active = configStore.getServers().stream()
+            if (configStore == null) {
+                return activeServer;
+            }
+            List<ServerConfig> servers = configStore.getServers();
+            if (servers == null || servers.isEmpty()) {
+                return null;
+            }
+            Optional<ServerConfig> active = servers.stream()
                     .filter(ServerConfig::isActive)
                     .findFirst();
             return active.orElse(null);
         } catch (IllegalArgumentException e) {
+            log.warn("ConfigStore not available: {}", e.getMessage());
             return activeServer;
+        }
+    }
+
+    private void refreshConnectButtonAvailability() {
+        try {
+            ConfigStore configStore = ServiceLocator.get(ConfigStore.class);
+            List<ServerConfig> servers = configStore != null ? configStore.getServers() : null;
+            if (servers == null || servers.isEmpty()) {
+                connectButton.setDisable(true);
+                connectButton.setTooltip(new Tooltip("No servers configured"));
+            } else {
+                connectButton.setTooltip(null);
+            }
+        } catch (IllegalArgumentException e) {
+            log.debug("ConfigStore not available while refreshing connect button");
         }
     }
 
@@ -362,6 +421,10 @@ public class DashboardViewController {
             serverNameLabel.setText(activeServer.getName());
         } else {
             serverNameLabel.setText("No server selected");
+        }
+
+        if (state != ConnectionState.CONNECTED && state != ConnectionState.CONNECTING) {
+            refreshConnectButtonAvailability();
         }
     }
 

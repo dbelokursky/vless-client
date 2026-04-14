@@ -13,11 +13,15 @@ import com.vlessclient.model.TlsConfig;
 import com.vlessclient.model.TransportConfig;
 import com.vlessclient.model.TransportType;
 import com.vlessclient.model.ProxyMode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
 
 public class SingBoxConfigGenerator {
+
+    private static final Logger log = LoggerFactory.getLogger(SingBoxConfigGenerator.class);
 
     private final ObjectMapper mapper;
 
@@ -37,7 +41,7 @@ public class SingBoxConfigGenerator {
         root.set("log", buildLog());
 
         if (settings.getProxyMode() == ProxyMode.TUN) {
-            root.set("dns", buildDns());
+            root.set("dns", buildDns(settings));
         }
 
         root.set("inbounds", buildInbounds(settings));
@@ -63,20 +67,20 @@ public class SingBoxConfigGenerator {
         return log;
     }
 
-    private ObjectNode buildDns() {
+    private ObjectNode buildDns(AppSettings settings) {
         ObjectNode dns = mapper.createObjectNode();
 
         ArrayNode servers = mapper.createArrayNode();
 
         ObjectNode proxyDns = mapper.createObjectNode();
         proxyDns.put("tag", "proxy-dns");
-        proxyDns.put("address", "https://1.1.1.1/dns-query");
+        proxyDns.put("address", settings.getProxyDns());
         proxyDns.put("detour", "proxy");
         servers.add(proxyDns);
 
         ObjectNode directDns = mapper.createObjectNode();
         directDns.put("tag", "direct-dns");
-        directDns.put("address", "https://223.5.5.5/dns-query");
+        directDns.put("address", settings.getDirectDns());
         directDns.put("detour", "direct");
         servers.add(directDns);
 
@@ -91,7 +95,7 @@ public class SingBoxConfigGenerator {
         rules.add(rule);
         dns.set("rules", rules);
 
-        dns.put("strategy", "prefer_ipv4");
+        dns.put("strategy", settings.getDnsStrategy());
 
         return dns;
     }
@@ -103,8 +107,8 @@ public class SingBoxConfigGenerator {
             ObjectNode tun = mapper.createObjectNode();
             tun.put("type", "tun");
             tun.put("tag", "tun-in");
-            tun.put("interface_name", "utun99");
-            tun.put("inet4_address", "172.19.0.1/30");
+            tun.put("interface_name", settings.getTunInterfaceName());
+            tun.put("inet4_address", settings.getTunIpv4Address());
             tun.put("auto_route", true);
             tun.put("strict_route", true);
             tun.put("stack", "system");
@@ -246,19 +250,33 @@ public class SingBoxConfigGenerator {
             outbound.put("peer_public_key", server.getEncryption());
         }
 
-        if (server.getFlow() != null && !server.getFlow().isEmpty()) {
+        if (server.getFlow() != null && !server.getFlow().isBlank()) {
             ArrayNode localAddress = mapper.createArrayNode();
-            localAddress.add(server.getFlow());
+            localAddress.add(server.getFlow().trim());
             outbound.set("local_address", localAddress);
         }
 
         if (server.getTls() != null && server.getTls().getServerName() != null
-                && !server.getTls().getServerName().isEmpty()) {
-            ArrayNode reserved = mapper.createArrayNode();
-            for (String part : server.getTls().getServerName().split(",")) {
-                reserved.add(Integer.parseInt(part.trim()));
+                && !server.getTls().getServerName().isBlank()) {
+            String[] parts = server.getTls().getServerName().split(",");
+            if (parts.length > 0) {
+                ArrayNode reserved = mapper.createArrayNode();
+                for (String part : parts) {
+                    String trimmed = part.trim();
+                    if (trimmed.isEmpty()) {
+                        continue;
+                    }
+                    try {
+                        reserved.add(Integer.parseInt(trimmed));
+                    } catch (NumberFormatException e) {
+                        log.warn("Skipping invalid reserved byte value '{}' for WireGuard server {}",
+                                trimmed, server.getAddress());
+                    }
+                }
+                if (reserved.size() > 0) {
+                    outbound.set("reserved", reserved);
+                }
             }
-            outbound.set("reserved", reserved);
         }
 
         return outbound;

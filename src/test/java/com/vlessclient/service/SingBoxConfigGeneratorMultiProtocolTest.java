@@ -323,6 +323,57 @@ class SingBoxConfigGeneratorMultiProtocolTest {
     }
 
     @Test
+    void wireguard_invalidReservedBytes_doesNotCrash() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setProtocol(Protocol.WIREGUARD);
+        server.setAddress("wg.example.com");
+        server.setPort(51820);
+        server.setUuid("wg-private-key");
+        // Mix of valid and invalid integers — invalid values must be skipped gracefully
+        server.getTls().setServerName("1,abc,2,,3,xyz");
+
+        JsonNode proxy = proxyOutbound(server);
+
+        assertThat(proxy.get("type").asText()).isEqualTo("wireguard");
+        JsonNode reserved = proxy.get("reserved");
+        assertThat(reserved).isNotNull();
+        assertThat(reserved.isArray()).isTrue();
+        assertThat(reserved.size()).isEqualTo(3);
+        assertThat(reserved.get(0).asInt()).isEqualTo(1);
+        assertThat(reserved.get(1).asInt()).isEqualTo(2);
+        assertThat(reserved.get(2).asInt()).isEqualTo(3);
+    }
+
+    @Test
+    void wireguard_allInvalidReservedBytes_omitsReservedField() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setProtocol(Protocol.WIREGUARD);
+        server.setAddress("wg.example.com");
+        server.setPort(51820);
+        server.setUuid("wg-private-key");
+        server.getTls().setServerName("abc,def,ghi");
+
+        JsonNode proxy = proxyOutbound(server);
+
+        assertThat(proxy.get("type").asText()).isEqualTo("wireguard");
+        assertThat(proxy.has("reserved")).isFalse();
+    }
+
+    @Test
+    void wireguard_blankFlow_omitsLocalAddress() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setProtocol(Protocol.WIREGUARD);
+        server.setAddress("wg.example.com");
+        server.setPort(51820);
+        server.setUuid("wg-private-key");
+        server.setFlow("   ");
+
+        JsonNode proxy = proxyOutbound(server);
+
+        assertThat(proxy.has("local_address")).isFalse();
+    }
+
+    @Test
     void wireguard_noTlsSection() throws Exception {
         ServerConfig server = new ServerConfig();
         server.setProtocol(Protocol.WIREGUARD);

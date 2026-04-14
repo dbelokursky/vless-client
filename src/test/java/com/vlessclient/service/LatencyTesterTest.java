@@ -67,6 +67,50 @@ class LatencyTesterTest {
     }
 
     @Test
+    void testSingle_nullAddress_returnsMinusOne() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setAddress(null);
+        server.setPort(443);
+
+        long result = tester.testSingle(server).get(5, TimeUnit.SECONDS);
+
+        assertThat(result).isEqualTo(-1);
+    }
+
+    @Test
+    void testSingle_blankAddress_returnsMinusOne() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setAddress("   ");
+        server.setPort(443);
+
+        long result = tester.testSingle(server).get(5, TimeUnit.SECONDS);
+
+        assertThat(result).isEqualTo(-1);
+    }
+
+    @Test
+    void testSingle_invalidPortZero_returnsMinusOne() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setAddress("example.com");
+        server.setPort(0);
+
+        long result = tester.testSingle(server).get(5, TimeUnit.SECONDS);
+
+        assertThat(result).isEqualTo(-1);
+    }
+
+    @Test
+    void testSingle_invalidPortTooLarge_returnsMinusOne() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setAddress("example.com");
+        server.setPort(70000);
+
+        long result = tester.testSingle(server).get(5, TimeUnit.SECONDS);
+
+        assertThat(result).isEqualTo(-1);
+    }
+
+    @Test
     void testAll_multipleServers_returnsResultForEach() throws Exception {
         ServerConfig server1 = new ServerConfig();
         server1.setAddress("10.255.255.1");

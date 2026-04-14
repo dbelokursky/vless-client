@@ -40,6 +40,11 @@ public class SettingsViewController {
     @FXML private Label singboxVersionLabel;
     @FXML private Label appVersionValue;
     @FXML private Label singboxVersionValue;
+    @FXML private Label advancedLabel;
+    @FXML private Label proxyDnsLabel;
+    @FXML private Label directDnsLabel;
+    @FXML private Label tunInterfaceNameLabel;
+    @FXML private Label tunIpv4Label;
 
     @FXML private ComboBox<String> themeCombo;
     @FXML private ComboBox<String> languageCombo;
@@ -47,6 +52,10 @@ public class SettingsViewController {
     @FXML private TextField socksPortField;
     @FXML private TextField httpPortField;
     @FXML private ComboBox<ProxyMode> proxyModeCombo;
+    @FXML private TextField proxyDnsField;
+    @FXML private TextField directDnsField;
+    @FXML private TextField tunInterfaceNameField;
+    @FXML private TextField tunIpv4Field;
 
     private ConfigStore configStore;
     private ThemeManager themeManager;
@@ -72,8 +81,35 @@ public class SettingsViewController {
         initLanguageCombo(settings);
         initConnectionSettings(settings);
         initProxyModeCombo(settings);
+        initAdvancedSettings(settings);
         initAboutSection();
         bindLabels();
+    }
+
+    private void initAdvancedSettings(AppSettings settings) {
+        proxyDnsField.setText(settings.getProxyDns());
+        proxyDnsField.textProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setProxyDns(newVal == null ? "" : newVal.trim());
+            saveSettings(settings);
+        });
+
+        directDnsField.setText(settings.getDirectDns());
+        directDnsField.textProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setDirectDns(newVal == null ? "" : newVal.trim());
+            saveSettings(settings);
+        });
+
+        tunInterfaceNameField.setText(settings.getTunInterfaceName());
+        tunInterfaceNameField.textProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setTunInterfaceName(newVal == null ? "" : newVal.trim());
+            saveSettings(settings);
+        });
+
+        tunIpv4Field.setText(settings.getTunIpv4Address());
+        tunIpv4Field.textProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setTunIpv4Address(newVal == null ? "" : newVal.trim());
+            saveSettings(settings);
+        });
     }
 
     private void initThemeCombo(AppSettings settings) {
@@ -220,6 +256,11 @@ public class SettingsViewController {
         aboutLabel.textProperty().bind(I18n.binding("settings.about"));
         appVersionLabel.textProperty().bind(I18n.binding("settings.app.version"));
         singboxVersionLabel.textProperty().bind(I18n.binding("settings.singbox.version"));
+        advancedLabel.textProperty().bind(I18n.binding("settings.advanced"));
+        proxyDnsLabel.textProperty().bind(I18n.binding("settings.proxy.dns"));
+        directDnsLabel.textProperty().bind(I18n.binding("settings.direct.dns"));
+        tunInterfaceNameLabel.textProperty().bind(I18n.binding("settings.tun.interface"));
+        tunIpv4Label.textProperty().bind(I18n.binding("settings.tun.ipv4"));
     }
 
     private void refreshLabels() {

@@ -75,6 +75,41 @@
             </HBox>
         </VBox>
 
+        <!-- Advanced Section -->
+        <VBox spacing="12" styleClass="card">
+            <padding>
+                <Insets top="16" right="20" bottom="16" left="20"/>
+            </padding>
+
+            <Label fx:id="advancedLabel" text="Advanced" styleClass="form-section-title"/>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="proxyDnsLabel" text="Proxy DNS" styleClass="form-label" prefWidth="160"/>
+                <TextField fx:id="proxyDnsField" styleClass="form-field" prefWidth="280"
+                           promptText="https://1.1.1.1/dns-query"/>
+            </HBox>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="directDnsLabel" text="Direct DNS" styleClass="form-label" prefWidth="160"/>
+                <TextField fx:id="directDnsField" styleClass="form-field" prefWidth="280"
+                           promptText="https://223.5.5.5/dns-query"/>
+            </HBox>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="tunInterfaceNameLabel" text="TUN Interface Name"
+                       styleClass="form-label" prefWidth="160"/>
+                <TextField fx:id="tunInterfaceNameField" styleClass="form-field" prefWidth="200"
+                           promptText="utun99"/>
+            </HBox>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="tunIpv4Label" text="TUN IPv4 Address"
+                       styleClass="form-label" prefWidth="160"/>
+                <TextField fx:id="tunIpv4Field" styleClass="form-field" prefWidth="200"
+                           promptText="172.19.0.1/30"/>
+            </HBox>
+        </VBox>
+
         <!-- About Section -->
         <VBox spacing="8" styleClass="card">
             <padding>

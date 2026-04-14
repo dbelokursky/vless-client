@@ -30,6 +30,21 @@ public class AppSettings {
     @JsonProperty("proxy_mode")
     private ProxyMode proxyMode = ProxyMode.SYSTEM_PROXY;
 
+    @JsonProperty("proxy_dns")
+    private String proxyDns = "https://1.1.1.1/dns-query";
+
+    @JsonProperty("direct_dns")
+    private String directDns = "https://223.5.5.5/dns-query";
+
+    @JsonProperty("dns_strategy")
+    private String dnsStrategy = "prefer_ipv4";
+
+    @JsonProperty("tun_interface_name")
+    private String tunInterfaceName = "utun99";
+
+    @JsonProperty("tun_ipv4_address")
+    private String tunIpv4Address = "172.19.0.1/30";
+
     public AppSettings() {
     }
 
@@ -95,5 +110,45 @@ public class AppSettings {
 
     public void setProxyMode(ProxyMode proxyMode) {
         this.proxyMode = proxyMode;
+    }
+
+    public String getProxyDns() {
+        return proxyDns;
+    }
+
+    public void setProxyDns(String proxyDns) {
+        this.proxyDns = proxyDns;
+    }
+
+    public String getDirectDns() {
+        return directDns;
+    }
+
+    public void setDirectDns(String directDns) {
+        this.directDns = directDns;
+    }
+
+    public String getDnsStrategy() {
+        return dnsStrategy;
+    }
+
+    public void setDnsStrategy(String dnsStrategy) {
+        this.dnsStrategy = dnsStrategy;
+    }
+
+    public String getTunInterfaceName() {
+        return tunInterfaceName;
+    }
+
+    public void setTunInterfaceName(String tunInterfaceName) {
+        this.tunInterfaceName = tunInterfaceName;
+    }
+
+    public String getTunIpv4Address() {
+        return tunIpv4Address;
+    }
+
+    public void setTunIpv4Address(String tunIpv4Address) {
+        this.tunIpv4Address = tunIpv4Address;
     }
 }
