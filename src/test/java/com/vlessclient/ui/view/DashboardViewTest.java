@@ -8,17 +8,14 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.testfx.framework.junit5.ApplicationTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Smoke tests for DashboardView. Disabled by default — see MainViewTest
- * for rationale (JavaFX 25 preview + TestFX compatibility).
+ * Smoke tests for DashboardView using TestFX with Monocle headless rendering.
  */
-@Disabled("Requires display / JavaFX 25 preview compatibility")
 public class DashboardViewTest extends ApplicationTest {
 
     @BeforeAll

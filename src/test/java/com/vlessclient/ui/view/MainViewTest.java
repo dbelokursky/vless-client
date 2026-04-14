@@ -7,7 +7,6 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.testfx.framework.junit5.ApplicationTest;
 
@@ -18,7 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * with --enable-preview has known compatibility issues. Skeleton kept for
  * future enablement.
  */
-@Disabled("Requires display / JavaFX 25 preview compatibility")
 public class MainViewTest extends ApplicationTest {
 
     @BeforeAll
