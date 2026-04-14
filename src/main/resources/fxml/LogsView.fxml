@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.Priority?>
+<?import javafx.scene.layout.Region?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.vlessclient.ui.view.LogsViewController"
+      spacing="12">
+
+    <!-- Header -->
+    <Label text="Logs" styleClass="view-title"/>
+
+    <!-- Toolbar -->
+    <HBox spacing="12" alignment="CENTER_LEFT" styleClass="logs-toolbar">
+        <padding>
+            <Insets top="4" bottom="4"/>
+        </padding>
+
+        <Label text="Level:" styleClass="form-label"/>
+        <ComboBox fx:id="logLevelFilter" prefWidth="100" styleClass="combo-box"/>
+
+        <TextField fx:id="searchField" promptText="Search logs..." prefWidth="220"
+                   styleClass="form-field"/>
+
+        <Region HBox.hgrow="ALWAYS"/>
+
+        <CheckBox fx:id="autoScrollCheckBox" text="Auto-scroll" selected="true"
+                  styleClass="form-checkbox"/>
+
+        <Button fx:id="clearButton" text="Clear" styleClass="small-button"
+                onAction="#onClearClicked"/>
+    </HBox>
+
+    <!-- Log Lines -->
+    <ListView fx:id="logListView" styleClass="log-list-view" VBox.vgrow="ALWAYS"/>
+</VBox>

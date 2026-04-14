@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.Priority?>
+<?import javafx.scene.layout.Region?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.vlessclient.ui.view.RoutingViewController"
+      spacing="16">
+
+    <!-- Header -->
+    <HBox alignment="CENTER_LEFT" spacing="12">
+        <Label text="Routing" styleClass="view-title"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Button fx:id="downloadGeodataButton" text="Download Geodata" styleClass="secondary-button"
+                onAction="#onDownloadGeodataClicked"/>
+    </HBox>
+
+    <!-- Preset selector -->
+    <HBox alignment="CENTER_LEFT" spacing="12">
+        <Label text="Preset:" styleClass="section-title"/>
+        <ComboBox fx:id="presetCombo" prefWidth="200"/>
+    </HBox>
+
+    <!-- Geodata status -->
+    <Label fx:id="geodataStatusLabel" text="" styleClass="server-address"/>
+
+    <!-- Custom rules section (visible only when preset is Custom) -->
+    <VBox fx:id="customRulesSection" spacing="8" VBox.vgrow="ALWAYS" managed="false" visible="false">
+        <HBox alignment="CENTER_LEFT" spacing="12">
+            <Label text="Custom Rules" styleClass="section-title"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button fx:id="addRuleButton" text="+ Add Rule" styleClass="primary-button"
+                    onAction="#onAddRuleClicked"/>
+        </HBox>
+
+        <ListView fx:id="rulesListView" styleClass="server-list" VBox.vgrow="ALWAYS"/>
+
+        <!-- Empty state -->
+        <VBox fx:id="emptyState" styleClass="empty-state" spacing="8" alignment="CENTER"
+              VBox.vgrow="ALWAYS" managed="true" visible="true">
+            <Label text="No custom rules" styleClass="empty-state-title"/>
+            <Label text="Click 'Add Rule' to create routing rules"
+                   styleClass="empty-state-hint"/>
+        </VBox>
+    </VBox>
+</VBox>

@@ -1,0 +1,168 @@
+package com.vlessclient.service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import javafx.application.Platform;
+import javafx.beans.property.LongProperty;
+import javafx.beans.property.ReadOnlyLongProperty;
+import javafx.beans.property.SimpleLongProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class TrafficMonitor {
+
+    private static final Logger log = LoggerFactory.getLogger(TrafficMonitor.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    private static final long KB = 1024L;
+    private static final long MB = 1024L * 1024L;
+    private static final long GB = 1024L * 1024L * 1024L;
+
+    private final LongProperty uploadSpeed = new SimpleLongProperty(0);
+    private final LongProperty downloadSpeed = new SimpleLongProperty(0);
+    private final LongProperty totalUpload = new SimpleLongProperty(0);
+    private final LongProperty totalDownload = new SimpleLongProperty(0);
+
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private volatile Thread sseThread;
+
+    public ReadOnlyLongProperty uploadSpeedProperty() {
+        return uploadSpeed;
+    }
+
+    public ReadOnlyLongProperty downloadSpeedProperty() {
+        return downloadSpeed;
+    }
+
+    public ReadOnlyLongProperty totalUploadProperty() {
+        return totalUpload;
+    }
+
+    public ReadOnlyLongProperty totalDownloadProperty() {
+        return totalDownload;
+    }
+
+    public void start(int clashApiPort) {
+        if (running.getAndSet(true)) {
+            log.warn("TrafficMonitor is already running");
+            return;
+        }
+
+        sseThread = Thread.ofVirtual().name("traffic-monitor").start(() -> {
+            log.info("TrafficMonitor started, connecting to Clash API on port {}", clashApiPort);
+            try {
+                connectAndStream(clashApiPort);
+            } catch (Exception e) {
+                if (running.get()) {
+                    log.error("TrafficMonitor SSE stream failed", e);
+                }
+            } finally {
+                running.set(false);
+                log.info("TrafficMonitor stopped");
+            }
+        });
+    }
+
+    public void stop() {
+        running.set(false);
+        Thread thread = sseThread;
+        if (thread != null) {
+            thread.interrupt();
+            sseThread = null;
+        }
+        Platform.runLater(() -> {
+            uploadSpeed.set(0);
+            downloadSpeed.set(0);
+        });
+        log.info("TrafficMonitor stop requested");
+    }
+
+    private void connectAndStream(int clashApiPort) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + clashApiPort + "/traffic"))
+                .GET()
+                .build();
+
+        HttpResponse<java.io.InputStream> response = client.send(request,
+                HttpResponse.BodyHandlers.ofInputStream());
+
+        if (response.statusCode() != 200) {
+            log.error("Clash API returned status {}", response.statusCode());
+            return;
+        }
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(response.body()))) {
+            String line;
+            while (running.get() && (line = reader.readLine()) != null) {
+                processTrafficLine(line);
+            }
+        }
+    }
+
+    void processTrafficLine(String line) {
+        if (line.isBlank()) {
+            return;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(line);
+            long up = node.path("up").asLong(0);
+            long down = node.path("down").asLong(0);
+
+            Platform.runLater(() -> {
+                uploadSpeed.set(up);
+                downloadSpeed.set(down);
+                totalUpload.set(totalUpload.get() + up);
+                totalDownload.set(totalDownload.get() + down);
+            });
+        } catch (Exception e) {
+            log.debug("Failed to parse traffic line: {}", line, e);
+        }
+    }
+
+    public static String formatSpeed(long bytesPerSec) {
+        if (bytesPerSec < 0) {
+            return "0 B/s";
+        }
+        if (bytesPerSec < KB) {
+            return bytesPerSec + " B/s";
+        }
+        if (bytesPerSec < MB) {
+            return String.format(Locale.US, "%.1f KB/s", bytesPerSec / (double) KB);
+        }
+        if (bytesPerSec < GB) {
+            return String.format(Locale.US, "%.1f MB/s", bytesPerSec / (double) MB);
+        }
+        return String.format(Locale.US, "%.2f GB/s", bytesPerSec / (double) GB);
+    }
+
+    public static String formatBytes(long bytes) {
+        if (bytes < 0) {
+            return "0 B";
+        }
+        if (bytes < KB) {
+            return bytes + " B";
+        }
+        if (bytes < MB) {
+            return String.format(Locale.US, "%.1f KB", bytes / (double) KB);
+        }
+        if (bytes < GB) {
+            return String.format(Locale.US, "%.1f MB", bytes / (double) MB);
+        }
+        return String.format(Locale.US, "%.2f GB", bytes / (double) GB);
+    }
+}

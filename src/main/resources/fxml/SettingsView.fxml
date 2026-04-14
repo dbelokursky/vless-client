@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.ScrollPane?>
+
+<ScrollPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.vlessclient.ui.view.SettingsViewController"
+            fitToWidth="true" styleClass="form-scroll">
+    <VBox spacing="20" styleClass="form-content">
+        <padding>
+            <Insets top="8" right="16" bottom="24" left="16"/>
+        </padding>
+
+        <!-- Title -->
+        <Label fx:id="titleLabel" text="Settings" styleClass="view-title"/>
+
+        <!-- Appearance Section -->
+        <VBox spacing="12" styleClass="card">
+            <padding>
+                <Insets top="16" right="20" bottom="16" left="20"/>
+            </padding>
+
+            <Label fx:id="appearanceLabel" text="Appearance" styleClass="form-section-title"/>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="themeLabel" text="Theme" styleClass="form-label" prefWidth="120"/>
+                <ComboBox fx:id="themeCombo" styleClass="form-field" prefWidth="200"/>
+            </HBox>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="languageLabel" text="Language" styleClass="form-label" prefWidth="120"/>
+                <ComboBox fx:id="languageCombo" styleClass="form-field" prefWidth="200"/>
+            </HBox>
+        </VBox>
+
+        <!-- Connection Section -->
+        <VBox spacing="12" styleClass="card">
+            <padding>
+                <Insets top="16" right="20" bottom="16" left="20"/>
+            </padding>
+
+            <Label fx:id="connectionLabel" text="Connection" styleClass="form-section-title"/>
+
+            <CheckBox fx:id="autoConnectCheck" text="Auto-connect on startup" styleClass="form-checkbox"/>
+
+            <Separator styleClass="sidebar-separator"/>
+
+            <Label fx:id="proxyPortsLabel" text="Proxy Ports" styleClass="form-label"/>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="socksPortLabel" text="SOCKS Port" styleClass="form-label" prefWidth="120"/>
+                <TextField fx:id="socksPortField" styleClass="form-field" prefWidth="120"
+                           promptText="1080"/>
+            </HBox>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="httpPortLabel" text="HTTP Port" styleClass="form-label" prefWidth="120"/>
+                <TextField fx:id="httpPortField" styleClass="form-field" prefWidth="120"
+                           promptText="1081"/>
+            </HBox>
+
+            <Separator styleClass="sidebar-separator"/>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="proxyModeLabel" text="Proxy Mode" styleClass="form-label" prefWidth="120"/>
+                <ComboBox fx:id="proxyModeCombo" styleClass="form-field" prefWidth="200"/>
+            </HBox>
+        </VBox>
+
+        <!-- About Section -->
+        <VBox spacing="8" styleClass="card">
+            <padding>
+                <Insets top="16" right="20" bottom="16" left="20"/>
+            </padding>
+
+            <Label fx:id="aboutLabel" text="About" styleClass="form-section-title"/>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="appVersionLabel" text="App Version" styleClass="form-label" prefWidth="120"/>
+                <Label fx:id="appVersionValue" text="1.0.0" styleClass="stats-value"
+                       style="-fx-font-size: 13px;"/>
+            </HBox>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="singboxVersionLabel" text="sing-box Version" styleClass="form-label"
+                       prefWidth="120"/>
+                <Label fx:id="singboxVersionValue" text="Unknown" styleClass="stats-value"
+                       style="-fx-font-size: 13px;"/>
+            </HBox>
+        </VBox>
+
+    </VBox>
+</ScrollPane>

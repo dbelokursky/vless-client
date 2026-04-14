@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.Priority?>
+
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.vlessclient.ui.view.MainViewController"
+            styleClass="root-pane">
+
+    <left>
+        <VBox fx:id="sidebar" styleClass="sidebar" prefWidth="200" spacing="2">
+            <padding>
+                <Insets top="16" right="8" bottom="16" left="8"/>
+            </padding>
+
+            <Label text="VLESS Client" styleClass="sidebar-title"/>
+
+            <Separator styleClass="sidebar-separator">
+                <VBox.margin>
+                    <Insets top="8" bottom="12"/>
+                </VBox.margin>
+            </Separator>
+
+            <Button fx:id="btnDashboard" text="Dashboard" styleClass="nav-button"
+                    onAction="#onDashboardClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
+                <graphic>
+                    <Label text="&#x1F4CA;" styleClass="nav-icon"/>
+                </graphic>
+            </Button>
+
+            <Button fx:id="btnServers" text="Servers" styleClass="nav-button"
+                    onAction="#onServersClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
+                <graphic>
+                    <Label text="&#x1F5A5;" styleClass="nav-icon"/>
+                </graphic>
+            </Button>
+
+            <Button fx:id="btnSubscriptions" text="Subscriptions" styleClass="nav-button"
+                    onAction="#onSubscriptionsClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
+                <graphic>
+                    <Label text="&#x1F517;" styleClass="nav-icon"/>
+                </graphic>
+            </Button>
+
+            <Button fx:id="btnRouting" text="Routing" styleClass="nav-button"
+                    onAction="#onRoutingClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
+                <graphic>
+                    <Label text="&#x1F500;" styleClass="nav-icon"/>
+                </graphic>
+            </Button>
+
+            <Button fx:id="btnLogs" text="Logs" styleClass="nav-button"
+                    onAction="#onLogsClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
+                <graphic>
+                    <Label text="&#x1F4CB;" styleClass="nav-icon"/>
+                </graphic>
+            </Button>
+
+            <Region VBox.vgrow="ALWAYS"/>
+
+            <Separator styleClass="sidebar-separator">
+                <VBox.margin>
+                    <Insets top="8" bottom="8"/>
+                </VBox.margin>
+            </Separator>
+
+            <Button fx:id="btnSettings" text="Settings" styleClass="nav-button"
+                    onAction="#onSettingsClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
+                <graphic>
+                    <Label text="&#x2699;" styleClass="nav-icon"/>
+                </graphic>
+            </Button>
+        </VBox>
+    </left>
+
+    <center>
+        <StackPane fx:id="contentArea" styleClass="content-area">
+            <padding>
+                <Insets top="24" right="24" bottom="24" left="24"/>
+            </padding>
+        </StackPane>
+    </center>
+
+</BorderPane>

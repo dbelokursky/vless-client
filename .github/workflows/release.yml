@@ -1,0 +1,42 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25-ea'
+          distribution: 'temurin'
+      - name: Build fat JAR
+        run: mvn clean package -DskipTests
+      - name: Download sing-box
+        run: |
+          SINGBOX_VERSION="1.11.0"
+          curl -L -o sing-box.tar.gz "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-${SINGBOX_VERSION}-darwin-universal.tar.gz"
+          tar xzf sing-box.tar.gz
+          mkdir -p staging
+          cp sing-box-*/sing-box staging/
+          cp target/vless-client-*.jar staging/
+      - name: Create DMG with jpackage
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          jpackage \
+            --type dmg \
+            --name "VLESS Client" \
+            --app-version "${VERSION}" \
+            --input staging \
+            --main-jar vless-client-0.1.0-SNAPSHOT.jar \
+            --main-class com.vlessclient.app.Launcher \
+            --dest dist \
+            --mac-package-name "VLESSClient" \
+            --java-options "--enable-preview" \
+            --verbose
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg

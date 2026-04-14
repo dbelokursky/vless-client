@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.RowConstraints?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.Priority?>
+<?import javafx.scene.shape.Circle?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.vlessclient.ui.view.DashboardViewController"
+      spacing="20" alignment="TOP_CENTER">
+
+    <!-- Connection Status Card -->
+    <VBox styleClass="card" spacing="16" alignment="CENTER">
+        <padding>
+            <Insets top="32" right="40" bottom="32" left="40"/>
+        </padding>
+
+        <Circle fx:id="statusCircle" radius="12" styleClass="status-circle-disconnected"/>
+
+        <Label fx:id="statusLabel" text="Disconnected" styleClass="status-label-disconnected"/>
+
+        <Label fx:id="serverNameLabel" text="No server selected" styleClass="server-name-label"/>
+
+        <HBox alignment="CENTER" spacing="10">
+            <Label text="Mode:" styleClass="stats-title"/>
+            <ComboBox fx:id="proxyModeCombo" prefWidth="150" styleClass="secondary-button"/>
+        </HBox>
+
+        <Label fx:id="proxyModeWarning" text="" styleClass="status-label-error"
+               visible="false" managed="false"/>
+
+        <Button fx:id="connectButton" text="Connect" styleClass="connect-button"
+                onAction="#onConnectClicked" prefWidth="200" prefHeight="44">
+        </Button>
+    </VBox>
+
+    <!-- Speed Stats Grid -->
+    <GridPane hgap="16" vgap="16">
+        <columnConstraints>
+            <ColumnConstraints hgrow="ALWAYS" percentWidth="50"/>
+            <ColumnConstraints hgrow="ALWAYS" percentWidth="50"/>
+        </columnConstraints>
+
+        <!-- Upload Speed -->
+        <VBox styleClass="card, stats-card" spacing="6" alignment="CENTER"
+              GridPane.columnIndex="0" GridPane.rowIndex="0">
+            <padding>
+                <Insets top="20" right="20" bottom="20" left="20"/>
+            </padding>
+            <Label text="Upload" styleClass="stats-title"/>
+            <Label fx:id="uploadSpeedLabel" text="--" styleClass="speed-value"/>
+            <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
+        </VBox>
+
+        <!-- Download Speed -->
+        <VBox styleClass="card, stats-card" spacing="6" alignment="CENTER"
+              GridPane.columnIndex="1" GridPane.rowIndex="0">
+            <padding>
+                <Insets top="20" right="20" bottom="20" left="20"/>
+            </padding>
+            <Label text="Download" styleClass="stats-title"/>
+            <Label fx:id="downloadSpeedLabel" text="--" styleClass="speed-value"/>
+            <Label text="&#x2B07;" styleClass="stats-icon-download"/>
+        </VBox>
+
+        <!-- Total Uploaded -->
+        <VBox styleClass="card, stats-card-small" spacing="4" alignment="CENTER"
+              GridPane.columnIndex="0" GridPane.rowIndex="1">
+            <padding>
+                <Insets top="14" right="16" bottom="14" left="16"/>
+            </padding>
+            <Label text="Total Up" styleClass="stats-title"/>
+            <Label fx:id="totalUploadLabel" text="--" styleClass="stats-value"/>
+        </VBox>
+
+        <!-- Total Downloaded -->
+        <VBox styleClass="card, stats-card-small" spacing="4" alignment="CENTER"
+              GridPane.columnIndex="1" GridPane.rowIndex="1">
+            <padding>
+                <Insets top="14" right="16" bottom="14" left="16"/>
+            </padding>
+            <Label text="Total Down" styleClass="stats-title"/>
+            <Label fx:id="totalDownloadLabel" text="--" styleClass="stats-value"/>
+        </VBox>
+    </GridPane>
+
+    <!-- Latency Test -->
+    <HBox alignment="CENTER" spacing="16">
+        <Button fx:id="testLatencyButton" text="Test Latency" styleClass="secondary-button"
+                onAction="#onTestLatencyClicked" prefHeight="36"/>
+        <Label fx:id="latencyResultLabel" text="" styleClass="latency-result"/>
+    </HBox>
+</VBox>

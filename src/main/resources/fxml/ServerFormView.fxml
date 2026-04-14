@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.Priority?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.vlessclient.ui.view.ServerFormController"
+      spacing="0" styleClass="form-root">
+
+    <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS" styleClass="form-scroll">
+        <VBox spacing="14" styleClass="form-content">
+            <padding>
+                <Insets top="20" right="24" bottom="20" left="24"/>
+            </padding>
+
+            <Label text="Server Configuration" styleClass="form-title"/>
+
+            <!-- Protocol -->
+            <Label text="Protocol" styleClass="form-label"/>
+            <ComboBox fx:id="protocolCombo" maxWidth="Infinity" styleClass="form-field"
+                      onAction="#onProtocolChanged"/>
+
+            <!-- Basic Settings -->
+            <Label text="Name" styleClass="form-label"/>
+            <TextField fx:id="nameField" promptText="My Server" styleClass="form-field"/>
+
+            <Label text="Address *" styleClass="form-label"/>
+            <TextField fx:id="addressField" promptText="example.com" styleClass="form-field"/>
+
+            <HBox spacing="12">
+                <VBox spacing="4" HBox.hgrow="ALWAYS">
+                    <Label text="Port *" styleClass="form-label"/>
+                    <TextField fx:id="portField" promptText="443" styleClass="form-field"/>
+                </VBox>
+                <VBox spacing="4" HBox.hgrow="ALWAYS">
+                    <Label fx:id="uuidLabel" text="UUID *" styleClass="form-label"/>
+                    <TextField fx:id="uuidField" promptText="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                               styleClass="form-field"/>
+                </VBox>
+            </HBox>
+
+            <HBox fx:id="encryptionFlowBox" spacing="12">
+                <VBox fx:id="encryptionBox" spacing="4" HBox.hgrow="ALWAYS">
+                    <Label fx:id="encryptionLabel" text="Encryption" styleClass="form-label"/>
+                    <ComboBox fx:id="encryptionCombo" maxWidth="Infinity" styleClass="form-field"/>
+                </VBox>
+                <VBox fx:id="flowBox" spacing="4" HBox.hgrow="ALWAYS">
+                    <Label fx:id="flowLabel" text="Flow" styleClass="form-label"/>
+                    <ComboBox fx:id="flowCombo" maxWidth="Infinity" styleClass="form-field"/>
+                </VBox>
+            </HBox>
+
+            <Separator fx:id="transportSeparator">
+                <VBox.margin><Insets top="8" bottom="4"/></VBox.margin>
+            </Separator>
+
+            <!-- Transport -->
+            <VBox fx:id="transportSection" spacing="4">
+                <Label text="Transport" styleClass="form-section-title"/>
+
+                <Label text="Type" styleClass="form-label"/>
+                <ComboBox fx:id="transportTypeCombo" maxWidth="Infinity" styleClass="form-field"/>
+
+                <!-- WebSocket fields -->
+                <VBox fx:id="wsFields" spacing="4" managed="false" visible="false">
+                    <Label text="Path" styleClass="form-label"/>
+                    <TextField fx:id="wsPathField" promptText="/ws" styleClass="form-field"/>
+                    <Label text="Host" styleClass="form-label"/>
+                    <TextField fx:id="wsHostField" promptText="example.com" styleClass="form-field"/>
+                </VBox>
+
+                <!-- gRPC fields -->
+                <VBox fx:id="grpcFields" spacing="4" managed="false" visible="false">
+                    <Label text="Service Name" styleClass="form-label"/>
+                    <TextField fx:id="grpcServiceNameField" promptText="grpc-service" styleClass="form-field"/>
+                </VBox>
+            </VBox>
+
+            <Separator fx:id="tlsSeparator">
+                <VBox.margin><Insets top="8" bottom="4"/></VBox.margin>
+            </Separator>
+
+            <!-- TLS -->
+            <VBox fx:id="tlsSection" spacing="4">
+                <Label text="TLS" styleClass="form-section-title"/>
+                <CheckBox fx:id="tlsEnabledCheck" text="Enable TLS" styleClass="form-checkbox"/>
+
+                <VBox fx:id="tlsFields" spacing="4" managed="false" visible="false">
+                    <Label text="SNI (Server Name)" styleClass="form-label"/>
+                    <TextField fx:id="sniField" promptText="example.com" styleClass="form-field"/>
+
+                    <Label text="ALPN" styleClass="form-label"/>
+                    <TextField fx:id="alpnField" promptText="h2,http/1.1" styleClass="form-field"/>
+
+                    <Label text="Fingerprint" styleClass="form-label"/>
+                    <TextField fx:id="fingerprintField" promptText="chrome" styleClass="form-field"/>
+
+                    <CheckBox fx:id="allowInsecureCheck" text="Allow Insecure" styleClass="form-checkbox"/>
+
+                    <Separator>
+                        <VBox.margin><Insets top="6" bottom="4"/></VBox.margin>
+                    </Separator>
+
+                    <!-- Reality -->
+                    <VBox fx:id="realitySection" spacing="4">
+                        <CheckBox fx:id="realityCheck" text="Reality" styleClass="form-checkbox"/>
+
+                        <VBox fx:id="realityFields" spacing="4" managed="false" visible="false">
+                            <Label text="Public Key" styleClass="form-label"/>
+                            <TextField fx:id="realityPublicKeyField" styleClass="form-field"/>
+
+                            <Label text="Short ID" styleClass="form-label"/>
+                            <TextField fx:id="realityShortIdField" styleClass="form-field"/>
+                        </VBox>
+                    </VBox>
+                </VBox>
+            </VBox>
+        </VBox>
+    </ScrollPane>
+
+    <!-- Action Buttons -->
+    <Separator/>
+    <HBox spacing="12" alignment="CENTER_RIGHT" styleClass="form-actions">
+        <padding>
+            <Insets top="12" right="24" bottom="12" left="24"/>
+        </padding>
+        <Button fx:id="cancelButton" text="Cancel" styleClass="secondary-button"
+                onAction="#onCancelClicked"/>
+        <Button fx:id="saveButton" text="Save" styleClass="primary-button"
+                onAction="#onSaveClicked"/>
+    </HBox>
+</VBox>

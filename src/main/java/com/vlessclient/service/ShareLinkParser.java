@@ -1,0 +1,574 @@
+package com.vlessclient.service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vlessclient.model.Protocol;
+import com.vlessclient.model.ServerConfig;
+import com.vlessclient.model.TransportType;
+
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class ShareLinkParser {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    public ServerConfig parse(String uri) {
+        if (uri == null || uri.isBlank()) {
+            throw new IllegalArgumentException("URI must not be null or blank");
+        }
+        String scheme = uri.substring(0, uri.indexOf("://")).toLowerCase();
+        return switch (scheme) {
+            case "vless" -> parseVless(uri);
+            case "vmess" -> parseVmess(uri);
+            case "trojan" -> parseTrojan(uri);
+            case "ss" -> parseShadowsocks(uri);
+            case "hysteria2", "hy2" -> parseHysteria2(uri);
+            default -> throw new IllegalArgumentException("Unsupported protocol scheme: " + scheme);
+        };
+    }
+
+    public ServerConfig parseVless(String uri) {
+        if (!uri.toLowerCase().startsWith("vless://")) {
+            throw new IllegalArgumentException("URI must start with vless://");
+        }
+
+        // Extract fragment (server name) before parsing
+        String fragment = null;
+        int fragmentIndex = uri.indexOf('#');
+        if (fragmentIndex >= 0) {
+            fragment = URLDecoder.decode(uri.substring(fragmentIndex + 1), StandardCharsets.UTF_8);
+        }
+
+        // Parse the URI using a workaround: replace vless:// with http:// so java.net.URI can parse it
+        String httpUri = "http://" + uri.substring("vless://".length());
+        // Remove fragment for URI parsing to avoid issues
+        if (fragmentIndex >= 0) {
+            httpUri = "http://" + uri.substring("vless://".length(), fragmentIndex);
+        }
+        URI parsed;
+        try {
+            parsed = URI.create(httpUri);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid VLESS URI format: " + e.getMessage());
+        }
+
+        String userInfo = parsed.getUserInfo();
+        if (userInfo == null || userInfo.isBlank()) {
+            throw new IllegalArgumentException("Missing UUID in VLESS URI");
+        }
+
+        String host = parsed.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("Missing host in VLESS URI");
+        }
+
+        int port = parsed.getPort();
+        if (port < 0) {
+            port = 443;
+        }
+
+        Map<String, String> params = parseQueryParams(parsed.getRawQuery());
+
+        ServerConfig config = new ServerConfig();
+        config.setProtocol(Protocol.VLESS);
+        config.setUuid(userInfo);
+        config.setAddress(host);
+        config.setPort(port);
+        config.setName(fragment != null ? fragment : host + ":" + port);
+
+        // Encryption
+        String encryption = params.get("encryption");
+        if (encryption != null && !encryption.isBlank()) {
+            config.setEncryption(encryption);
+        }
+
+        // Flow
+        String flow = params.get("flow");
+        if (flow != null && !flow.isBlank()) {
+            config.setFlow(flow);
+        }
+
+        // Transport
+        applyTransportParams(config, params);
+
+        // Security / TLS
+        applyTlsParams(config, params);
+
+        return config;
+    }
+
+    public ServerConfig parseVmess(String uri) {
+        if (!uri.toLowerCase().startsWith("vmess://")) {
+            throw new IllegalArgumentException("URI must start with vmess://");
+        }
+
+        String encoded = uri.substring("vmess://".length());
+        String json = decodeBase64(encoded);
+
+        JsonNode node;
+        try {
+            node = OBJECT_MAPPER.readTree(json);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Invalid vmess JSON: " + e.getMessage());
+        }
+
+        ServerConfig config = new ServerConfig();
+        config.setProtocol(Protocol.VMESS);
+
+        config.setName(getJsonString(node, "ps", ""));
+        config.setAddress(getJsonString(node, "add", ""));
+        config.setPort(getJsonInt(node, "port", 443));
+        config.setUuid(getJsonString(node, "id", ""));
+
+        if (config.getAddress().isBlank()) {
+            throw new IllegalArgumentException("Missing address in vmess URI");
+        }
+        if (config.getUuid().isBlank()) {
+            throw new IllegalArgumentException("Missing UUID in vmess URI");
+        }
+
+        // Encryption
+        String scy = getJsonString(node, "scy", "auto");
+        config.setEncryption(scy);
+
+        // Transport
+        String net = getJsonString(node, "net", "tcp");
+        TransportType transportType = parseTransportType(mapVmessNet(net));
+        config.getTransport().setType(transportType);
+
+        String path = getJsonString(node, "path", "");
+        if (!path.isBlank()) {
+            config.getTransport().setPath(path);
+        }
+
+        String host = getJsonString(node, "host", "");
+        if (!host.isBlank()) {
+            config.getTransport().setHost(host);
+        }
+
+        // TLS
+        String tls = getJsonString(node, "tls", "");
+        if ("tls".equalsIgnoreCase(tls)) {
+            config.getTls().setEnabled(true);
+        }
+
+        String sni = getJsonString(node, "sni", "");
+        if (!sni.isBlank()) {
+            config.getTls().setServerName(sni);
+        }
+
+        String fp = getJsonString(node, "fp", "");
+        if (!fp.isBlank()) {
+            config.getTls().setFingerprint(fp);
+        }
+
+        String alpn = getJsonString(node, "alpn", "");
+        if (!alpn.isBlank()) {
+            config.getTls().setAlpn(alpn);
+        }
+
+        if (config.getName().isBlank()) {
+            config.setName(config.getAddress() + ":" + config.getPort());
+        }
+
+        return config;
+    }
+
+    public ServerConfig parseTrojan(String uri) {
+        if (!uri.toLowerCase().startsWith("trojan://")) {
+            throw new IllegalArgumentException("URI must start with trojan://");
+        }
+
+        String fragment = null;
+        int fragmentIndex = uri.indexOf('#');
+        if (fragmentIndex >= 0) {
+            fragment = URLDecoder.decode(uri.substring(fragmentIndex + 1), StandardCharsets.UTF_8);
+        }
+
+        String httpUri = "http://" + uri.substring("trojan://".length());
+        if (fragmentIndex >= 0) {
+            httpUri = "http://" + uri.substring("trojan://".length(), fragmentIndex);
+        }
+
+        URI parsed;
+        try {
+            parsed = URI.create(httpUri);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid Trojan URI format: " + e.getMessage());
+        }
+
+        String password = parsed.getUserInfo();
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Missing password in Trojan URI");
+        }
+        password = URLDecoder.decode(password, StandardCharsets.UTF_8);
+
+        String host = parsed.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("Missing host in Trojan URI");
+        }
+
+        int port = parsed.getPort();
+        if (port < 0) {
+            port = 443;
+        }
+
+        Map<String, String> params = parseQueryParams(parsed.getRawQuery());
+
+        ServerConfig config = new ServerConfig();
+        config.setProtocol(Protocol.TROJAN);
+        config.setUuid(password);
+        config.setAddress(host);
+        config.setPort(port);
+        config.setName(fragment != null ? fragment : host + ":" + port);
+
+        // Transport
+        applyTransportParams(config, params);
+
+        // Security / TLS - trojan defaults to TLS enabled
+        String security = params.getOrDefault("security", "tls");
+        if ("tls".equals(security)) {
+            config.getTls().setEnabled(true);
+        } else if ("reality".equals(security)) {
+            config.getTls().setEnabled(true);
+            config.getTls().setReality(true);
+        }
+
+        String sni = params.get("sni");
+        if (sni != null && !sni.isBlank()) {
+            config.getTls().setServerName(sni);
+        }
+
+        String fp = params.get("fp");
+        if (fp != null && !fp.isBlank()) {
+            config.getTls().setFingerprint(fp);
+        }
+
+        String alpn = params.get("alpn");
+        if (alpn != null && !alpn.isBlank()) {
+            config.getTls().setAlpn(alpn);
+        }
+
+        String allowInsecure = params.get("allowInsecure");
+        if ("1".equals(allowInsecure)) {
+            config.getTls().setAllowInsecure(true);
+        }
+
+        return config;
+    }
+
+    public ServerConfig parseShadowsocks(String uri) {
+        if (!uri.toLowerCase().startsWith("ss://")) {
+            throw new IllegalArgumentException("URI must start with ss://");
+        }
+
+        String rest = uri.substring("ss://".length());
+
+        // Extract fragment (name)
+        String fragment = null;
+        int fragmentIndex = rest.indexOf('#');
+        if (fragmentIndex >= 0) {
+            fragment = URLDecoder.decode(rest.substring(fragmentIndex + 1), StandardCharsets.UTF_8);
+            rest = rest.substring(0, fragmentIndex);
+        }
+
+        String host;
+        int port;
+        String method;
+        String password;
+
+        // SIP002 format: BASE64(method:password)@host:port/?plugin=...
+        // Legacy format: BASE64(method:password@host:port)
+        int atSign = rest.indexOf('@');
+        if (atSign >= 0) {
+            // SIP002: userinfo is base64, then @host:port
+            String userInfoEncoded = rest.substring(0, atSign);
+            String userInfo = decodeBase64(userInfoEncoded);
+            int colonIndex = userInfo.indexOf(':');
+            if (colonIndex < 0) {
+                throw new IllegalArgumentException("Invalid Shadowsocks userinfo format");
+            }
+            method = userInfo.substring(0, colonIndex);
+            password = userInfo.substring(colonIndex + 1);
+
+            String hostPort = rest.substring(atSign + 1);
+            // Remove query string if present
+            int queryIndex = hostPort.indexOf('?');
+            if (queryIndex >= 0) {
+                hostPort = hostPort.substring(0, queryIndex);
+            }
+            // Remove trailing slash
+            if (hostPort.endsWith("/")) {
+                hostPort = hostPort.substring(0, hostPort.length() - 1);
+            }
+
+            int lastColon = hostPort.lastIndexOf(':');
+            if (lastColon < 0) {
+                throw new IllegalArgumentException("Missing port in Shadowsocks URI");
+            }
+            host = hostPort.substring(0, lastColon);
+            port = Integer.parseInt(hostPort.substring(lastColon + 1));
+        } else {
+            // Legacy: entire part is base64 encoded
+            String decoded = decodeBase64(rest);
+            // format: method:password@host:port
+            int atInDecoded = decoded.lastIndexOf('@');
+            if (atInDecoded < 0) {
+                throw new IllegalArgumentException("Invalid Shadowsocks legacy format");
+            }
+            String userInfo = decoded.substring(0, atInDecoded);
+            String hostPort = decoded.substring(atInDecoded + 1);
+
+            int colonIndex = userInfo.indexOf(':');
+            if (colonIndex < 0) {
+                throw new IllegalArgumentException("Invalid Shadowsocks userinfo format");
+            }
+            method = userInfo.substring(0, colonIndex);
+            password = userInfo.substring(colonIndex + 1);
+
+            int lastColon = hostPort.lastIndexOf(':');
+            if (lastColon < 0) {
+                throw new IllegalArgumentException("Missing port in Shadowsocks URI");
+            }
+            host = hostPort.substring(0, lastColon);
+            port = Integer.parseInt(hostPort.substring(lastColon + 1));
+        }
+
+        ServerConfig config = new ServerConfig();
+        config.setProtocol(Protocol.SHADOWSOCKS);
+        config.setEncryption(method);
+        config.setUuid(password);
+        config.setAddress(host);
+        config.setPort(port);
+        config.setName(fragment != null ? fragment : host + ":" + port);
+
+        return config;
+    }
+
+    public ServerConfig parseHysteria2(String uri) {
+        String lower = uri.toLowerCase();
+        if (!lower.startsWith("hysteria2://") && !lower.startsWith("hy2://")) {
+            throw new IllegalArgumentException("URI must start with hysteria2:// or hy2://");
+        }
+
+        int schemeEnd = uri.indexOf("://");
+        String fragment = null;
+        int fragmentIndex = uri.indexOf('#');
+        if (fragmentIndex >= 0) {
+            fragment = URLDecoder.decode(uri.substring(fragmentIndex + 1), StandardCharsets.UTF_8);
+        }
+
+        String httpUri = "http://" + uri.substring(schemeEnd + 3);
+        if (fragmentIndex >= 0) {
+            httpUri = "http://" + uri.substring(schemeEnd + 3, fragmentIndex);
+        }
+
+        URI parsed;
+        try {
+            parsed = URI.create(httpUri);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid Hysteria2 URI format: " + e.getMessage());
+        }
+
+        String password = parsed.getUserInfo();
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Missing password in Hysteria2 URI");
+        }
+        password = URLDecoder.decode(password, StandardCharsets.UTF_8);
+
+        String host = parsed.getHost();
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("Missing host in Hysteria2 URI");
+        }
+
+        int port = parsed.getPort();
+        if (port < 0) {
+            port = 443;
+        }
+
+        Map<String, String> params = parseQueryParams(parsed.getRawQuery());
+
+        ServerConfig config = new ServerConfig();
+        config.setProtocol(Protocol.HYSTERIA2);
+        config.setUuid(password);
+        config.setAddress(host);
+        config.setPort(port);
+        config.setName(fragment != null ? fragment : host + ":" + port);
+
+        // TLS - hysteria2 defaults to TLS
+        config.getTls().setEnabled(true);
+
+        String sni = params.get("sni");
+        if (sni != null && !sni.isBlank()) {
+            config.getTls().setServerName(sni);
+        }
+
+        String allowInsecure = params.get("insecure");
+        if ("1".equals(allowInsecure)) {
+            config.getTls().setAllowInsecure(true);
+        }
+
+        // Obfuscation - store obfs-password in flow field
+        String obfsPassword = params.get("obfs-password");
+        if (obfsPassword != null && !obfsPassword.isBlank()) {
+            config.setFlow(obfsPassword);
+        }
+
+        // Store obfs type in encryption field
+        String obfs = params.get("obfs");
+        if (obfs != null && !obfs.isBlank()) {
+            config.setEncryption(obfs);
+        }
+
+        return config;
+    }
+
+    private void applyTransportParams(ServerConfig config, Map<String, String> params) {
+        String type = params.getOrDefault("type", "tcp");
+        TransportType transportType = parseTransportType(type);
+        config.getTransport().setType(transportType);
+
+        String path = params.get("path");
+        if (path != null && !path.isBlank()) {
+            config.getTransport().setPath(URLDecoder.decode(path, StandardCharsets.UTF_8));
+        }
+
+        String transportHost = params.get("host");
+        if (transportHost != null && !transportHost.isBlank()) {
+            config.getTransport().setHost(transportHost);
+        }
+
+        String serviceName = params.get("serviceName");
+        if (serviceName != null && !serviceName.isBlank()) {
+            config.getTransport().setServiceName(serviceName);
+        }
+    }
+
+    private void applyTlsParams(ServerConfig config, Map<String, String> params) {
+        String security = params.getOrDefault("security", "none");
+        if ("tls".equals(security)) {
+            config.getTls().setEnabled(true);
+        } else if ("reality".equals(security)) {
+            config.getTls().setEnabled(true);
+            config.getTls().setReality(true);
+        }
+
+        String sni = params.get("sni");
+        if (sni != null && !sni.isBlank()) {
+            config.getTls().setServerName(sni);
+        }
+
+        String fp = params.get("fp");
+        if (fp != null && !fp.isBlank()) {
+            config.getTls().setFingerprint(fp);
+        }
+
+        String alpn = params.get("alpn");
+        if (alpn != null && !alpn.isBlank()) {
+            config.getTls().setAlpn(alpn);
+        }
+
+        String pbk = params.get("pbk");
+        if (pbk != null && !pbk.isBlank()) {
+            config.getTls().setRealityPublicKey(pbk);
+        }
+
+        String sid = params.get("sid");
+        if (sid != null && !sid.isBlank()) {
+            config.getTls().setRealityShortId(sid);
+        }
+
+        String allowInsecure = params.get("allowInsecure");
+        if ("1".equals(allowInsecure)) {
+            config.getTls().setAllowInsecure(true);
+        }
+    }
+
+    private String mapVmessNet(String net) {
+        return switch (net.toLowerCase()) {
+            case "h2" -> "http";
+            case "kcp" -> "tcp";
+            default -> net;
+        };
+    }
+
+    private String getJsonString(JsonNode node, String field, String defaultValue) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return defaultValue;
+        }
+        return value.asText(defaultValue);
+    }
+
+    private int getJsonInt(JsonNode node, String field, int defaultValue) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return defaultValue;
+        }
+        if (value.isTextual()) {
+            try {
+                return Integer.parseInt(value.asText());
+            } catch (NumberFormatException e) {
+                return defaultValue;
+            }
+        }
+        return value.asInt(defaultValue);
+    }
+
+    private String decodeBase64(String encoded) {
+        // Remove whitespace and newlines
+        encoded = encoded.replaceAll("\\s+", "");
+        // Try standard base64 first, then URL-safe
+        try {
+            return new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            // Try URL-safe base64
+            try {
+                return new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException e2) {
+                // Try adding padding
+                String padded = encoded;
+                int pad = padded.length() % 4;
+                if (pad > 0) {
+                    padded = padded + "=".repeat(4 - pad);
+                }
+                try {
+                    return new String(Base64.getDecoder().decode(padded), StandardCharsets.UTF_8);
+                } catch (IllegalArgumentException e3) {
+                    return new String(Base64.getUrlDecoder().decode(padded), StandardCharsets.UTF_8);
+                }
+            }
+        }
+    }
+
+    private TransportType parseTransportType(String type) {
+        for (TransportType t : TransportType.values()) {
+            if (t.getValue().equalsIgnoreCase(type)) {
+                return t;
+            }
+        }
+        throw new IllegalArgumentException("Unknown transport type: " + type);
+    }
+
+    private Map<String, String> parseQueryParams(String query) {
+        Map<String, String> params = new LinkedHashMap<>();
+        if (query == null || query.isBlank()) {
+            return params;
+        }
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0) {
+                String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
+                String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
+                params.put(key, value);
+            }
+        }
+        return params;
+    }
+}
