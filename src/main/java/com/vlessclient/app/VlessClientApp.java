@@ -1,8 +1,13 @@
 package com.vlessclient.app;
 
 import com.vlessclient.model.AppSettings;
+import com.vlessclient.service.ConfigStore;
+import com.vlessclient.service.SingBoxConfigGenerator;
+import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.ThemeManager;
+import com.vlessclient.service.TrayIconService;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -17,6 +22,8 @@ import java.util.Locale;
 public class VlessClientApp extends Application {
 
     private static final Logger log = LoggerFactory.getLogger(VlessClientApp.class);
+
+    private TrayIconService trayIconService;
 
     @Override
     public void init() {
@@ -48,15 +55,51 @@ public class VlessClientApp extends Application {
 
         loadAppIcon(primaryStage);
 
-        primaryStage.setOnCloseRequest(event -> shutdown());
+        // Keep the app alive when the main window is closed — it continues
+        // running in the menu bar (tray). The user can quit via the tray menu
+        // or Cmd+Q.
+        Platform.setImplicitExit(false);
+        primaryStage.setOnCloseRequest(event -> {
+            event.consume();
+            primaryStage.hide();
+        });
 
         primaryStage.show();
         log.info("VLESS Client started");
+
+        installTrayIcon(primaryStage);
     }
 
     @Override
     public void stop() {
+        if (trayIconService != null) {
+            try {
+                trayIconService.uninstall();
+            } catch (Exception e) {
+                log.debug("Error uninstalling tray icon", e);
+            }
+            trayIconService = null;
+        }
         shutdown();
+    }
+
+    private void installTrayIcon(Stage stage) {
+        try {
+            SingBoxEngine engine = null;
+            try {
+                engine = ServiceLocator.get(SingBoxEngine.class);
+            } catch (IllegalArgumentException e) {
+                log.debug("SingBoxEngine not available for tray icon");
+            }
+            ConfigStore configStore = ServiceLocator.get(ConfigStore.class);
+            SingBoxConfigGenerator generator = ServiceLocator.get(SingBoxConfigGenerator.class);
+
+            trayIconService = new TrayIconService(engine, configStore, generator, stage);
+            ServiceLocator.register(TrayIconService.class, trayIconService);
+            trayIconService.install();
+        } catch (Exception e) {
+            log.warn("Failed to install tray icon service", e);
+        }
     }
 
     private void shutdown() {

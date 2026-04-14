@@ -78,6 +78,13 @@ public class ServersViewController {
         openServerForm(null);
     }
 
+    /**
+     * Opens the add-server dialog. Used by keyboard shortcuts.
+     */
+    public void openAddServerDialog() {
+        openServerForm(null);
+    }
+
     @FXML
     private void onImportLinkClicked() {
         TextInputDialog dialog = new TextInputDialog();

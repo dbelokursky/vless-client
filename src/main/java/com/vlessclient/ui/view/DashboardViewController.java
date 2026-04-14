@@ -201,6 +201,14 @@ public class DashboardViewController {
         }
     }
 
+    /**
+     * Toggles connection state: connects if disconnected, disconnects if connected.
+     * Used by keyboard shortcuts.
+     */
+    public void toggleConnection() {
+        onConnectClicked();
+    }
+
     @FXML
     private void onConnectClicked() {
         ConnectionState current = singBoxEngine != null

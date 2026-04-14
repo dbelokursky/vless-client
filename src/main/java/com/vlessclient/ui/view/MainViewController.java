@@ -3,9 +3,13 @@ package com.vlessclient.ui.view;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.input.KeyCombination;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,6 +21,7 @@ public class MainViewController {
 
     private static final Logger log = LoggerFactory.getLogger(MainViewController.class);
 
+    @FXML private BorderPane rootNode;
     @FXML private StackPane contentArea;
     @FXML private VBox sidebar;
 
@@ -28,11 +33,67 @@ public class MainViewController {
     @FXML private Button btnSettings;
 
     private final Map<String, Node> viewCache = new HashMap<>();
+    private final Map<String, Object> controllerCache = new HashMap<>();
     private Button activeButton;
+    private boolean acceleratorsRegistered;
 
     @FXML
     public void initialize() {
         showDashboard();
+
+        if (rootNode != null) {
+            rootNode.sceneProperty().addListener((obs, oldScene, newScene) -> {
+                if (newScene != null && !acceleratorsRegistered) {
+                    registerAccelerators(newScene);
+                    acceleratorsRegistered = true;
+                }
+            });
+        }
+    }
+
+    private void registerAccelerators(Scene scene) {
+        Map<KeyCombination, Runnable> accelerators = scene.getAccelerators();
+
+        accelerators.put(KeyCombination.keyCombination("Shortcut+1"), this::showDashboard);
+        accelerators.put(KeyCombination.keyCombination("Shortcut+2"), this::showServers);
+        accelerators.put(KeyCombination.keyCombination("Shortcut+3"), this::showSubscriptions);
+        accelerators.put(KeyCombination.keyCombination("Shortcut+4"), this::showRouting);
+        accelerators.put(KeyCombination.keyCombination("Shortcut+5"), this::showLogs);
+        accelerators.put(KeyCombination.keyCombination("Shortcut+Comma"), this::showSettings);
+
+        accelerators.put(KeyCombination.keyCombination("Shortcut+N"), this::onShortcutAddServer);
+        accelerators.put(KeyCombination.keyCombination("Shortcut+Shift+C"), this::onShortcutToggleConnection);
+        accelerators.put(KeyCombination.keyCombination("Shortcut+W"), this::onShortcutHideWindow);
+
+        log.info("Registered {} keyboard shortcuts", accelerators.size());
+    }
+
+    private void onShortcutAddServer() {
+        showServers();
+        Object controller = controllerCache.get("ServersView");
+        if (controller instanceof ServersViewController serversController) {
+            serversController.openAddServerDialog();
+        } else {
+            log.warn("ServersViewController not available for Cmd+N shortcut");
+        }
+    }
+
+    private void onShortcutToggleConnection() {
+        // Ensure Dashboard is loaded so we have a controller reference
+        ensureViewLoaded("DashboardView", "/fxml/DashboardView.fxml");
+        Object controller = controllerCache.get("DashboardView");
+        if (controller instanceof DashboardViewController dashboardController) {
+            dashboardController.toggleConnection();
+        } else {
+            log.warn("DashboardViewController not available for Cmd+Shift+C shortcut");
+        }
+    }
+
+    private void onShortcutHideWindow() {
+        if (rootNode != null && rootNode.getScene() != null
+                && rootNode.getScene().getWindow() instanceof Stage stage) {
+            stage.hide();
+        }
     }
 
     @FXML
@@ -91,7 +152,7 @@ public class MainViewController {
 
     private void switchView(String viewName, String fxmlPath, Button navButton) {
         try {
-            Node view = viewCache.computeIfAbsent(viewName, key -> loadView(fxmlPath));
+            Node view = ensureViewLoaded(viewName, fxmlPath);
             if (view != null) {
                 contentArea.getChildren().setAll(view);
                 setActiveButton(navButton);
@@ -101,10 +162,20 @@ public class MainViewController {
         }
     }
 
-    private Node loadView(String fxmlPath) {
+    private Node ensureViewLoaded(String viewName, String fxmlPath) {
+        Node cached = viewCache.get(viewName);
+        if (cached != null) {
+            return cached;
+        }
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource(fxmlPath));
-            return loader.load();
+            Node view = loader.load();
+            viewCache.put(viewName, view);
+            Object controller = loader.getController();
+            if (controller != null) {
+                controllerCache.put(viewName, controller);
+            }
+            return view;
         } catch (IOException e) {
             log.error("Failed to load FXML: {}", fxmlPath, e);
             return null;

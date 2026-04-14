@@ -10,7 +10,7 @@
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.Priority?>
 
-<BorderPane xmlns="http://javafx.com/javafx"
+<BorderPane fx:id="rootNode" xmlns="http://javafx.com/javafx"
             xmlns:fx="http://javafx.com/fxml"
             fx:controller="com.vlessclient.ui.view.MainViewController"
             styleClass="root-pane">
