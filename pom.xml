@@ -142,6 +142,16 @@
                 <version>0.0.8</version>
                 <configuration>
                     <mainClass>${main.class}</mainClass>
+                    <options>
+                        <!--
+                            macOS: make the application name shown in the
+                            menu bar ("Quit <name>", "Hide <name>") and the
+                            Dock title read "VLESS Client" instead of the
+                            fully-qualified main class name.
+                        -->
+                        <option>-Xdock:name=VLESS Client</option>
+                        <option>-Dapple.awt.application.name=VLESS Client</option>
+                    </options>
                 </configuration>
             </plugin>
 

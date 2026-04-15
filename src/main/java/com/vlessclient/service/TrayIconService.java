@@ -113,6 +113,13 @@ public class TrayIconService {
 
     /**
      * Removes the tray icon from the system tray and detaches listeners.
+     *
+     * <p>Runs synchronously on the AWT event thread so the icon really is
+     * gone by the time this method returns. This matters for the Quit flow
+     * in {@link com.vlessclient.app.VlessClientApp#stop()} — that method
+     * immediately calls {@code System.exit}, and any pending-but-unexecuted
+     * {@code invokeLater} callback would be dropped, leaving a stale tray
+     * icon behind in the menu bar.</p>
      */
     public void uninstall() {
         if (singBoxEngine != null && stateListener != null) {
@@ -124,7 +131,7 @@ public class TrayIconService {
             serversListener = null;
         }
 
-        EventQueue.invokeLater(() -> {
+        Runnable removeTask = () -> {
             if (trayIcon != null) {
                 try {
                     SystemTray.getSystemTray().remove(trayIcon);
@@ -138,7 +145,20 @@ public class TrayIconService {
                 statusItem = null;
                 serversMenu = null;
             }
-        });
+        };
+
+        if (EventQueue.isDispatchThread()) {
+            removeTask.run();
+        } else {
+            try {
+                EventQueue.invokeAndWait(removeTask);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.debug("Interrupted while uninstalling tray icon");
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                log.debug("Error removing tray icon", e.getCause());
+            }
+        }
     }
 
     private PopupMenu buildPopupMenu() {
