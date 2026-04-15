@@ -101,6 +101,41 @@
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 22, 0, 0, 5);
 }
 
+.status-bar {
+    -fx-min-height: 70;
+}
+
+.status-halo-sm {
+    -fx-background-radius: 22;
+    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #35353a 0%, #2a2a2d 100%);
+}
+
+.section-header {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #7b8087;
+    -fx-text-transform: uppercase;
+    -fx-letter-spacing: 0.6;
+    -fx-padding: 2 0 0 2;
+}
+
+.traffic-card {
+    -fx-min-height: 100;
+}
+
+.totals-strip {
+    -fx-min-height: 52;
+}
+
+.totals-strip .separator .line {
+    -fx-border-color: #3a3a3e;
+    -fx-border-width: 0 1 0 0;
+}
+
+.mode-combo {
+    -fx-pref-height: 30;
+}
+
 .stats-card {
     -fx-min-height: 96;
 }

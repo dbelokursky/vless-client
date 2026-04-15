@@ -4,20 +4,21 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.ColumnConstraints?>
-<?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.Priority?>
 <?import javafx.scene.shape.Circle?>
+<?import com.vlessclient.ui.view.Sparkline?>
 
 <VBox xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml"
       fx:controller="com.vlessclient.ui.view.DashboardViewController"
-      spacing="20" alignment="TOP_CENTER">
+      spacing="18">
 
     <!-- Sing-box missing banner (hidden when engine is available) -->
     <HBox fx:id="singBoxMissingBanner" styleClass="singbox-missing-banner"
@@ -38,97 +39,108 @@
                 onAction="#onRetryInstallClicked"/>
     </HBox>
 
-    <!-- Connection Status Card -->
-    <VBox styleClass="card, hero-card" spacing="18" alignment="CENTER">
+    <!-- Compact status bar: single card, one row -->
+    <HBox styleClass="card, hero-card, status-bar" alignment="CENTER_LEFT" spacing="16">
         <padding>
-            <Insets top="36" right="40" bottom="32" left="40"/>
+            <Insets top="14" right="18" bottom="14" left="18"/>
         </padding>
 
-        <!-- Big halo around the status circle -->
-        <StackPane fx:id="statusHalo" styleClass="status-halo"
-                   prefWidth="72" prefHeight="72" maxWidth="72" maxHeight="72">
-            <Circle fx:id="statusCircle" radius="16" styleClass="status-circle-disconnected"/>
+        <StackPane fx:id="statusHalo" styleClass="status-halo, status-halo-sm"
+                   prefWidth="44" prefHeight="44" maxWidth="44" maxHeight="44">
+            <Circle fx:id="statusCircle" radius="9" styleClass="status-circle-disconnected"/>
         </StackPane>
 
-        <Label fx:id="statusTitle" text="Disconnected" styleClass="status-title"/>
+        <VBox spacing="1" HBox.hgrow="ALWAYS">
+            <Label fx:id="statusTitle" text="Disconnected" styleClass="status-title"/>
+            <Label fx:id="statusLabel" text="Add a server to get started"
+                   styleClass="status-subtitle" wrapText="true" maxWidth="520"/>
+        </VBox>
 
-        <Label fx:id="statusLabel" text="Not connected to any server" styleClass="status-subtitle"
-               wrapText="true" maxWidth="560" alignment="CENTER" textAlignment="CENTER"/>
-
-        <Label fx:id="serverNameLabel" text="" styleClass="server-name-label"
-               managed="false" visible="false"/>
-
-        <HBox alignment="CENTER" spacing="10">
-            <Label text="Mode" styleClass="stats-title"/>
-            <ComboBox fx:id="proxyModeCombo" prefWidth="150" styleClass="mode-combo"/>
-        </HBox>
-
-        <Label fx:id="proxyModeWarning" text="" styleClass="hint-label"
-               visible="false" managed="false"/>
+        <!-- Mode selector and hint, stacked -->
+        <VBox alignment="CENTER_RIGHT" spacing="2">
+            <HBox alignment="CENTER_LEFT" spacing="8">
+                <Label text="Mode" styleClass="stats-title"/>
+                <ComboBox fx:id="proxyModeCombo" prefWidth="130" styleClass="mode-combo"/>
+            </HBox>
+            <Label fx:id="proxyModeWarning" text="" styleClass="hint-label"
+                   visible="false" managed="false"/>
+        </VBox>
 
         <Button fx:id="connectButton" text="Connect" styleClass="connect-button"
-                onAction="#onConnectClicked" prefWidth="220" prefHeight="48">
-        </Button>
-    </VBox>
+                onAction="#onConnectClicked" prefWidth="170" prefHeight="44"/>
+    </HBox>
 
-    <!-- Speed Stats Grid -->
+    <!-- Hidden legacy field used elsewhere; no longer rendered. -->
+    <Label fx:id="serverNameLabel" text="" managed="false" visible="false"/>
+
+    <!-- Real-time traffic section -->
+    <Label text="Real-time traffic" styleClass="section-header"/>
+
     <GridPane hgap="16" vgap="16">
         <columnConstraints>
             <ColumnConstraints hgrow="ALWAYS" percentWidth="50"/>
             <ColumnConstraints hgrow="ALWAYS" percentWidth="50"/>
         </columnConstraints>
 
-        <!-- Upload Speed -->
-        <VBox styleClass="card, stats-card, upload-card" spacing="4" alignment="CENTER_LEFT"
+        <!-- Upload card with sparkline -->
+        <VBox styleClass="card, traffic-card, upload-card" spacing="6"
+              alignment="CENTER_LEFT"
               GridPane.columnIndex="0" GridPane.rowIndex="0">
             <padding>
-                <Insets top="18" right="20" bottom="18" left="22"/>
+                <Insets top="14" right="18" bottom="14" left="20"/>
             </padding>
             <HBox alignment="CENTER_LEFT" spacing="8">
                 <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
                 <Label text="Upload" styleClass="stats-title"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="uploadSpeedLabel" text="0 B/s" styleClass="speed-value"/>
             </HBox>
-            <Label fx:id="uploadSpeedLabel" text="—" styleClass="speed-value"/>
+            <Sparkline fx:id="uploadSparkline" prefHeight="52"/>
         </VBox>
 
-        <!-- Download Speed -->
-        <VBox styleClass="card, stats-card, download-card" spacing="4" alignment="CENTER_LEFT"
+        <!-- Download card with sparkline -->
+        <VBox styleClass="card, traffic-card, download-card" spacing="6"
+              alignment="CENTER_LEFT"
               GridPane.columnIndex="1" GridPane.rowIndex="0">
             <padding>
-                <Insets top="18" right="20" bottom="18" left="22"/>
+                <Insets top="14" right="18" bottom="14" left="20"/>
             </padding>
             <HBox alignment="CENTER_LEFT" spacing="8">
                 <Label text="&#x2B07;" styleClass="stats-icon-download"/>
                 <Label text="Download" styleClass="stats-title"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="downloadSpeedLabel" text="0 B/s" styleClass="speed-value"/>
             </HBox>
-            <Label fx:id="downloadSpeedLabel" text="—" styleClass="speed-value"/>
-        </VBox>
-
-        <!-- Total Uploaded -->
-        <VBox styleClass="card, stats-card-small" spacing="4" alignment="CENTER_LEFT"
-              GridPane.columnIndex="0" GridPane.rowIndex="1">
-            <padding>
-                <Insets top="14" right="18" bottom="14" left="22"/>
-            </padding>
-            <Label text="Total Up" styleClass="stats-title"/>
-            <Label fx:id="totalUploadLabel" text="—" styleClass="stats-value"/>
-        </VBox>
-
-        <!-- Total Downloaded -->
-        <VBox styleClass="card, stats-card-small" spacing="4" alignment="CENTER_LEFT"
-              GridPane.columnIndex="1" GridPane.rowIndex="1">
-            <padding>
-                <Insets top="14" right="18" bottom="14" left="22"/>
-            </padding>
-            <Label text="Total Down" styleClass="stats-title"/>
-            <Label fx:id="totalDownloadLabel" text="—" styleClass="stats-value"/>
+            <Sparkline fx:id="downloadSparkline" prefHeight="52"/>
         </VBox>
     </GridPane>
 
-    <!-- Latency Test -->
-    <HBox alignment="CENTER" spacing="16">
-        <Button fx:id="testLatencyButton" text="Test Latency" styleClass="secondary-button"
-                onAction="#onTestLatencyClicked" prefHeight="36"/>
-        <Label fx:id="latencyResultLabel" text="" styleClass="latency-result"/>
+    <!-- Session totals and latency: inline strip, no extra cards -->
+    <HBox styleClass="card, totals-strip" alignment="CENTER_LEFT" spacing="24">
+        <padding>
+            <Insets top="12" right="18" bottom="12" left="20"/>
+        </padding>
+        <Label text="SESSION" styleClass="stats-title"/>
+
+        <HBox alignment="CENTER_LEFT" spacing="6">
+            <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
+            <Label fx:id="totalUploadLabel" text="—" styleClass="stats-value"/>
+        </HBox>
+
+        <HBox alignment="CENTER_LEFT" spacing="6">
+            <Label text="&#x2B07;" styleClass="stats-icon-download"/>
+            <Label fx:id="totalDownloadLabel" text="—" styleClass="stats-value"/>
+        </HBox>
+
+        <Separator orientation="VERTICAL"/>
+
+        <Label text="LATENCY" styleClass="stats-title"/>
+        <Label fx:id="latencyResultLabel" text="—" styleClass="stats-value latency-result"/>
+
+        <Region HBox.hgrow="ALWAYS"/>
+
+        <Button fx:id="testLatencyButton" text="Test Latency"
+                styleClass="secondary-button"
+                onAction="#onTestLatencyClicked"/>
     </HBox>
 </VBox>

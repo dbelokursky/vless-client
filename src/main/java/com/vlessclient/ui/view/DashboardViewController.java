@@ -49,6 +49,8 @@ public class DashboardViewController {
     @FXML private Label statusTitle;
     @FXML private Label statusLabel;
     @FXML private Label serverNameLabel;
+    @FXML private Sparkline uploadSparkline;
+    @FXML private Sparkline downloadSparkline;
     @FXML private Button connectButton;
     @FXML private Label uploadSpeedLabel;
     @FXML private Label downloadSpeedLabel;
@@ -95,6 +97,7 @@ public class DashboardViewController {
         }
 
         initProxyModeCombo();
+        initSparklines();
 
         if (trafficMonitor != null) {
             bindTrafficLabels();
@@ -193,6 +196,17 @@ public class DashboardViewController {
         });
     }
 
+    private void initSparklines() {
+        if (uploadSparkline != null) {
+            uploadSparkline.setLineColor(Color.web("#ef6c00"));
+            uploadSparkline.setFillColor(Color.web("#ef6c00", 0.18));
+        }
+        if (downloadSparkline != null) {
+            downloadSparkline.setLineColor(Color.web("#1565c0"));
+            downloadSparkline.setFillColor(Color.web("#1565c0", 0.18));
+        }
+    }
+
     private void initProxyModeCombo() {
         proxyModeCombo.getItems().addAll(ProxyMode.values());
         proxyModeCombo.setCellFactory(cb -> new ListCell<>() {
@@ -252,11 +266,21 @@ public class DashboardViewController {
     }
 
     private void bindTrafficLabels() {
-        trafficMonitor.uploadSpeedProperty().addListener((obs, oldVal, newVal) ->
-                uploadSpeedLabel.setText(TrafficMonitor.formatSpeed(newVal.longValue())));
+        trafficMonitor.uploadSpeedProperty().addListener((obs, oldVal, newVal) -> {
+            long v = newVal.longValue();
+            uploadSpeedLabel.setText(TrafficMonitor.formatSpeed(v));
+            if (uploadSparkline != null) {
+                uploadSparkline.addSample(v);
+            }
+        });
 
-        trafficMonitor.downloadSpeedProperty().addListener((obs, oldVal, newVal) ->
-                downloadSpeedLabel.setText(TrafficMonitor.formatSpeed(newVal.longValue())));
+        trafficMonitor.downloadSpeedProperty().addListener((obs, oldVal, newVal) -> {
+            long v = newVal.longValue();
+            downloadSpeedLabel.setText(TrafficMonitor.formatSpeed(v));
+            if (downloadSparkline != null) {
+                downloadSparkline.addSample(v);
+            }
+        });
 
         trafficMonitor.totalUploadProperty().addListener((obs, oldVal, newVal) ->
                 totalUploadLabel.setText(TrafficMonitor.formatBytes(newVal.longValue())));
@@ -278,6 +302,12 @@ public class DashboardViewController {
             }
         } else if (state == ConnectionState.DISCONNECTED || state == ConnectionState.ERROR) {
             trafficMonitor.stop();
+            if (uploadSparkline != null) {
+                uploadSparkline.clear();
+            }
+            if (downloadSparkline != null) {
+                downloadSparkline.clear();
+            }
         }
     }
 
