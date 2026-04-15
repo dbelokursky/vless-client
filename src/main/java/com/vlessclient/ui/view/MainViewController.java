@@ -59,7 +59,7 @@ public class MainViewController {
      * our wrapping {@code Group → StackPane} structure.
      */
     private void installSidebarIcons() {
-        double size = 18;
+        double size = 22;
         if (btnDashboard != null) {
             btnDashboard.setGraphic(Icons.dashboard(size));
         }
