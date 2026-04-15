@@ -154,7 +154,19 @@ public class MainViewController {
         try {
             Node view = ensureViewLoaded(viewName, fxmlPath);
             if (view != null) {
-                contentArea.getChildren().setAll(view);
+                // Wrap every loaded view in a ScrollPane so the whole page is
+                // reachable when the window is smaller than the content
+                // (otherwise buttons like Test Latency are clipped off the
+                // bottom and can't be clicked at all).
+                javafx.scene.control.ScrollPane wrapper =
+                        new javafx.scene.control.ScrollPane(view);
+                wrapper.setFitToWidth(true);
+                wrapper.setHbarPolicy(
+                        javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
+                wrapper.setVbarPolicy(
+                        javafx.scene.control.ScrollPane.ScrollBarPolicy.AS_NEEDED);
+                wrapper.getStyleClass().add("content-scroll");
+                contentArea.getChildren().setAll(wrapper);
                 setActiveButton(navButton);
             }
         } catch (Exception e) {

@@ -117,27 +117,23 @@
 }
 
 .status-label-disconnected {
-    -fx-font-size: 24px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #757575;
+    -fx-font-size: 14px;
+    -fx-text-fill: #9e9e9e;
 }
 
 .status-label-connected {
-    -fx-font-size: 24px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #66bb6a;
+    -fx-font-size: 14px;
+    -fx-text-fill: #81c784;
 }
 
 .status-label-connecting {
-    -fx-font-size: 24px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #ffa726;
+    -fx-font-size: 14px;
+    -fx-text-fill: #ffb74d;
 }
 
 .status-label-error {
-    -fx-font-size: 24px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #ef5350;
+    -fx-font-size: 14px;
+    -fx-text-fill: #bdbdbd;
 }
 
 .server-name-label {
@@ -621,4 +617,21 @@
     -fx-background-color: #5d4037;
     -fx-padding: 3 8 3 8;
     -fx-background-radius: 4;
+}
+
+/* ===== Content scroll wrapper ===== */
+.content-scroll {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-border-color: transparent;
+}
+
+.content-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+/* Neutral hint label — used for informational notes. */
+.hint-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #9e9e9e;
 }

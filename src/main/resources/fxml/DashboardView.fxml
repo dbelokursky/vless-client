@@ -55,7 +55,7 @@
             <ComboBox fx:id="proxyModeCombo" prefWidth="150" styleClass="secondary-button"/>
         </HBox>
 
-        <Label fx:id="proxyModeWarning" text="" styleClass="status-label-error"
+        <Label fx:id="proxyModeWarning" text="" styleClass="hint-label"
                visible="false" managed="false"/>
 
         <Button fx:id="connectButton" text="Connect" styleClass="connect-button"

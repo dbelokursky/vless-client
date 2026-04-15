@@ -117,27 +117,23 @@
 }
 
 .status-label-disconnected {
-    -fx-font-size: 24px;
-    -fx-font-weight: bold;
+    -fx-font-size: 14px;
     -fx-text-fill: #757575;
 }
 
 .status-label-connected {
-    -fx-font-size: 24px;
-    -fx-font-weight: bold;
+    -fx-font-size: 14px;
     -fx-text-fill: #2e7d32;
 }
 
 .status-label-connecting {
-    -fx-font-size: 24px;
-    -fx-font-weight: bold;
+    -fx-font-size: 14px;
     -fx-text-fill: #f57c00;
 }
 
 .status-label-error {
-    -fx-font-size: 24px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #d32f2f;
+    -fx-font-size: 14px;
+    -fx-text-fill: #424242;
 }
 
 .server-name-label {
@@ -603,4 +599,22 @@
     -fx-background-color: #ffe0b2;
     -fx-padding: 3 8 3 8;
     -fx-background-radius: 4;
+}
+
+/* ===== Content scroll wrapper ===== */
+.content-scroll {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-border-color: transparent;
+}
+
+.content-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+/* Neutral hint label — used for informational notes like "TUN mode
+   requires administrator privileges". */
+.hint-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #757575;
 }
