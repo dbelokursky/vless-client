@@ -18,8 +18,10 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.awt.Desktop;
 import java.awt.Taskbar;
 import java.awt.Toolkit;
+import java.awt.desktop.QuitStrategy;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Path;
@@ -39,7 +41,46 @@ public class VlessClientApp extends Application {
         // AWT toolkit available. Safe no-op on platforms without Taskbar
         // support or when the ICON_IMAGE feature is unavailable.
         setDockIcon();
+        installQuitHandler();
         ServiceLocator.initialize();
+    }
+
+    /**
+     * Registers a Desktop quit handler so Cmd+Q and the macOS app menu's
+     * "Quit" both actually terminate the JVM. Without this, JavaFX's glass
+     * bridge handles {@code applicationShouldTerminate:} on its own and —
+     * combined with {@code Platform.setImplicitExit(false)} — leaves the
+     * process running with a stranded Dock icon.
+     */
+    private void installQuitHandler() {
+        try {
+            if (!Desktop.isDesktopSupported()) {
+                return;
+            }
+            Desktop desktop = Desktop.getDesktop();
+            if (desktop.isSupported(Desktop.Action.APP_SUDDEN_TERMINATION)) {
+                desktop.enableSuddenTermination();
+            }
+            if (desktop.isSupported(Desktop.Action.APP_QUIT_STRATEGY)) {
+                desktop.setQuitStrategy(QuitStrategy.CLOSE_ALL_WINDOWS);
+            }
+            if (desktop.isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
+                desktop.setQuitHandler((event, response) -> {
+                    log.info("Desktop quit handler fired — terminating");
+                    try {
+                        shutdown();
+                    } catch (Exception e) {
+                        log.debug("Shutdown during quit failed", e);
+                    }
+                    response.performQuit();
+                    // Insurance: even if performQuit is a no-op, force the
+                    // JVM down so the Dock icon disappears.
+                    Runtime.getRuntime().halt(0);
+                });
+            }
+        } catch (Exception e) {
+            log.debug("Could not install Desktop quit handler: {}", e.getMessage());
+        }
     }
 
     private void setDockIcon() {

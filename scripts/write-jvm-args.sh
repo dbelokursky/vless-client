@@ -14,5 +14,7 @@ OUT="${1:?usage: $0 <out_file>}"
 mkdir -p "$(dirname "${OUT}")"
 cat > "${OUT}" <<'ARGFILE'
 -Xdock:name="VLESS Client"
+-Dapple.awt.application.name="VLESS Client"
+-Dcom.apple.mrj.application.apple.menu.about.name="VLESS Client"
 ARGFILE
 echo "[write-jvm-args] wrote ${OUT}"
