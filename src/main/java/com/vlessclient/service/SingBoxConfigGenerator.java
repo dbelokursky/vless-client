@@ -51,14 +51,14 @@ public class SingBoxConfigGenerator {
 
         if (routingConfig != null) {
             ObjectNode route = buildRoute(routingConfig);
-            ensureDefaultDomainResolver(route, settings);
+            ensureTunRouteEssentials(route, settings);
             root.set("route", route);
         } else if (settings.getProxyMode() == ProxyMode.TUN) {
-            // sing-box 1.12+ requires route.default_domain_resolver when DNS
-            // is configured; without it sing-box 1.13 refuses to start with
-            // FATAL "missing route.default_domain_resolver".
+            // sing-box 1.13 needs a route block with default_domain_resolver
+            // plus auto_detect_interface so DNS and outbound dial can escape
+            // the TUN interface via the physical network.
             ObjectNode route = mapper.createObjectNode();
-            ensureDefaultDomainResolver(route, settings);
+            ensureTunRouteEssentials(route, settings);
             root.set("route", route);
         }
 
@@ -112,20 +112,61 @@ public class SingBoxConfigGenerator {
     }
 
     /**
-     * Ensures the route block carries a {@code default_domain_resolver} so
-     * sing-box 1.13 can resolve outbound dial targets. Points at the
-     * {@code direct-dns} server to avoid DNS loops through the proxy.
+     * Adds the minimum fields sing-box 1.13 needs for a working TUN route:
+     *
+     * <ul>
+     *   <li>{@code default_domain_resolver} — so outbound dial targets can be
+     *       resolved. Points at {@code direct-dns} to avoid a DNS loop
+     *       through the proxy.</li>
+     *   <li>{@code auto_detect_interface: true} — lets sing-box pick the
+     *       physical network interface for outbound dial and DNS, so those
+     *       connections escape the TUN device instead of looping back.</li>
+     *   <li>{@code rules} with {@code action: "sniff"} + DNS hijack — 1.13
+     *       expresses protocol sniffing and DNS interception as route rules
+     *       rather than inbound flags.</li>
+     * </ul>
      */
-    private void ensureDefaultDomainResolver(ObjectNode route, AppSettings settings) {
-        if (route.has("default_domain_resolver")) {
-            return;
-        }
+    private void ensureTunRouteEssentials(ObjectNode route, AppSettings settings) {
         if (settings.getProxyMode() != ProxyMode.TUN) {
             return;
         }
-        ObjectNode resolver = mapper.createObjectNode();
-        resolver.put("server", "direct-dns");
-        route.set("default_domain_resolver", resolver);
+        if (!route.has("default_domain_resolver")) {
+            route.put("default_domain_resolver", "direct-dns");
+        }
+        if (!route.has("auto_detect_interface")) {
+            route.put("auto_detect_interface", true);
+        }
+
+        ArrayNode rules = (ArrayNode) route.get("rules");
+        if (rules == null) {
+            rules = mapper.createArrayNode();
+            route.set("rules", rules);
+        }
+
+        // Prepend the protocol-sniffing and DNS-hijack rules, followed by a
+        // private-ip direct rule so LAN traffic bypasses the proxy.
+        ArrayNode prepended = mapper.createArrayNode();
+
+        ObjectNode sniffRule = mapper.createObjectNode();
+        sniffRule.put("action", "sniff");
+        prepended.add(sniffRule);
+
+        ObjectNode hijackDns = mapper.createObjectNode();
+        hijackDns.put("protocol", "dns");
+        hijackDns.put("action", "hijack-dns");
+        prepended.add(hijackDns);
+
+        ObjectNode privateIp = mapper.createObjectNode();
+        privateIp.put("ip_is_private", true);
+        privateIp.put("action", "route");
+        privateIp.put("outbound", "direct");
+        prepended.add(privateIp);
+
+        // Preserve any pre-existing rules after our essentials.
+        for (int i = 0; i < rules.size(); i++) {
+            prepended.add(rules.get(i));
+        }
+        route.set("rules", prepended);
     }
 
     /**
