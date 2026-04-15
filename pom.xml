@@ -151,6 +151,16 @@
                 <version>3.5.3</version>
                 <configuration>
                     <argLine>--enable-preview</argLine>
+                    <systemPropertyVariables>
+                        <!--
+                            Prevent tests from writing the bundled sing-box
+                            binary into the user's real ~/Library/Application
+                            Support cache, which can trigger macOS Gatekeeper
+                            prompts on first run.
+                        -->
+                        <vless.singbox.skipBundled>true</vless.singbox.skipBundled>
+                        <vless.singbox.installDir>${project.build.directory}/test-singbox-install</vless.singbox.installDir>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
 

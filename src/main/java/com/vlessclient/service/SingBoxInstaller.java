@@ -71,7 +71,20 @@ public class SingBoxInstaller {
     private final Map<String, String> expectedSha256;
 
     public SingBoxInstaller() {
-        this(defaultInstallDir(), DOWNLOAD_URL_TEMPLATE, EXPECTED_SHA256);
+        this(resolveInstallDir(), DOWNLOAD_URL_TEMPLATE, EXPECTED_SHA256);
+    }
+
+    /**
+     * Returns the install directory to use. Tests can override the default
+     * location via the {@code vless.singbox.installDir} system property so
+     * they don't touch the user's real ~/Library/Application Support cache.
+     */
+    private static Path resolveInstallDir() {
+        String override = System.getProperty("vless.singbox.installDir");
+        if (override != null && !override.isBlank()) {
+            return Path.of(override);
+        }
+        return defaultInstallDir();
     }
 
     /** Test constructor: allows overriding install dir, URL template, and checksums. */
@@ -120,13 +133,17 @@ public class SingBoxInstaller {
 
         // 3. Bundled inside the JAR/classpath (maven build-time bundling).
         //    Extract to the cache directory on first use and return the path.
-        try {
-            Optional<Path> extracted = extractBundledResource();
-            if (extracted.isPresent()) {
-                return extracted;
+        //    Tests can skip this by setting vless.singbox.skipBundled=true so
+        //    they don't litter the user's Application Support directory.
+        if (!Boolean.getBoolean("vless.singbox.skipBundled")) {
+            try {
+                Optional<Path> extracted = extractBundledResource();
+                if (extracted.isPresent()) {
+                    return extracted;
+                }
+            } catch (IOException e) {
+                log.warn("Failed to extract bundled sing-box from classpath: {}", e.getMessage());
             }
-        } catch (IOException e) {
-            log.warn("Failed to extract bundled sing-box from classpath: {}", e.getMessage());
         }
 
         // 3. Common system install locations
