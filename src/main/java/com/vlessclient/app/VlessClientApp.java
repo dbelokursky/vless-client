@@ -51,32 +51,58 @@ public class VlessClientApp extends Application {
      * bridge handles {@code applicationShouldTerminate:} on its own and —
      * combined with {@code Platform.setImplicitExit(false)} — leaves the
      * process running with a stranded Dock icon.
+     *
+     * <p>Belt-and-braces: also register a JVM shutdown hook that calls
+     * {@link Runtime#halt(int)} as a last-resort killer, in case another
+     * non-daemon thread is holding shutdown up.</p>
      */
     private void installQuitHandler() {
+        Runnable forceKill = () -> {
+            log.info("Forcing JVM termination (Runtime.halt)");
+            Runtime.getRuntime().halt(0);
+        };
+
         try {
             if (!Desktop.isDesktopSupported()) {
+                log.debug("Desktop API not supported");
                 return;
             }
             Desktop desktop = Desktop.getDesktop();
             if (desktop.isSupported(Desktop.Action.APP_SUDDEN_TERMINATION)) {
                 desktop.enableSuddenTermination();
+                log.debug("Enabled sudden termination");
             }
             if (desktop.isSupported(Desktop.Action.APP_QUIT_STRATEGY)) {
                 desktop.setQuitStrategy(QuitStrategy.CLOSE_ALL_WINDOWS);
+                log.debug("Set quit strategy CLOSE_ALL_WINDOWS");
             }
             if (desktop.isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
                 desktop.setQuitHandler((event, response) -> {
                     log.info("Desktop quit handler fired — terminating");
+                    // Don't let shutdown block us forever: kick a watchdog
+                    // that force-halts after 2 seconds no matter what.
+                    Thread killer = new Thread(() -> {
+                        try {
+                            Thread.sleep(2000);
+                        } catch (InterruptedException ignored) {
+                            Thread.currentThread().interrupt();
+                        }
+                        forceKill.run();
+                    }, "vless-quit-killer");
+                    killer.setDaemon(true);
+                    killer.start();
+
                     try {
                         shutdown();
                     } catch (Exception e) {
                         log.debug("Shutdown during quit failed", e);
                     }
                     response.performQuit();
-                    // Insurance: even if performQuit is a no-op, force the
-                    // JVM down so the Dock icon disappears.
-                    Runtime.getRuntime().halt(0);
+                    forceKill.run();
                 });
+                log.info("Desktop quit handler installed");
+            } else {
+                log.warn("APP_QUIT_HANDLER not supported — Cmd+Q may leak JVM");
             }
         } catch (Exception e) {
             log.debug("Could not install Desktop quit handler: {}", e.getMessage());

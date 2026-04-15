@@ -24,6 +24,15 @@ public final class Launcher {
         System.setProperty("apple.awt.application.name", APP_NAME);
         System.setProperty("com.apple.mrj.application.apple.menu.about.name", APP_NAME);
 
+        // Pre-initialize AWT Toolkit while our property is the latest thing
+        // set, so the Aqua UI caches the app name before JavaFX starts its
+        // own NSApplication setup.
+        try {
+            java.awt.Toolkit.getDefaultToolkit();
+        } catch (Throwable ignored) {
+            // Headless or missing AWT — skip silently
+        }
+
         VlessClientApp.main(args);
     }
 }
