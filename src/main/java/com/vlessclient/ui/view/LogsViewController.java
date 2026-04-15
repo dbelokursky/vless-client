@@ -1,6 +1,7 @@
 package com.vlessclient.ui.view;
 
 import com.vlessclient.app.ServiceLocator;
+import com.vlessclient.service.LogLineFormatter;
 import com.vlessclient.service.SingBoxEngine;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
@@ -22,6 +23,8 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.Region;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -176,40 +179,40 @@ public class LogsViewController {
     }
 
     /**
-     * Custom list cell that wraps long lines and applies color coding based
-     * on log level. Wrapping is achieved by binding the cell's maxWidth to
-     * the list viewport width so text reflows when the window is resized.
+     * Custom list cell that renders a log line as a {@link TextFlow} of
+     * styled {@link Text} nodes — timestamp / level / context / module /
+     * message each get their own CSS class, so the result reads like a
+     * syntax-highlighted terminal. Long lines wrap inside the viewport.
      */
     private static class LogLineCell extends ListCell<String> {
 
+        private final TextFlow flow = new TextFlow();
+
         LogLineCell(ListView<String> parent) {
-            setWrapText(true);
-            // Constrain the cell width to the viewport so the Label inside
-            // wraps instead of growing horizontally.
-            prefWidthProperty().bind(parent.widthProperty().subtract(24));
+            flow.getStyleClass().add("log-line-flow");
+            // Bind the TextFlow width to the viewport so long lines wrap
+            // instead of growing horizontally.
+            flow.prefWidthProperty().bind(parent.widthProperty().subtract(28));
+            flow.maxWidthProperty().bind(parent.widthProperty().subtract(28));
             setMinHeight(Region.USE_PREF_SIZE);
         }
 
         @Override
         protected void updateItem(String item, boolean empty) {
             super.updateItem(item, empty);
-            getStyleClass().removeAll("log-line-error", "log-line-warn",
-                    "log-line-info", "log-line-debug");
             if (empty || item == null) {
                 setText(null);
+                setGraphic(null);
                 return;
             }
-            setText(item);
-            String lower = item.toLowerCase();
-            if (lower.contains("error") || lower.contains("fatal")) {
-                getStyleClass().add("log-line-error");
-            } else if (lower.contains("warn")) {
-                getStyleClass().add("log-line-warn");
-            } else if (lower.contains("info")) {
-                getStyleClass().add("log-line-info");
-            } else {
-                getStyleClass().add("log-line-debug");
+            setText(null);
+            flow.getChildren().clear();
+            for (LogLineFormatter.Segment seg : LogLineFormatter.format(item)) {
+                Text text = new Text(seg.text());
+                text.getStyleClass().add(seg.kind().styleClass());
+                flow.getChildren().add(text);
             }
+            setGraphic(flow);
         }
     }
 }

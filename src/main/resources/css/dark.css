@@ -577,6 +577,28 @@
     -fx-text-fill: #888888;
 }
 
+/* ===== Syntax-highlighted log segments (TextFlow) ===== */
+.log-line-flow {
+    -fx-line-spacing: 1;
+}
+
+.log-line-flow .text {
+    -fx-font-family: "Menlo", "Monaco", "Courier New", monospace;
+    -fx-font-size: 12px;
+}
+
+.log-ts         { -fx-fill: #757575; }
+.log-level-debug { -fx-fill: #90a4ae; -fx-font-weight: bold; }
+.log-level-info  { -fx-fill: #64b5f6; -fx-font-weight: bold; }
+.log-level-warn  { -fx-fill: #ffb74d; -fx-font-weight: bold; }
+.log-level-error { -fx-fill: #ef5350; -fx-font-weight: bold; }
+.log-context    { -fx-fill: #ba68c8; }
+.log-module     { -fx-fill: #4db6ac; }
+.log-msg        { -fx-fill: #e0e0e0; }
+.log-msg-warn   { -fx-fill: #ffcc80; }
+.log-msg-error  { -fx-fill: #ff8a80; }
+.log-plain      { -fx-fill: #bdbdbd; }
+
 /* ===== Tooltip ===== */
 .tooltip {
     -fx-background-color: #3a3a3a;

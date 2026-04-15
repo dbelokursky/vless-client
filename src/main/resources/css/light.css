@@ -567,6 +567,28 @@
     -fx-text-fill: #9e9e9e;
 }
 
+/* ===== Syntax-highlighted log segments (TextFlow) ===== */
+.log-line-flow {
+    -fx-line-spacing: 1;
+}
+
+.log-line-flow .text {
+    -fx-font-family: "Menlo", "Monaco", "Courier New", monospace;
+    -fx-font-size: 12px;
+}
+
+.log-ts         { -fx-fill: #9e9e9e; }
+.log-level-debug { -fx-fill: #78909c; -fx-font-weight: bold; }
+.log-level-info  { -fx-fill: #1976d2; -fx-font-weight: bold; }
+.log-level-warn  { -fx-fill: #ef6c00; -fx-font-weight: bold; }
+.log-level-error { -fx-fill: #c62828; -fx-font-weight: bold; }
+.log-context    { -fx-fill: #7b1fa2; }
+.log-module     { -fx-fill: #00796b; }
+.log-msg        { -fx-fill: #263238; }
+.log-msg-warn   { -fx-fill: #bf360c; }
+.log-msg-error  { -fx-fill: #b71c1c; }
+.log-plain      { -fx-fill: #424242; }
+
 /* ===== sing-box missing banner ===== */
 .singbox-missing-banner {
     -fx-background-color: #fff3e0;
