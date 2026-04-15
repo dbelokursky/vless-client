@@ -9,6 +9,7 @@ import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.LatencyTester;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
+import com.vlessclient.service.SingBoxInstaller;
 import com.vlessclient.service.TrafficMonitor;
 import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
@@ -20,6 +21,9 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.layout.HBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import org.slf4j.Logger;
@@ -50,6 +54,10 @@ public class DashboardViewController {
     @FXML private Label latencyResultLabel;
     @FXML private ComboBox<ProxyMode> proxyModeCombo;
     @FXML private Label proxyModeWarning;
+    @FXML private HBox singBoxMissingBanner;
+    @FXML private Label brewCommandLabel;
+    @FXML private Button copyBrewButton;
+    @FXML private Button retryInstallButton;
 
     private final ObjectProperty<ConnectionState> connectionState =
             new SimpleObjectProperty<>(ConnectionState.DISCONNECTED);
@@ -88,6 +96,15 @@ public class DashboardViewController {
             bindTrafficLabels();
         }
 
+        try {
+            ConfigStore configStore = ServiceLocator.get(ConfigStore.class);
+            configStore.getServers().addListener(
+                    (javafx.collections.ListChangeListener<ServerConfig>) change ->
+                            refreshConnectButtonAvailability());
+        } catch (IllegalArgumentException e) {
+            log.debug("ConfigStore not available while wiring server-list listener");
+        }
+
         if (singBoxEngine != null) {
             singBoxEngine.connectionStateProperty().addListener(
                     (obs, oldState, newState) -> {
@@ -110,7 +127,66 @@ public class DashboardViewController {
             updateUI(ConnectionState.DISCONNECTED);
         }
 
+        if (brewCommandLabel != null) {
+            brewCommandLabel.setText(SingBoxInstaller.brewInstallCommand());
+        }
+        refreshSingBoxMissingBanner();
         refreshConnectButtonAvailability();
+    }
+
+    private void refreshSingBoxMissingBanner() {
+        if (singBoxMissingBanner == null) {
+            return;
+        }
+        boolean missing = singBoxEngine == null;
+        singBoxMissingBanner.setVisible(missing);
+        singBoxMissingBanner.setManaged(missing);
+    }
+
+    @FXML
+    private void onCopyBrewCommandClicked() {
+        ClipboardContent content = new ClipboardContent();
+        content.putString(SingBoxInstaller.brewInstallCommand());
+        Clipboard.getSystemClipboard().setContent(content);
+        if (copyBrewButton != null) {
+            copyBrewButton.setText("Copied!");
+        }
+    }
+
+    @FXML
+    private void onRetryInstallClicked() {
+        SingBoxInstaller installer;
+        try {
+            installer = ServiceLocator.get(SingBoxInstaller.class);
+        } catch (IllegalArgumentException e) {
+            showError("Installer unavailable", "Installer service is not registered.");
+            return;
+        }
+
+        com.vlessclient.ui.view.SingBoxInstallerDialog dialog =
+                new com.vlessclient.ui.view.SingBoxInstallerDialog(installer);
+        dialog.showAndWait().ifPresent(path -> {
+            ServiceLocator.registerSingBoxEngine(path);
+            try {
+                singBoxEngine = ServiceLocator.get(SingBoxEngine.class);
+                singBoxEngine.connectionStateProperty().addListener(
+                        (obs, oldState, newState) -> {
+                            updateUI(newState);
+                            handleTrafficMonitor(newState);
+                        });
+                singBoxEngine.errorMessageProperty().addListener(
+                        (obs, oldMsg, newMsg) -> {
+                            if (newMsg != null && !newMsg.isEmpty()) {
+                                statusLabel.setText(newMsg);
+                            }
+                        });
+                updateUI(singBoxEngine.connectionStateProperty().get());
+            } catch (IllegalArgumentException e) {
+                log.warn("SingBoxEngine still unavailable after install");
+            }
+            refreshSingBoxMissingBanner();
+            refreshConnectButtonAvailability();
+        });
     }
 
     private void initProxyModeCombo() {
@@ -374,6 +450,7 @@ public class DashboardViewController {
                 connectButton.setDisable(true);
                 connectButton.setTooltip(new Tooltip("No servers configured"));
             } else {
+                connectButton.setDisable(false);
                 connectButton.setTooltip(null);
             }
         } catch (IllegalArgumentException e) {

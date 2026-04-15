@@ -18,6 +18,25 @@
       fx:controller="com.vlessclient.ui.view.DashboardViewController"
       spacing="20" alignment="TOP_CENTER">
 
+    <!-- Sing-box missing banner (hidden when engine is available) -->
+    <HBox fx:id="singBoxMissingBanner" styleClass="singbox-missing-banner"
+          spacing="12" alignment="CENTER_LEFT"
+          visible="false" managed="false">
+        <padding>
+            <Insets top="12" right="16" bottom="12" left="16"/>
+        </padding>
+        <Label text="&#x26A0;" styleClass="banner-icon"/>
+        <VBox spacing="2" HBox.hgrow="ALWAYS">
+            <Label text="sing-box is not installed" styleClass="banner-title"/>
+            <Label text="Install it with Homebrew, then restart the app:" styleClass="banner-subtitle"/>
+            <Label fx:id="brewCommandLabel" text="brew install sing-box" styleClass="banner-command"/>
+        </VBox>
+        <Button fx:id="copyBrewButton" text="Copy" styleClass="secondary-button"
+                onAction="#onCopyBrewCommandClicked"/>
+        <Button fx:id="retryInstallButton" text="Retry download" styleClass="secondary-button"
+                onAction="#onRetryInstallClicked"/>
+    </HBox>
+
     <!-- Connection Status Card -->
     <VBox styleClass="card" spacing="16" alignment="CENTER">
         <padding>

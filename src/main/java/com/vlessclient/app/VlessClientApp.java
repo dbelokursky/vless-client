@@ -4,8 +4,10 @@ import com.vlessclient.model.AppSettings;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
+import com.vlessclient.service.SingBoxInstaller;
 import com.vlessclient.service.ThemeManager;
 import com.vlessclient.service.TrayIconService;
+import com.vlessclient.ui.view.SingBoxInstallerDialog;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
@@ -17,7 +19,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.Locale;
+import java.util.Optional;
 
 public class VlessClientApp extends Application {
 
@@ -32,6 +36,8 @@ public class VlessClientApp extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
+        ensureSingBoxAvailable();
+
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/MainView.fxml"));
         Parent root = loader.load();
 
@@ -83,6 +89,42 @@ public class VlessClientApp extends Application {
         shutdown();
     }
 
+    /**
+     * If sing-box is not available yet, shows a modal installer dialog that
+     * downloads and caches the pinned release before the main window appears.
+     * On failure or user skip, the app continues without SingBoxEngine and the
+     * Dashboard will show a brew-install hint.
+     */
+    private void ensureSingBoxAvailable() {
+        boolean alreadyAvailable;
+        try {
+            ServiceLocator.get(SingBoxEngine.class);
+            alreadyAvailable = true;
+        } catch (IllegalArgumentException e) {
+            alreadyAvailable = false;
+        }
+        if (alreadyAvailable) {
+            return;
+        }
+
+        SingBoxInstaller installer;
+        try {
+            installer = ServiceLocator.get(SingBoxInstaller.class);
+        } catch (IllegalArgumentException e) {
+            log.warn("SingBoxInstaller not available; skipping auto-install");
+            return;
+        }
+
+        SingBoxInstallerDialog dialog = new SingBoxInstallerDialog(installer);
+        Optional<Path> installed = dialog.showAndWait();
+        if (installed.isPresent()) {
+            ServiceLocator.registerSingBoxEngine(installed.get());
+            log.info("sing-box ready at {}", installed.get());
+        } else {
+            log.warn("User continued without sing-box; Connect will be unavailable");
+        }
+    }
+
     private void installTrayIcon(Stage stage) {
         try {
             SingBoxEngine engine = null;
@@ -112,13 +154,29 @@ public class VlessClientApp extends Application {
     }
 
     private void loadAppIcon(Stage stage) {
-        try {
-            InputStream iconStream = getClass().getResourceAsStream("/icons/app-icon.png");
-            if (iconStream != null) {
-                stage.getIcons().add(new Image(iconStream));
+        // Register multiple resolutions so the OS can pick the best fit for
+        // the window title bar, Dock, and Cmd+Tab switcher.
+        int[] sizes = {16, 32, 64, 128, 256, 512, 1024};
+        int loaded = 0;
+        for (int size : sizes) {
+            String path = "/icons/app-icon-" + size + ".png";
+            try (InputStream iconStream = getClass().getResourceAsStream(path)) {
+                if (iconStream != null) {
+                    stage.getIcons().add(new Image(iconStream));
+                    loaded++;
+                }
+            } catch (Exception e) {
+                log.debug("Failed to load icon {}", path);
             }
-        } catch (Exception e) {
-            log.debug("No application icon found, using default");
+        }
+        if (loaded == 0) {
+            try (InputStream fallback = getClass().getResourceAsStream("/icons/app-icon.png")) {
+                if (fallback != null) {
+                    stage.getIcons().add(new Image(fallback));
+                }
+            } catch (Exception e) {
+                log.debug("No application icon found, using default");
+            }
         }
     }
 

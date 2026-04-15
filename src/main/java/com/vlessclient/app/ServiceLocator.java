@@ -8,6 +8,7 @@ import com.vlessclient.service.ShareLinkExporter;
 import com.vlessclient.service.ShareLinkParser;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
+import com.vlessclient.service.SingBoxInstaller;
 import com.vlessclient.service.SubscriptionService;
 import com.vlessclient.service.ThemeManager;
 import com.vlessclient.service.TrafficMonitor;
@@ -15,10 +16,9 @@ import com.vlessclient.service.UpdateManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -38,8 +38,18 @@ public class ServiceLocator {
      * Creates and registers all service instances.
      */
     public static void initialize() {
-        singBoxPath = resolveSingBoxPath();
-        log.info("sing-box binary path: {}", singBoxPath != null ? singBoxPath : "NOT FOUND");
+        SingBoxInstaller installer = new SingBoxInstaller();
+        register(SingBoxInstaller.class, installer);
+
+        Optional<Path> existing = installer.findExisting();
+        if (existing.isPresent()) {
+            singBoxPath = existing.get().toString();
+            log.info("sing-box binary path: {}", singBoxPath);
+            register(SingBoxEngine.class, new SingBoxEngine(existing.get()));
+        } else {
+            singBoxPath = null;
+            log.info("sing-box binary not found on disk; will be downloaded on startup");
+        }
 
         ConfigStore configStore = new ConfigStore();
         register(ConfigStore.class, configStore);
@@ -48,13 +58,6 @@ public class ServiceLocator {
 
         ThemeManager themeManager = new ThemeManager();
         register(ThemeManager.class, themeManager);
-
-        if (singBoxPath != null) {
-            SingBoxEngine singBoxEngine = new SingBoxEngine(Path.of(singBoxPath));
-            register(SingBoxEngine.class, singBoxEngine);
-        } else {
-            log.warn("sing-box binary not found; SingBoxEngine will not be available");
-        }
 
         SingBoxConfigGenerator configGenerator = new SingBoxConfigGenerator();
         register(SingBoxConfigGenerator.class, configGenerator);
@@ -173,41 +176,12 @@ public class ServiceLocator {
     }
 
     /**
-     * Resolves the sing-box binary path by checking multiple locations:
-     * 1. Bundled inside the macOS .app bundle: Contents/Resources/sing-box
-     * 2. Common install location: /usr/local/bin/sing-box
-     * 3. Anywhere on the system PATH
+     * Registers (or re-registers) the SingBoxEngine after the binary has been
+     * downloaded at startup. Called by the installer flow in VlessClientApp.
      */
-    private static String resolveSingBoxPath() {
-        // 1. Check bundled location (macOS .app bundle)
-        String bundledPath = System.getProperty("java.home");
-        if (bundledPath != null) {
-            Path appBundlePath = Path.of(bundledPath).getParent();
-            if (appBundlePath != null) {
-                Path resourcePath = appBundlePath.resolve("Resources").resolve("sing-box");
-                if (Files.isExecutable(resourcePath)) {
-                    return resourcePath.toAbsolutePath().toString();
-                }
-            }
-        }
-
-        // 2. Check /usr/local/bin/sing-box
-        Path usrLocalPath = Path.of("/usr/local/bin/sing-box");
-        if (Files.isExecutable(usrLocalPath)) {
-            return usrLocalPath.toString();
-        }
-
-        // 3. Check system PATH
-        String pathEnv = System.getenv("PATH");
-        if (pathEnv != null) {
-            for (String dir : pathEnv.split(File.pathSeparator)) {
-                Path candidate = Path.of(dir, "sing-box");
-                if (Files.isExecutable(candidate)) {
-                    return candidate.toAbsolutePath().toString();
-                }
-            }
-        }
-
-        return null;
+    public static void registerSingBoxEngine(Path binaryPath) {
+        singBoxPath = binaryPath.toString();
+        register(SingBoxEngine.class, new SingBoxEngine(binaryPath));
+        log.info("SingBoxEngine registered with binary: {}", singBoxPath);
     }
 }

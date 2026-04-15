@@ -20,6 +20,7 @@
         <junit.version>5.12.2</junit.version>
         <jackson.version>2.18.3</jackson.version>
         <main.class>com.vlessclient.app.Launcher</main.class>
+        <singbox.version>1.13.8</singbox.version>
     </properties>
 
     <dependencies>
@@ -94,6 +95,34 @@
 
     <build>
         <plugins>
+            <!--
+                Downloads and bundles the sing-box binary for both macOS
+                architectures into target/classes/native/darwin-{arch}/sing-box.
+                This makes the bundled JAR self-contained: SingBoxInstaller
+                extracts the matching binary from the classpath on first run,
+                so users don't need to install sing-box manually.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>bundle-sing-box</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>bash</executable>
+                            <arguments>
+                                <argument>${project.basedir}/scripts/bundle-singbox.sh</argument>
+                                <argument>${project.build.directory}/classes/native</argument>
+                                <argument>${singbox.version}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

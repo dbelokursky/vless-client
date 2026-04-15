@@ -588,3 +588,37 @@
     -fx-font-size: 12px;
     -fx-background-radius: 4;
 }
+
+/* ===== sing-box missing banner ===== */
+.singbox-missing-banner {
+    -fx-background-color: #3e2723;
+    -fx-border-color: #ff8a65;
+    -fx-border-width: 1;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+.singbox-missing-banner .banner-icon {
+    -fx-font-size: 22px;
+    -fx-text-fill: #ffab91;
+}
+
+.singbox-missing-banner .banner-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffccbc;
+}
+
+.singbox-missing-banner .banner-subtitle {
+    -fx-font-size: 11px;
+    -fx-text-fill: #bcaaa4;
+}
+
+.singbox-missing-banner .banner-command {
+    -fx-font-family: 'Menlo', 'Monaco', monospace;
+    -fx-font-size: 12px;
+    -fx-text-fill: #ffffff;
+    -fx-background-color: #5d4037;
+    -fx-padding: 3 8 3 8;
+    -fx-background-radius: 4;
+}
