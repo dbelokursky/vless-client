@@ -62,7 +62,10 @@ class SingBoxConfigGeneratorTunTest {
                 hasTun = true;
                 assertThat(inbound.get("tag").asText()).isEqualTo("tun-in");
                 assertThat(inbound.get("interface_name").asText()).isEqualTo("utun99");
-                assertThat(inbound.get("inet4_address").asText()).isEqualTo("172.19.0.1/30");
+                JsonNode addr = inbound.get("address");
+                assertThat(addr).isNotNull();
+                assertThat(addr.isArray()).isTrue();
+                assertThat(addr.get(0).asText()).isEqualTo("172.19.0.1/30");
                 break;
             }
         }
@@ -70,7 +73,7 @@ class SingBoxConfigGeneratorTunTest {
     }
 
     @Test
-    void tunMode_tunInboundHasAutoRouteStrictRouteSniff() throws Exception {
+    void tunMode_tunInboundHasAutoRouteAndStrictRoute() throws Exception {
         String json = generator.generate(createVlessServer(), tunSettings());
         JsonNode inbounds = parse(json).get("inbounds");
 
@@ -85,9 +88,10 @@ class SingBoxConfigGeneratorTunTest {
         assertThat(tun).isNotNull();
         assertThat(tun.get("auto_route").asBoolean()).isTrue();
         assertThat(tun.get("strict_route").asBoolean()).isTrue();
-        assertThat(tun.get("sniff").asBoolean()).isTrue();
-        assertThat(tun.get("sniff_override_destination").asBoolean()).isTrue();
         assertThat(tun.get("stack").asText()).isEqualTo("system");
+        // sing-box 1.13 removed sniff/sniff_override_destination from inbounds
+        assertThat(tun.has("sniff")).isFalse();
+        assertThat(tun.has("sniff_override_destination")).isFalse();
     }
 
     @Test
@@ -125,18 +129,19 @@ class SingBoxConfigGeneratorTunTest {
         assertThat(servers.size()).isEqualTo(2);
 
         assertThat(servers.get(0).get("tag").asText()).isEqualTo("proxy-dns");
-        assertThat(servers.get(0).get("address").asText()).isEqualTo("https://1.1.1.1/dns-query");
+        assertThat(servers.get(0).get("type").asText()).isEqualTo("https");
+        assertThat(servers.get(0).get("server").asText()).isEqualTo("1.1.1.1");
+        assertThat(servers.get(0).get("path").asText()).isEqualTo("/dns-query");
         assertThat(servers.get(0).get("detour").asText()).isEqualTo("proxy");
 
         assertThat(servers.get(1).get("tag").asText()).isEqualTo("direct-dns");
-        assertThat(servers.get(1).get("address").asText()).isEqualTo("https://223.5.5.5/dns-query");
+        assertThat(servers.get(1).get("type").asText()).isEqualTo("https");
+        assertThat(servers.get(1).get("server").asText()).isEqualTo("223.5.5.5");
+        assertThat(servers.get(1).get("path").asText()).isEqualTo("/dns-query");
         assertThat(servers.get(1).get("detour").asText()).isEqualTo("direct");
 
-        JsonNode rules = dns.get("rules");
-        assertThat(rules).isNotNull();
-        assertThat(rules.size()).isEqualTo(1);
-        assertThat(rules.get(0).get("server").asText()).isEqualTo("proxy-dns");
-
+        // sing-box 1.13 uses dns.final instead of a match-all rule
+        assertThat(dns.get("final").asText()).isEqualTo("proxy-dns");
         assertThat(dns.get("strategy").asText()).isEqualTo("prefer_ipv4");
     }
 
@@ -170,10 +175,10 @@ class SingBoxConfigGeneratorTunTest {
         String json = generator.generate(createVlessServer(), settings);
         JsonNode dns = parse(json).get("dns");
 
-        assertThat(dns.get("servers").get(0).get("address").asText())
-                .isEqualTo("https://8.8.8.8/dns-query");
-        assertThat(dns.get("servers").get(1).get("address").asText())
-                .isEqualTo("https://9.9.9.9/dns-query");
+        assertThat(dns.get("servers").get(0).get("server").asText()).isEqualTo("8.8.8.8");
+        assertThat(dns.get("servers").get(0).get("type").asText()).isEqualTo("https");
+        assertThat(dns.get("servers").get(1).get("server").asText()).isEqualTo("9.9.9.9");
+        assertThat(dns.get("servers").get(1).get("type").asText()).isEqualTo("https");
         assertThat(dns.get("strategy").asText()).isEqualTo("prefer_ipv6");
     }
 
@@ -212,6 +217,6 @@ class SingBoxConfigGeneratorTunTest {
             }
         }
         assertThat(tun).isNotNull();
-        assertThat(tun.get("inet4_address").asText()).isEqualTo("10.10.0.1/24");
+        assertThat(tun.get("address").get(0).asText()).isEqualTo("10.10.0.1/24");
     }
 }

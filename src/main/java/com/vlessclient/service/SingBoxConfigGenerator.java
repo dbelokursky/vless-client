@@ -16,6 +16,8 @@ import com.vlessclient.model.ProxyMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 
@@ -48,7 +50,16 @@ public class SingBoxConfigGenerator {
         root.set("outbounds", buildOutbounds(server));
 
         if (routingConfig != null) {
-            root.set("route", buildRoute(routingConfig));
+            ObjectNode route = buildRoute(routingConfig);
+            ensureDefaultDomainResolver(route, settings);
+            root.set("route", route);
+        } else if (settings.getProxyMode() == ProxyMode.TUN) {
+            // sing-box 1.12+ requires route.default_domain_resolver when DNS
+            // is configured; without it sing-box 1.13 refuses to start with
+            // FATAL "missing route.default_domain_resolver".
+            ObjectNode route = mapper.createObjectNode();
+            ensureDefaultDomainResolver(route, settings);
+            root.set("route", route);
         }
 
         root.set("experimental", buildExperimental(settings));
@@ -74,30 +85,86 @@ public class SingBoxConfigGenerator {
 
         ObjectNode proxyDns = mapper.createObjectNode();
         proxyDns.put("tag", "proxy-dns");
-        proxyDns.put("address", settings.getProxyDns());
+        populateDnsServerAddress(proxyDns, settings.getProxyDns());
         proxyDns.put("detour", "proxy");
         servers.add(proxyDns);
 
         ObjectNode directDns = mapper.createObjectNode();
         directDns.put("tag", "direct-dns");
-        directDns.put("address", settings.getDirectDns());
+        populateDnsServerAddress(directDns, settings.getDirectDns());
         directDns.put("detour", "direct");
         servers.add(directDns);
 
         dns.set("servers", servers);
 
-        ArrayNode rules = mapper.createArrayNode();
-        ObjectNode rule = mapper.createObjectNode();
-        ArrayNode outbound = mapper.createArrayNode();
-        outbound.add("any");
-        rule.set("outbound", outbound);
-        rule.put("server", "proxy-dns");
-        rules.add(rule);
-        dns.set("rules", rules);
+        // In sing-box 1.13 the dns.rules[].outbound match-all form and
+        // the string address shortcut were removed. Use dns.final to route
+        // all queries through the proxy DNS by default.
+        dns.put("final", "proxy-dns");
 
         dns.put("strategy", settings.getDnsStrategy());
 
         return dns;
+    }
+
+    /**
+     * Ensures the route block carries a {@code default_domain_resolver} so
+     * sing-box 1.13 can resolve outbound dial targets. Points at the
+     * {@code direct-dns} server to avoid DNS loops through the proxy.
+     */
+    private void ensureDefaultDomainResolver(ObjectNode route, AppSettings settings) {
+        if (route.has("default_domain_resolver")) {
+            return;
+        }
+        if (settings.getProxyMode() != ProxyMode.TUN) {
+            return;
+        }
+        ObjectNode resolver = mapper.createObjectNode();
+        resolver.put("server", "direct-dns");
+        route.set("default_domain_resolver", resolver);
+    }
+
+    /**
+     * Populates a DNS server object using the sing-box 1.13 schema. Accepts
+     * both the legacy URL-style address (e.g. {@code https://1.1.1.1/dns-query})
+     * and bare IPs/hostnames.
+     */
+    void populateDnsServerAddress(ObjectNode server, String address) {
+        if (address == null || address.isBlank()) {
+            server.put("type", "udp");
+            server.put("server", "1.1.1.1");
+            return;
+        }
+        if (!address.contains("://")) {
+            server.put("type", "udp");
+            server.put("server", address);
+            return;
+        }
+        try {
+            URI uri = new URI(address);
+            String scheme = uri.getScheme() != null ? uri.getScheme().toLowerCase() : "udp";
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) {
+                server.put("type", "udp");
+                server.put("server", address);
+                return;
+            }
+            server.put("type", scheme);
+            server.put("server", host);
+            if (uri.getPort() > 0) {
+                server.put("server_port", uri.getPort());
+            }
+            if ("https".equals(scheme) || "h3".equals(scheme) || "quic".equals(scheme)) {
+                String path = uri.getRawPath();
+                if (path != null && !path.isEmpty()) {
+                    server.put("path", path);
+                }
+            }
+        } catch (URISyntaxException e) {
+            log.warn("Could not parse DNS address {}, falling back to UDP", address);
+            server.put("type", "udp");
+            server.put("server", address);
+        }
     }
 
     private ArrayNode buildInbounds(AppSettings settings) {
@@ -108,12 +175,16 @@ public class SingBoxConfigGenerator {
             tun.put("type", "tun");
             tun.put("tag", "tun-in");
             tun.put("interface_name", settings.getTunInterfaceName());
-            tun.put("inet4_address", settings.getTunIpv4Address());
+            // sing-box 1.13 removed inet4_address/inet6_address in favor of
+            // a CIDR array under `address`.
+            ArrayNode address = mapper.createArrayNode();
+            address.add(settings.getTunIpv4Address());
+            tun.set("address", address);
             tun.put("auto_route", true);
             tun.put("strict_route", true);
             tun.put("stack", "system");
-            tun.put("sniff", true);
-            tun.put("sniff_override_destination", true);
+            // `sniff` and `sniff_override_destination` were removed from
+            // inbound in 1.13; sniffing is now expressed as a route action.
             inbounds.add(tun);
         }
 
