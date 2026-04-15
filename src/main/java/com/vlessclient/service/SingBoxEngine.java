@@ -35,6 +35,7 @@ public class SingBoxEngine {
 
     private Process process;
     private Path tempConfigFile;
+    private Path stopSignalFile;
     private LogReader logReader;
     private ProxyMode activeProxyMode;
 
@@ -168,25 +169,66 @@ public class SingBoxEngine {
     /**
      * Starts sing-box with administrator privileges using macOS osascript.
      * Required for TUN mode since creating a TUN device needs root access.
+     *
+     * <p>To avoid a second password prompt on disconnect we spawn a small
+     * shell wrapper inside the privileged context. The wrapper launches
+     * sing-box in the background, then polls for either the disappearance of
+     * the Java parent process or the creation of a user-writable
+     * "stop signal" file in {@code /tmp}. Either condition causes it to kill
+     * sing-box and exit — so {@link #stopPrivilegedProcess()} only has to
+     * {@code touch} the stop file (no {@code sudo}, no password).</p>
      */
     private void startWithPrivileges() throws IOException {
-        String singBoxCmd = singBoxBinary.toAbsolutePath().toString()
-                .replace("'", "'\\''");
-        String configPath = tempConfigFile.toAbsolutePath().toString()
-                .replace("'", "'\\''");
+        // Use /tmp so both root and the user can read/write the signal file.
+        stopSignalFile = Path.of("/tmp",
+                "vless-client-stop-" + System.nanoTime() + ".signal");
+        // Make sure the signal file is absent at start time.
+        Files.deleteIfExists(stopSignalFile);
 
-        String shellCommand = String.format("'%s' run -c '%s'", singBoxCmd, configPath);
+        long parentPid = ProcessHandle.current().pid();
+
+        String singBoxCmd = shellQuote(singBoxBinary.toAbsolutePath().toString());
+        String configPath = shellQuote(tempConfigFile.toAbsolutePath().toString());
+        String stopPath = shellQuote(stopSignalFile.toAbsolutePath().toString());
+
+        // The wrapper:
+        //  1. Launches sing-box in background and captures its PID.
+        //  2. Sets an EXIT trap so sing-box is killed no matter how the shell
+        //     exits (signal, stop file, parent death, internal error).
+        //  3. Polls every 300 ms for three stop conditions:
+        //       - sing-box process died on its own,
+        //       - Java parent process died (orphan cleanup),
+        //       - stop signal file appeared (user clicked Disconnect).
+        //  4. Removes the stop file so re-runs start from a clean state.
+        String shellCommand = String.format(
+                "%s run -c %s & SBPID=$!; "
+                        + "trap 'kill $SBPID 2>/dev/null' EXIT; "
+                        + "while kill -0 $SBPID 2>/dev/null "
+                        + "&& kill -0 %d 2>/dev/null "
+                        + "&& [ ! -f %s ]; do sleep 0.3; done; "
+                        + "kill $SBPID 2>/dev/null; "
+                        + "wait $SBPID 2>/dev/null; "
+                        + "rm -f %s",
+                singBoxCmd, configPath, parentPid, stopPath, stopPath);
 
         ProcessBuilder pb = new ProcessBuilder(
                 "osascript",
                 "-e",
-                "do shell script \"" + shellCommand.replace("\"", "\\\"")
-                        + "\" with administrator privileges"
+                "do shell script \"" + shellCommand.replace("\\", "\\\\")
+                        .replace("\"", "\\\"") + "\" with administrator privileges"
         );
         pb.directory(singBoxBinary.getParent().toFile());
         pb.redirectErrorStream(true);
 
         process = pb.start();
+    }
+
+    /**
+     * Wraps {@code s} in single quotes, escaping any embedded single quotes.
+     * Safe for embedding into an {@code sh -c} command.
+     */
+    private static String shellQuote(String s) {
+        return "'" + s.replace("'", "'\\''") + "'";
     }
 
     /**
@@ -230,23 +272,43 @@ public class SingBoxEngine {
 
     /**
      * Stops a sing-box process that was started with administrator privileges.
-     * Uses osascript to run {@code pkill -f sing-box} as root.
+     *
+     * <p>Instead of shelling out to {@code pkill} with another
+     * privilege-escalation prompt, we signal the root-owned wrapper shell by
+     * creating the stop-signal file. The wrapper's watch loop sees it and
+     * terminates sing-box, then the outer osascript process exits on its own.
+     * No password prompt.</p>
      */
     private void stopPrivilegedProcess() {
         try {
-            ProcessBuilder pb = new ProcessBuilder(
-                    "osascript",
-                    "-e",
-                    "do shell script \"pkill -f 'sing-box run'\" with administrator privileges"
-            );
-            pb.redirectErrorStream(true);
-            Process killProcess = pb.start();
-            killProcess.waitFor(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (stopSignalFile != null) {
+                try {
+                    Files.createFile(stopSignalFile);
+                } catch (java.nio.file.FileAlreadyExistsException ignored) {
+                    // Already signalled — the wrapper will notice regardless.
+                }
+            }
+            if (process != null) {
+                if (!process.waitFor(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                    process.waitFor(2, TimeUnit.SECONDS);
+                }
+            }
         } catch (IOException | InterruptedException e) {
-            // Fallback: try normal destroy
-            process.destroyForcibly();
+            if (process != null) {
+                process.destroyForcibly();
+            }
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
+            }
+        } finally {
+            if (stopSignalFile != null) {
+                try {
+                    Files.deleteIfExists(stopSignalFile);
+                } catch (IOException ignored) {
+                    // best effort
+                }
+                stopSignalFile = null;
             }
         }
     }
@@ -321,6 +383,16 @@ public class SingBoxEngine {
      * Used by the JVM shutdown hook.
      */
     private void forceStop() {
+        // TUN mode: signal the wrapper via the stop file so it kills the
+        // root-owned sing-box gracefully. Parent-PID watch in the wrapper
+        // also catches this case, but touching the file is faster.
+        if (stopSignalFile != null) {
+            try {
+                Files.createFile(stopSignalFile);
+            } catch (IOException ignored) {
+                // already exists or can't create — best effort
+            }
+        }
         try {
             if (process != null && process.isAlive()) {
                 process.destroy();
@@ -333,6 +405,14 @@ public class SingBoxEngine {
                 process.destroyForcibly();
             }
             Thread.currentThread().interrupt();
+        }
+        if (stopSignalFile != null) {
+            try {
+                Files.deleteIfExists(stopSignalFile);
+            } catch (IOException ignored) {
+                // best effort
+            }
+            stopSignalFile = null;
         }
         cleanupConfigFile();
     }
