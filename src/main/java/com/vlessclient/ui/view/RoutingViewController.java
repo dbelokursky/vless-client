@@ -17,6 +17,7 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -26,6 +27,8 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class RoutingViewController {
@@ -39,6 +42,8 @@ public class RoutingViewController {
     @FXML private Label geodataStatusLabel;
     @FXML private Button downloadGeodataButton;
     @FXML private Button addRuleButton;
+    @FXML private TextArea bypassListArea;
+    @FXML private Button saveBypassButton;
 
     private RoutingService routingService;
     private final ObservableList<RoutingRule> rulesList = FXCollections.observableArrayList();
@@ -71,8 +76,58 @@ public class RoutingViewController {
         rulesListView.setCellFactory(list -> new RuleListCell());
 
         loadRules();
+        loadBypassList();
         updateCustomRulesVisibility(config.getPreset());
         updateGeodataStatus();
+    }
+
+    private void loadBypassList() {
+        if (bypassListArea == null) {
+            return;
+        }
+        List<String> list = routingService.getConfig().getBypassList();
+        if (list == null || list.isEmpty()) {
+            bypassListArea.clear();
+            return;
+        }
+        bypassListArea.setText(String.join("\n", list));
+    }
+
+    @FXML
+    private void onSaveBypassClicked() {
+        if (bypassListArea == null) {
+            return;
+        }
+        String text = bypassListArea.getText();
+        List<String> parsed = new ArrayList<>();
+        if (text != null) {
+            for (String line : text.split("\\R")) {
+                String trimmed = line.trim();
+                if (!trimmed.isEmpty()) {
+                    parsed.add(trimmed);
+                }
+            }
+        }
+        RoutingConfig config = routingService.getConfig();
+        config.setBypassList(parsed);
+        routingService.saveConfig(config);
+        log.info("Bypass list saved: {} entries", parsed.size());
+
+        // Brief button feedback
+        String originalText = saveBypassButton.getText();
+        saveBypassButton.setText("Saved");
+        saveBypassButton.setDisable(true);
+        Thread.startVirtualThread(() -> {
+            try {
+                Thread.sleep(1200);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            Platform.runLater(() -> {
+                saveBypassButton.setText(originalText);
+                saveBypassButton.setDisable(false);
+            });
+        });
     }
 
     @FXML

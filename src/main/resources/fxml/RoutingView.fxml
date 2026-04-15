@@ -5,6 +5,7 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.layout.Priority?>
@@ -31,6 +32,23 @@
 
     <!-- Geodata status -->
     <Label fx:id="geodataStatusLabel" text="" styleClass="server-address"/>
+
+    <!-- Bypass list: patterns matching these are sent direct, skipping the proxy -->
+    <VBox spacing="6" styleClass="card">
+        <padding>
+            <Insets top="14" right="16" bottom="14" left="16"/>
+        </padding>
+        <HBox alignment="CENTER_LEFT" spacing="10">
+            <Label text="Bypass list" styleClass="section-title"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button fx:id="saveBypassButton" text="Save" styleClass="primary-button"
+                    onAction="#onSaveBypassClicked"/>
+        </HBox>
+        <Label styleClass="server-address" wrapText="true"
+               text="One entry per line. These hosts go direct and bypass the VPN. Supports wildcards: *.example.com, .example.com, *google*, CIDR (192.168.0.0/16), bare IPs, URLs. Lines starting with # are comments."/>
+        <TextArea fx:id="bypassListArea" prefRowCount="6" wrapText="false"
+                  promptText="*.github.com&#10;api.openai.com&#10;192.168.0.0/16&#10;# legacy in-house services&#10;.corp.local"/>
+    </VBox>
 
     <!-- Custom rules section (visible only when preset is Custom) -->
     <VBox fx:id="customRulesSection" spacing="8" VBox.vgrow="ALWAYS" managed="false" visible="false">

@@ -15,6 +15,21 @@ public class RoutingConfig {
     @JsonProperty("rules")
     private List<RoutingRule> rules = new ArrayList<>();
 
+    /**
+     * User-maintained list of URL/host patterns that should BYPASS the proxy
+     * (go direct). One entry per element. Supports:
+     * <ul>
+     *   <li>{@code example.com} — exact domain match</li>
+     *   <li>{@code *.example.com} or {@code .example.com} — domain + all subdomains</li>
+     *   <li>{@code *example*} — substring / keyword match</li>
+     *   <li>{@code 192.168.0.0/16} — IPv4/IPv6 CIDR</li>
+     *   <li>{@code 203.0.113.42} — single IP (becomes /32)</li>
+     *   <li>{@code https://foo.com/path} — URL form, scheme and path stripped</li>
+     * </ul>
+     */
+    @JsonProperty("bypass_list")
+    private List<String> bypassList = new ArrayList<>();
+
     @JsonProperty("geoip_path")
     private String geoipPath;
 
@@ -22,6 +37,14 @@ public class RoutingConfig {
     private String geositePath;
 
     public RoutingConfig() {
+    }
+
+    public List<String> getBypassList() {
+        return bypassList;
+    }
+
+    public void setBypassList(List<String> bypassList) {
+        this.bypassList = bypassList != null ? bypassList : new ArrayList<>();
     }
 
     public String getPreset() {

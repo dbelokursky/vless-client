@@ -5,8 +5,10 @@ import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ConnectionState;
 import com.vlessclient.model.ProxyMode;
 import com.vlessclient.model.ServerConfig;
+import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.LatencyTester;
+import com.vlessclient.service.RoutingService;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.SingBoxInstaller;
@@ -397,7 +399,13 @@ public class DashboardViewController {
                         "Required services are not available. Please restart the app.");
                 return;
             }
-            String configJson = configGenerator.generate(activeServer, settings);
+            RoutingConfig routingConfig = null;
+            try {
+                routingConfig = ServiceLocator.get(RoutingService.class).getConfig();
+            } catch (IllegalArgumentException e) {
+                log.debug("RoutingService not available; using default route");
+            }
+            String configJson = configGenerator.generate(activeServer, settings, routingConfig);
             singBoxEngine.start(configJson, settings.getProxyMode());
         } catch (IllegalArgumentException e) {
             log.error("Service unavailable during connect", e);

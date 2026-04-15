@@ -270,7 +270,13 @@ public class TrayIconService {
             }
             try {
                 AppSettings settings = ServiceLocator.get(AppSettings.class);
-                String configJson = configGenerator.generate(active, settings);
+                com.vlessclient.model.RoutingConfig routingConfig = null;
+                try {
+                    routingConfig = ServiceLocator.get(RoutingService.class).getConfig();
+                } catch (IllegalArgumentException e) {
+                    log.debug("RoutingService not available; using default route");
+                }
+                String configJson = configGenerator.generate(active, settings, routingConfig);
                 singBoxEngine.start(configJson, settings.getProxyMode());
             } catch (IOException e) {
                 log.error("Failed to start sing-box from tray", e);

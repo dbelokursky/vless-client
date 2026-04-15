@@ -45,6 +45,64 @@ class SingBoxConfigGeneratorRoutingTest {
     }
 
     @Test
+    void bypassList_mergedIntoDirectRule() throws Exception {
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("route_all");
+        routingConfig.setBypassList(List.of(
+                "example.com",           // DOMAIN
+                "*.github.com",          // DOMAIN_SUFFIX → github.com
+                ".corp.local",           // DOMAIN_SUFFIX → corp.local
+                "*google*",              // DOMAIN_KEYWORD → google
+                "192.168.0.0/16",        // IP_CIDR as-is
+                "203.0.113.42",          // IP_CIDR → .../32
+                "# comment",             // skipped
+                "",                      // skipped
+                "https://api.openai.com/v1" // DOMAIN → api.openai.com
+        ));
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        assertThat(rules).isNotNull();
+        assertThat(rules.size()).isEqualTo(1);
+
+        JsonNode bypass = rules.get(0);
+        assertThat(bypass.get("action").asText()).isEqualTo("route");
+        assertThat(bypass.get("outbound").asText()).isEqualTo("direct");
+
+        JsonNode domains = bypass.get("domain");
+        assertThat(domains.size()).isEqualTo(2);
+        assertThat(domains.get(0).asText()).isEqualTo("example.com");
+        assertThat(domains.get(1).asText()).isEqualTo("api.openai.com");
+
+        JsonNode suffixes = bypass.get("domain_suffix");
+        assertThat(suffixes.size()).isEqualTo(2);
+        assertThat(suffixes.get(0).asText()).isEqualTo("github.com");
+        assertThat(suffixes.get(1).asText()).isEqualTo("corp.local");
+
+        JsonNode keywords = bypass.get("domain_keyword");
+        assertThat(keywords.size()).isEqualTo(1);
+        assertThat(keywords.get(0).asText()).isEqualTo("google");
+
+        JsonNode cidrs = bypass.get("ip_cidr");
+        assertThat(cidrs.size()).isEqualTo(2);
+        assertThat(cidrs.get(0).asText()).isEqualTo("192.168.0.0/16");
+        assertThat(cidrs.get(1).asText()).isEqualTo("203.0.113.42/32");
+    }
+
+    @Test
+    void bypassList_emptyProducesNoBypassRule() throws Exception {
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("route_all");
+        // bypassList is empty by default
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        assertThat(rules.size()).isEqualTo(0);
+    }
+
+    @Test
     void routeAll_generatesMinimalRouteSection() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("route_all");

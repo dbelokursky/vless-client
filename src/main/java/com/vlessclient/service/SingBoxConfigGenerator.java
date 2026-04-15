@@ -506,6 +506,13 @@ public class SingBoxConfigGenerator {
         }
         // "route_all" — no special rules, everything goes through proxy via final
 
+        // User bypass list is honored in every preset: matching hosts always
+        // go direct regardless of route_all / bypass_domestic / custom.
+        ObjectNode bypassRule = buildBypassRule(routingConfig.getBypassList());
+        if (bypassRule != null) {
+            rules.insert(0, bypassRule);
+        }
+
         route.set("rules", rules);
         route.put("final", "proxy");
         route.put("auto_detect_interface", true);
@@ -516,6 +523,62 @@ public class SingBoxConfigGenerator {
         }
 
         return route;
+    }
+
+    /**
+     * Collapses all bypass-list entries into a single sing-box route rule that
+     * sends matching traffic to the {@code direct} outbound. Returns
+     * {@code null} if the list is empty or contains no recognizable patterns.
+     *
+     * <p>A sing-box rule can carry multiple sibling matchers ({@code domain},
+     * {@code domain_suffix}, {@code domain_keyword}, {@code ip_cidr}) at once;
+     * they are OR'd together. Grouping all entries into one rule keeps the
+     * generated config compact.</p>
+     */
+    ObjectNode buildBypassRule(List<String> bypassList) {
+        if (bypassList == null || bypassList.isEmpty()) {
+            return null;
+        }
+
+        ArrayNode domains = mapper.createArrayNode();
+        ArrayNode domainSuffixes = mapper.createArrayNode();
+        ArrayNode domainKeywords = mapper.createArrayNode();
+        ArrayNode ipCidrs = mapper.createArrayNode();
+
+        for (String raw : bypassList) {
+            BypassPatternParser.Parsed parsed = BypassPatternParser.parse(raw);
+            if (parsed == null) {
+                continue;
+            }
+            switch (parsed.kind()) {
+                case DOMAIN -> domains.add(parsed.value());
+                case DOMAIN_SUFFIX -> domainSuffixes.add(parsed.value());
+                case DOMAIN_KEYWORD -> domainKeywords.add(parsed.value());
+                case IP_CIDR -> ipCidrs.add(parsed.value());
+            }
+        }
+
+        if (domains.isEmpty() && domainSuffixes.isEmpty()
+                && domainKeywords.isEmpty() && ipCidrs.isEmpty()) {
+            return null;
+        }
+
+        ObjectNode rule = mapper.createObjectNode();
+        if (!domains.isEmpty()) {
+            rule.set("domain", domains);
+        }
+        if (!domainSuffixes.isEmpty()) {
+            rule.set("domain_suffix", domainSuffixes);
+        }
+        if (!domainKeywords.isEmpty()) {
+            rule.set("domain_keyword", domainKeywords);
+        }
+        if (!ipCidrs.isEmpty()) {
+            rule.set("ip_cidr", ipCidrs);
+        }
+        rule.put("action", "route");
+        rule.put("outbound", "direct");
+        return rule;
     }
 
     private ObjectNode buildCustomRule(RoutingRule rule) {
