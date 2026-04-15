@@ -9,14 +9,24 @@ import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
+import javafx.scene.layout.Region;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Controller for the Logs view.
@@ -56,7 +66,35 @@ public class LogsViewController {
         filteredLogLines = new FilteredList<>(sourceLogLines, p -> true);
         logListView.setItems(filteredLogLines);
 
-        logListView.setCellFactory(lv -> new LogLineCell());
+        logListView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        logListView.setCellFactory(lv -> new LogLineCell(lv));
+
+        // Keyboard copy: Cmd+C / Ctrl+C copies selected rows
+        KeyCombination copyCombo = new KeyCodeCombination(
+                KeyCode.C, KeyCombination.SHORTCUT_DOWN);
+        logListView.setOnKeyPressed(event -> {
+            if (copyCombo.match(event)) {
+                copySelection();
+                event.consume();
+            } else if (event.getCode() == KeyCode.A && event.isShortcutDown()) {
+                logListView.getSelectionModel().selectAll();
+                event.consume();
+            }
+        });
+
+        // Right-click context menu with Copy / Copy All / Clear
+        ContextMenu contextMenu = new ContextMenu();
+        MenuItem copyItem = new MenuItem("Copy");
+        copyItem.setAccelerator(copyCombo);
+        copyItem.setOnAction(e -> copySelection());
+        MenuItem copyAllItem = new MenuItem("Copy All");
+        copyAllItem.setOnAction(e -> copyAll());
+        MenuItem selectAllItem = new MenuItem("Select All");
+        selectAllItem.setOnAction(e -> logListView.getSelectionModel().selectAll());
+        MenuItem clearItem = new MenuItem("Clear");
+        clearItem.setOnAction(e -> sourceLogLines.clear());
+        contextMenu.getItems().addAll(copyItem, copyAllItem, selectAllItem, clearItem);
+        logListView.setContextMenu(contextMenu);
 
         logLevelFilter.valueProperty().addListener((obs, oldVal, newVal) -> applyFilter());
         searchField.textProperty().addListener((obs, oldVal, newVal) -> applyFilter());
@@ -102,6 +140,33 @@ public class LogsViewController {
         };
     }
 
+    private void copySelection() {
+        var selected = logListView.getSelectionModel().getSelectedItems();
+        if (selected == null || selected.isEmpty()) {
+            return;
+        }
+        String joined = selected.stream()
+                .filter(line -> line != null)
+                .collect(Collectors.joining("\n"));
+        putStringOnClipboard(joined);
+    }
+
+    private void copyAll() {
+        String joined = filteredLogLines.stream()
+                .filter(line -> line != null)
+                .collect(Collectors.joining("\n"));
+        putStringOnClipboard(joined);
+    }
+
+    private void putStringOnClipboard(String text) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        ClipboardContent content = new ClipboardContent();
+        content.putString(text);
+        Clipboard.getSystemClipboard().setContent(content);
+    }
+
     private Predicate<String> buildSearchPredicate(String searchText) {
         if (searchText == null || searchText.isBlank()) {
             return line -> true;
@@ -111,30 +176,39 @@ public class LogsViewController {
     }
 
     /**
-     * Custom list cell that applies color coding based on log level.
+     * Custom list cell that wraps long lines and applies color coding based
+     * on log level. Wrapping is achieved by binding the cell's maxWidth to
+     * the list viewport width so text reflows when the window is resized.
      */
     private static class LogLineCell extends ListCell<String> {
+
+        LogLineCell(ListView<String> parent) {
+            setWrapText(true);
+            // Constrain the cell width to the viewport so the Label inside
+            // wraps instead of growing horizontally.
+            prefWidthProperty().bind(parent.widthProperty().subtract(24));
+            setMinHeight(Region.USE_PREF_SIZE);
+        }
+
         @Override
         protected void updateItem(String item, boolean empty) {
             super.updateItem(item, empty);
+            getStyleClass().removeAll("log-line-error", "log-line-warn",
+                    "log-line-info", "log-line-debug");
             if (empty || item == null) {
                 setText(null);
-                getStyleClass().removeAll("log-line-error", "log-line-warn",
-                        "log-line-info", "log-line-debug");
+                return;
+            }
+            setText(item);
+            String lower = item.toLowerCase();
+            if (lower.contains("error") || lower.contains("fatal")) {
+                getStyleClass().add("log-line-error");
+            } else if (lower.contains("warn")) {
+                getStyleClass().add("log-line-warn");
+            } else if (lower.contains("info")) {
+                getStyleClass().add("log-line-info");
             } else {
-                setText(item);
-                getStyleClass().removeAll("log-line-error", "log-line-warn",
-                        "log-line-info", "log-line-debug");
-                String lower = item.toLowerCase();
-                if (lower.contains("error") || lower.contains("fatal")) {
-                    getStyleClass().add("log-line-error");
-                } else if (lower.contains("warn")) {
-                    getStyleClass().add("log-line-warn");
-                } else if (lower.contains("info")) {
-                    getStyleClass().add("log-line-info");
-                } else {
-                    getStyleClass().add("log-line-debug");
-                }
+                getStyleClass().add("log-line-debug");
             }
         }
     }

@@ -138,7 +138,9 @@ class SingBoxConfigGeneratorTunTest {
         assertThat(servers.get(1).get("type").asText()).isEqualTo("https");
         assertThat(servers.get(1).get("server").asText()).isEqualTo("223.5.5.5");
         assertThat(servers.get(1).get("path").asText()).isEqualTo("/dns-query");
-        assertThat(servers.get(1).get("detour").asText()).isEqualTo("direct");
+        // sing-box 1.13 rejects detour: "direct" pointing at an empty direct
+        // outbound, so direct-dns no longer sets the detour field.
+        assertThat(servers.get(1).has("detour")).isFalse();
 
         // sing-box 1.13 uses dns.final instead of a match-all rule
         assertThat(dns.get("final").asText()).isEqualTo("proxy-dns");

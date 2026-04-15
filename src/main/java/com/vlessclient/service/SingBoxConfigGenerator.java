@@ -92,7 +92,11 @@ public class SingBoxConfigGenerator {
         ObjectNode directDns = mapper.createObjectNode();
         directDns.put("tag", "direct-dns");
         populateDnsServerAddress(directDns, settings.getDirectDns());
-        directDns.put("detour", "direct");
+        // Deliberately NOT setting detour:"direct" here — sing-box 1.13
+        // rejects DNS servers that detour to an "empty" direct outbound with
+        // FATAL "detour to an empty direct outbound makes no sense".
+        // Omitting detour lets the server dial through the default outbound
+        // route, which for a bare system resolver address does the right thing.
         servers.add(directDns);
 
         dns.set("servers", servers);
