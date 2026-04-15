@@ -18,7 +18,10 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.awt.Taskbar;
+import java.awt.Toolkit;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Optional;
@@ -31,7 +34,39 @@ public class VlessClientApp extends Application {
 
     @Override
     public void init() {
+        // Set the macOS Dock icon early, before any stage is shown, so the
+        // generic "exec" icon never flashes. Must happen on a thread with an
+        // AWT toolkit available. Safe no-op on platforms without Taskbar
+        // support or when the ICON_IMAGE feature is unavailable.
+        setDockIcon();
         ServiceLocator.initialize();
+    }
+
+    private void setDockIcon() {
+        try {
+            if (!Taskbar.isTaskbarSupported()) {
+                return;
+            }
+            Taskbar taskbar = Taskbar.getTaskbar();
+            if (!taskbar.isSupported(Taskbar.Feature.ICON_IMAGE)) {
+                return;
+            }
+            URL iconUrl = getClass().getResource("/icons/app-icon-512.png");
+            if (iconUrl == null) {
+                iconUrl = getClass().getResource("/icons/app-icon.png");
+            }
+            if (iconUrl == null) {
+                log.debug("No app icon resource found for Dock");
+                return;
+            }
+            java.awt.Image awtImage = Toolkit.getDefaultToolkit().getImage(iconUrl);
+            taskbar.setIconImage(awtImage);
+            log.info("Dock icon installed");
+        } catch (UnsupportedOperationException | SecurityException e) {
+            log.debug("Dock icon not supported on this platform: {}", e.getMessage());
+        } catch (Exception e) {
+            log.warn("Failed to set Dock icon", e);
+        }
     }
 
     @Override
