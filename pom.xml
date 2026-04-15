@@ -146,11 +146,18 @@
                         <!--
                             macOS: make the application name shown in the
                             menu bar ("Quit <name>", "Hide <name>") and the
-                            Dock title read "VLESS Client" instead of the
+                            Dock title read "VLESS-Client" instead of the
                             fully-qualified main class name.
+
+                            The javafx-maven-plugin (via commons-exec) splits
+                            option values on whitespace, so a literal "VLESS
+                            Client" gets chopped and the second half is
+                            interpreted as a main-class argument. Use a dash
+                            here; the user-facing menu name is still set by
+                            Launcher.main() through the apple.awt system
+                            property with a real space.
                         -->
-                        <option>-Xdock:name=VLESS Client</option>
-                        <option>-Dapple.awt.application.name=VLESS Client</option>
+                        <option>-Xdock:name=VLESS-Client</option>
                     </options>
                 </configuration>
             </plugin>
