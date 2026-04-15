@@ -81,9 +81,9 @@ public class GenerateAppIcon {
         g.fill(new RoundRectangle2D.Double(0, 0, s, s, cornerRadius * 2, cornerRadius * 2));
 
         // --- Globe (network context) ------------------------------------------
-        double cx = s * 0.5;
-        double gcy = s * 0.40;
-        double gRadius = s * 0.28;
+        double cx = s * 0.48;
+        double gcy = s * 0.48;
+        double gRadius = s * 0.36;
         Ellipse2D globe = new Ellipse2D.Double(
                 cx - gRadius, gcy - gRadius, gRadius * 2, gRadius * 2);
 
@@ -133,12 +133,13 @@ public class GenerateAppIcon {
 
         g.setClip(prevClip);
 
-        // --- Shield shape (badge covering the lower portion of the globe) ----
-        double shieldWidth = s * 0.44;
-        double shieldTop = s * 0.54;
-        double shieldHeight = s * 0.36;
-        double shieldLeft = cx - shieldWidth * 0.5;
-        double shieldRight = cx + shieldWidth * 0.5;
+        // --- Shield badge (bottom-right corner, overlapping globe edge) ------
+        double shieldWidth = s * 0.34;
+        double shieldHeight = s * 0.38;
+        double shieldCx = s * 0.78;
+        double shieldTop = s * 0.56;
+        double shieldLeft = shieldCx - shieldWidth * 0.5;
+        double shieldRight = shieldCx + shieldWidth * 0.5;
         double shieldBottom = shieldTop + shieldHeight;
         double topCurve = shieldHeight * 0.12;
 
@@ -152,11 +153,11 @@ public class GenerateAppIcon {
         shield.lineTo(shieldRight, shieldTop + shieldHeight * 0.45);
         shield.curveTo(
                 shieldRight, shieldTop + shieldHeight * 0.85,
-                cx + shieldWidth * 0.18, shieldBottom,
-                cx, shieldBottom
+                shieldCx + shieldWidth * 0.18, shieldBottom,
+                shieldCx, shieldBottom
         );
         shield.curveTo(
-                cx - shieldWidth * 0.18, shieldBottom,
+                shieldCx - shieldWidth * 0.18, shieldBottom,
                 shieldLeft, shieldTop + shieldHeight * 0.85,
                 shieldLeft, shieldTop + shieldHeight * 0.45
         );
@@ -171,14 +172,14 @@ public class GenerateAppIcon {
         // Shield body — vertical blue gradient so it reads as a distinct
         // foreground element against the white globe behind it
         GradientPaint shieldBody = new GradientPaint(
-                (float) cx, (float) shieldTop, new Color(0x3B, 0x82, 0xF6),
-                (float) cx, (float) shieldBottom, new Color(0x1E, 0x40, 0xAF)
+                (float) shieldCx, (float) shieldTop, new Color(0x3B, 0x82, 0xF6),
+                (float) shieldCx, (float) shieldBottom, new Color(0x1E, 0x40, 0xAF)
         );
         g.setPaint(shieldBody);
         g.fill(shield);
 
-        // Thin white outline to separate shield from globe
-        g.setStroke(new BasicStroke((float) Math.max(1.0, s * 0.012),
+        // Thicker white outline to separate the small badge from the globe
+        g.setStroke(new BasicStroke((float) Math.max(1.5, s * 0.018),
                 BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g.setColor(Color.WHITE);
         g.draw(shield);
@@ -189,8 +190,8 @@ public class GenerateAppIcon {
                 shieldLeft, shieldTop, shieldWidth, shieldHeight * 0.4, 20, 20));
         shieldArea.intersect(topBand);
         GradientPaint shieldHighlight = new GradientPaint(
-                (float) cx, (float) shieldTop, new Color(255, 255, 255, 80),
-                (float) cx, (float) (shieldTop + shieldHeight * 0.4), new Color(255, 255, 255, 0)
+                (float) shieldCx, (float) shieldTop, new Color(255, 255, 255, 90),
+                (float) shieldCx, (float) (shieldTop + shieldHeight * 0.4), new Color(255, 255, 255, 0)
         );
         g.setPaint(shieldHighlight);
         g.fill(shieldArea);
@@ -200,7 +201,7 @@ public class GenerateAppIcon {
         // corner (4,1) -> (16,21). Bolt bounding box is 12x20 in the viewBox.
         double boltScale = shieldHeight * 0.62 / 20.0;
         double boltBoundingWidth = 12.0 * boltScale;
-        double boltOriginX = cx - boltBoundingWidth * 0.5;
+        double boltOriginX = shieldCx - boltBoundingWidth * 0.5;
         double boltOriginY = shieldTop + shieldHeight * 0.14;
 
         double[][] boltPoints = {
@@ -227,8 +228,8 @@ public class GenerateAppIcon {
 
         // Bolt fill: yellow-orange vertical gradient
         GradientPaint boltGradient = new GradientPaint(
-                (float) cx, (float) boltOriginY, new Color(0xFB, 0xBF, 0x24),
-                (float) cx, (float) (boltOriginY + 20 * boltScale), new Color(0xF5, 0x9E, 0x0B)
+                (float) shieldCx, (float) boltOriginY, new Color(0xFB, 0xBF, 0x24),
+                (float) shieldCx, (float) (boltOriginY + 20 * boltScale), new Color(0xF5, 0x9E, 0x0B)
         );
         g.setPaint(boltGradient);
         g.fill(bolt);
