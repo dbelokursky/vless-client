@@ -106,7 +106,36 @@ public class SingBoxEngine {
         );
         logReader.start();
 
+        // In TUN mode sing-box runs under osascript, which buffers stdout
+        // until the shell script exits. LogReader never sees the "started"
+        // line in real time, so the UI would otherwise be stuck on
+        // CONNECTING forever. Promote to CONNECTED after a short delay as
+        // long as the process is still alive.
+        if (proxyMode == ProxyMode.TUN) {
+            startTunConnectedWatchdog();
+        }
+
         startProcessMonitor();
+    }
+
+    private static final long TUN_CONNECTED_DELAY_MS = 1800;
+
+    private void startTunConnectedWatchdog() {
+        Thread watchdog = new Thread(() -> {
+            try {
+                Thread.sleep(TUN_CONNECTED_DELAY_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            Platform.runLater(() -> {
+                if (isRunning() && connectionState.get() == ConnectionState.CONNECTING) {
+                    connectionState.set(ConnectionState.CONNECTED);
+                }
+            });
+        }, "singbox-tun-watchdog");
+        watchdog.setDaemon(true);
+        watchdog.start();
     }
 
     /**
