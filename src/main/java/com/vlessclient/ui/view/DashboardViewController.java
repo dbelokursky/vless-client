@@ -73,6 +73,9 @@ public class DashboardViewController {
     private TrafficMonitor trafficMonitor;
     private LatencyTester latencyTester;
 
+    private javafx.animation.Timeline latencyTimeline;
+    private volatile boolean latencyInFlight;
+
     @FXML
     public void initialize() {
         try {
@@ -359,6 +362,12 @@ public class DashboardViewController {
             return;
         }
 
+        // Toggle: second click stops the running measurement loop.
+        if (latencyTimeline != null) {
+            stopLatencyLoop();
+            return;
+        }
+
         try {
             ConfigStore configStore = ServiceLocator.get(ConfigStore.class);
             List<ServerConfig> servers = configStore.getServers();
@@ -367,20 +376,56 @@ public class DashboardViewController {
                 return;
             }
 
-            testLatencyButton.setDisable(true);
-            latencyResultLabel.setText("Testing...");
-            latencyResultLabel.getStyleClass().setAll("latency-result");
-
-            latencyTester.testAll(servers).thenAccept(results ->
-                    Platform.runLater(() -> displayLatencyResults(results, servers)));
+            startLatencyLoop(servers);
         } catch (IllegalArgumentException e) {
             latencyResultLabel.setText("No servers configured");
         }
     }
 
-    private void displayLatencyResults(Map<String, Long> results, List<ServerConfig> servers) {
-        testLatencyButton.setDisable(false);
+    private void startLatencyLoop(List<ServerConfig> servers) {
+        testLatencyButton.setText("Stop");
+        latencyResultLabel.setText("Testing…");
+        latencyResultLabel.getStyleClass().setAll("stats-value", "latency-result");
 
+        // Fire once immediately so the user sees feedback within the first
+        // second, then every second afterwards.
+        tickLatency(servers);
+
+        latencyTimeline = new javafx.animation.Timeline(
+                new javafx.animation.KeyFrame(
+                        javafx.util.Duration.seconds(1),
+                        e -> tickLatency(servers))
+        );
+        latencyTimeline.setCycleCount(javafx.animation.Animation.INDEFINITE);
+        latencyTimeline.play();
+    }
+
+    private void stopLatencyLoop() {
+        if (latencyTimeline != null) {
+            latencyTimeline.stop();
+            latencyTimeline = null;
+        }
+        testLatencyButton.setText("Test Latency");
+        latencyInFlight = false;
+    }
+
+    private void tickLatency(List<ServerConfig> servers) {
+        if (latencyInFlight || latencyTester == null) {
+            return;
+        }
+        latencyInFlight = true;
+        latencyTester.testAll(servers).whenComplete((results, err) ->
+                Platform.runLater(() -> {
+                    latencyInFlight = false;
+                    if (err != null) {
+                        latencyResultLabel.setText("Test failed");
+                        return;
+                    }
+                    displayLatencyResults(results, servers);
+                }));
+    }
+
+    private void displayLatencyResults(Map<String, Long> results, List<ServerConfig> servers) {
         if (results.isEmpty()) {
             latencyResultLabel.setText("No results");
             return;
