@@ -122,6 +122,30 @@ public class VlessClientApp extends Application {
             trayIconService = null;
         }
         shutdown();
+
+        // JavaFX has stopped its event loop, but AWT (SystemTray, Taskbar,
+        // Toolkit) keeps its non-daemon EventQueue thread alive, preventing
+        // the JVM from terminating. Force the process to exit so the app
+        // actually quits when the user picks Quit from the tray menu or
+        // uses Cmd+Q.
+        Runnable forceExit = () -> {
+            log.info("Forcing JVM shutdown");
+            Runtime.getRuntime().halt(0);
+        };
+        Thread killer = new Thread(() -> {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            forceExit.run();
+        }, "vless-jvm-exit");
+        killer.setDaemon(true);
+        killer.start();
+        // In case the killer thread is somehow not enough, call System.exit
+        // directly too. It waits for shutdown hooks (including our sing-box
+        // stop) before handing control to `halt`.
+        System.exit(0);
     }
 
     /**
