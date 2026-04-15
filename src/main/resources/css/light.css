@@ -73,6 +73,19 @@
     -fx-text-fill: #1b5e20;
 }
 
+/* SVG icon glyph inside nav buttons — inherits the button's colour. */
+.nav-button .nav-icon-glyph {
+    -fx-fill: #6b7078;
+}
+
+.nav-button:hover .nav-icon-glyph {
+    -fx-fill: #1b5e20;
+}
+
+.nav-button-active .nav-icon-glyph {
+    -fx-fill: #2e7d32;
+}
+
 .nav-button:disabled {
     -fx-opacity: 0.45;
     -fx-cursor: default;

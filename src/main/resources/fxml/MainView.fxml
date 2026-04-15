@@ -30,39 +30,19 @@
             </Separator>
 
             <Button fx:id="btnDashboard" text="Dashboard" styleClass="nav-button"
-                    onAction="#onDashboardClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
-                <graphic>
-                    <Label text="&#x1F4CA;" styleClass="nav-icon"/>
-                </graphic>
-            </Button>
+                    onAction="#onDashboardClicked" maxWidth="Infinity" alignment="CENTER_LEFT"/>
 
             <Button fx:id="btnServers" text="Servers" styleClass="nav-button"
-                    onAction="#onServersClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
-                <graphic>
-                    <Label text="&#x1F5A5;" styleClass="nav-icon"/>
-                </graphic>
-            </Button>
+                    onAction="#onServersClicked" maxWidth="Infinity" alignment="CENTER_LEFT"/>
 
             <Button fx:id="btnSubscriptions" text="Subscriptions" styleClass="nav-button"
-                    onAction="#onSubscriptionsClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
-                <graphic>
-                    <Label text="&#x1F517;" styleClass="nav-icon"/>
-                </graphic>
-            </Button>
+                    onAction="#onSubscriptionsClicked" maxWidth="Infinity" alignment="CENTER_LEFT"/>
 
             <Button fx:id="btnRouting" text="Routing" styleClass="nav-button"
-                    onAction="#onRoutingClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
-                <graphic>
-                    <Label text="&#x1F500;" styleClass="nav-icon"/>
-                </graphic>
-            </Button>
+                    onAction="#onRoutingClicked" maxWidth="Infinity" alignment="CENTER_LEFT"/>
 
             <Button fx:id="btnLogs" text="Logs" styleClass="nav-button"
-                    onAction="#onLogsClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
-                <graphic>
-                    <Label text="&#x1F4CB;" styleClass="nav-icon"/>
-                </graphic>
-            </Button>
+                    onAction="#onLogsClicked" maxWidth="Infinity" alignment="CENTER_LEFT"/>
 
             <Region VBox.vgrow="ALWAYS"/>
 
@@ -73,11 +53,7 @@
             </Separator>
 
             <Button fx:id="btnSettings" text="Settings" styleClass="nav-button"
-                    onAction="#onSettingsClicked" maxWidth="Infinity" alignment="CENTER_LEFT">
-                <graphic>
-                    <Label text="&#x2699;" styleClass="nav-icon"/>
-                </graphic>
-            </Button>
+                    onAction="#onSettingsClicked" maxWidth="Infinity" alignment="CENTER_LEFT"/>
         </VBox>
     </left>
 

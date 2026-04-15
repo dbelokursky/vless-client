@@ -39,6 +39,7 @@ public class MainViewController {
 
     @FXML
     public void initialize() {
+        installSidebarIcons();
         showDashboard();
 
         if (rootNode != null) {
@@ -48,6 +49,34 @@ public class MainViewController {
                     acceleratorsRegistered = true;
                 }
             });
+        }
+    }
+
+    /**
+     * Replaces the emoji graphics in {@code MainView.fxml} with crisp
+     * SVG-based flat icons from {@link Icons}. Done in code (not FXML)
+     * because FXML's static-method invocation support is awkward for
+     * our wrapping {@code Group → StackPane} structure.
+     */
+    private void installSidebarIcons() {
+        double size = 18;
+        if (btnDashboard != null) {
+            btnDashboard.setGraphic(Icons.dashboard(size));
+        }
+        if (btnServers != null) {
+            btnServers.setGraphic(Icons.server(size));
+        }
+        if (btnSubscriptions != null) {
+            btnSubscriptions.setGraphic(Icons.link(size));
+        }
+        if (btnRouting != null) {
+            btnRouting.setGraphic(Icons.routing(size));
+        }
+        if (btnLogs != null) {
+            btnLogs.setGraphic(Icons.list(size));
+        }
+        if (btnSettings != null) {
+            btnSettings.setGraphic(Icons.settings(size));
         }
     }
 

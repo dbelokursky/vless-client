@@ -143,7 +143,9 @@ public class VlessClientApp extends Application {
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/MainView.fxml"));
         Parent root = loader.load();
 
-        Scene scene = new Scene(root, 1000, 680);
+        // Compact default size that fits the new top-bar Dashboard layout
+        // without scrolling; users can still resize freely above the minimum.
+        Scene scene = new Scene(root, 960, 560);
 
         // Apply saved locale
         AppSettings settings = ServiceLocator.get(AppSettings.class);
@@ -157,8 +159,8 @@ public class VlessClientApp extends Application {
         themeManager.applyTheme(scene);
 
         primaryStage.setTitle("VLESS Client");
-        primaryStage.setMinWidth(900);
-        primaryStage.setMinHeight(600);
+        primaryStage.setMinWidth(860);
+        primaryStage.setMinHeight(500);
         primaryStage.setScene(scene);
 
         loadAppIcon(primaryStage);
