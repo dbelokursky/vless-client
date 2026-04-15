@@ -5,6 +5,7 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.ColumnConstraints?>
@@ -38,28 +39,35 @@
     </HBox>
 
     <!-- Connection Status Card -->
-    <VBox styleClass="card" spacing="16" alignment="CENTER">
+    <VBox styleClass="card, hero-card" spacing="18" alignment="CENTER">
         <padding>
-            <Insets top="32" right="40" bottom="32" left="40"/>
+            <Insets top="36" right="40" bottom="32" left="40"/>
         </padding>
 
-        <Circle fx:id="statusCircle" radius="12" styleClass="status-circle-disconnected"/>
+        <!-- Big halo around the status circle -->
+        <StackPane fx:id="statusHalo" styleClass="status-halo"
+                   prefWidth="72" prefHeight="72" maxWidth="72" maxHeight="72">
+            <Circle fx:id="statusCircle" radius="16" styleClass="status-circle-disconnected"/>
+        </StackPane>
 
-        <Label fx:id="statusLabel" text="Disconnected" styleClass="status-label-disconnected"
+        <Label fx:id="statusTitle" text="Disconnected" styleClass="status-title"/>
+
+        <Label fx:id="statusLabel" text="Not connected to any server" styleClass="status-subtitle"
                wrapText="true" maxWidth="560" alignment="CENTER" textAlignment="CENTER"/>
 
-        <Label fx:id="serverNameLabel" text="No server selected" styleClass="server-name-label"/>
+        <Label fx:id="serverNameLabel" text="" styleClass="server-name-label"
+               managed="false" visible="false"/>
 
         <HBox alignment="CENTER" spacing="10">
-            <Label text="Mode:" styleClass="stats-title"/>
-            <ComboBox fx:id="proxyModeCombo" prefWidth="150" styleClass="secondary-button"/>
+            <Label text="Mode" styleClass="stats-title"/>
+            <ComboBox fx:id="proxyModeCombo" prefWidth="150" styleClass="mode-combo"/>
         </HBox>
 
         <Label fx:id="proxyModeWarning" text="" styleClass="hint-label"
                visible="false" managed="false"/>
 
         <Button fx:id="connectButton" text="Connect" styleClass="connect-button"
-                onAction="#onConnectClicked" prefWidth="200" prefHeight="44">
+                onAction="#onConnectClicked" prefWidth="220" prefHeight="48">
         </Button>
     </VBox>
 
@@ -71,45 +79,49 @@
         </columnConstraints>
 
         <!-- Upload Speed -->
-        <VBox styleClass="card, stats-card" spacing="6" alignment="CENTER"
+        <VBox styleClass="card, stats-card, upload-card" spacing="4" alignment="CENTER_LEFT"
               GridPane.columnIndex="0" GridPane.rowIndex="0">
             <padding>
-                <Insets top="20" right="20" bottom="20" left="20"/>
+                <Insets top="18" right="20" bottom="18" left="22"/>
             </padding>
-            <Label text="Upload" styleClass="stats-title"/>
-            <Label fx:id="uploadSpeedLabel" text="--" styleClass="speed-value"/>
-            <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
+            <HBox alignment="CENTER_LEFT" spacing="8">
+                <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
+                <Label text="Upload" styleClass="stats-title"/>
+            </HBox>
+            <Label fx:id="uploadSpeedLabel" text="—" styleClass="speed-value"/>
         </VBox>
 
         <!-- Download Speed -->
-        <VBox styleClass="card, stats-card" spacing="6" alignment="CENTER"
+        <VBox styleClass="card, stats-card, download-card" spacing="4" alignment="CENTER_LEFT"
               GridPane.columnIndex="1" GridPane.rowIndex="0">
             <padding>
-                <Insets top="20" right="20" bottom="20" left="20"/>
+                <Insets top="18" right="20" bottom="18" left="22"/>
             </padding>
-            <Label text="Download" styleClass="stats-title"/>
-            <Label fx:id="downloadSpeedLabel" text="--" styleClass="speed-value"/>
-            <Label text="&#x2B07;" styleClass="stats-icon-download"/>
+            <HBox alignment="CENTER_LEFT" spacing="8">
+                <Label text="&#x2B07;" styleClass="stats-icon-download"/>
+                <Label text="Download" styleClass="stats-title"/>
+            </HBox>
+            <Label fx:id="downloadSpeedLabel" text="—" styleClass="speed-value"/>
         </VBox>
 
         <!-- Total Uploaded -->
-        <VBox styleClass="card, stats-card-small" spacing="4" alignment="CENTER"
+        <VBox styleClass="card, stats-card-small" spacing="4" alignment="CENTER_LEFT"
               GridPane.columnIndex="0" GridPane.rowIndex="1">
             <padding>
-                <Insets top="14" right="16" bottom="14" left="16"/>
+                <Insets top="14" right="18" bottom="14" left="22"/>
             </padding>
             <Label text="Total Up" styleClass="stats-title"/>
-            <Label fx:id="totalUploadLabel" text="--" styleClass="stats-value"/>
+            <Label fx:id="totalUploadLabel" text="—" styleClass="stats-value"/>
         </VBox>
 
         <!-- Total Downloaded -->
-        <VBox styleClass="card, stats-card-small" spacing="4" alignment="CENTER"
+        <VBox styleClass="card, stats-card-small" spacing="4" alignment="CENTER_LEFT"
               GridPane.columnIndex="1" GridPane.rowIndex="1">
             <padding>
-                <Insets top="14" right="16" bottom="14" left="16"/>
+                <Insets top="14" right="18" bottom="14" left="22"/>
             </padding>
             <Label text="Total Down" styleClass="stats-title"/>
-            <Label fx:id="totalDownloadLabel" text="--" styleClass="stats-value"/>
+            <Label fx:id="totalDownloadLabel" text="—" styleClass="stats-value"/>
         </VBox>
     </GridPane>
 

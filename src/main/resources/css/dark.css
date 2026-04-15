@@ -15,13 +15,13 @@
 
 /* ===== Sidebar ===== */
 .sidebar {
-    -fx-background-color: #2d2d2d;
-    -fx-border-color: #3a3a3a;
+    -fx-background-color: linear-gradient(to bottom, #252528 0%, #1f1f22 100%);
+    -fx-border-color: #333336;
     -fx-border-width: 0 1 0 0;
 }
 
 .sidebar-title {
-    -fx-font-size: 16px;
+    -fx-font-size: 15px;
     -fx-font-weight: bold;
     -fx-text-fill: #e0e0e0;
     -fx-padding: 4 8 0 8;
@@ -39,33 +39,38 @@
 /* ===== Navigation Buttons ===== */
 .nav-button {
     -fx-background-color: transparent;
-    -fx-text-fill: #b0b0b0;
+    -fx-text-fill: #a0a4aa;
     -fx-font-size: 13px;
-    -fx-padding: 10 16;
+    -fx-padding: 10 16 10 20;
     -fx-cursor: hand;
-    -fx-background-radius: 8;
+    -fx-background-radius: 10;
     -fx-alignment: CENTER-LEFT;
-    -fx-graphic-text-gap: 10;
+    -fx-graphic-text-gap: 12;
+    -fx-border-color: transparent;
+    -fx-border-width: 0 0 0 3;
+    -fx-border-radius: 10;
 }
 
 .nav-button:hover {
-    -fx-background-color: #3a3a3a;
-    -fx-text-fill: #e0e0e0;
+    -fx-background-color: rgba(102, 187, 106, 0.08);
+    -fx-text-fill: #c8e6c9;
 }
 
 .nav-button:pressed {
-    -fx-background-color: #444444;
+    -fx-background-color: rgba(102, 187, 106, 0.16);
 }
 
 .nav-button-active {
-    -fx-background-color: #1b3a1e;
-    -fx-text-fill: #66bb6a;
+    -fx-background-color: linear-gradient(to right, rgba(102, 187, 106, 0.18), rgba(102, 187, 106, 0.04));
+    -fx-text-fill: #81c784;
     -fx-font-weight: bold;
+    -fx-border-color: #66bb6a transparent transparent transparent;
+    -fx-border-width: 0 0 0 3;
 }
 
 .nav-button-active:hover {
-    -fx-background-color: #224428;
-    -fx-text-fill: #66bb6a;
+    -fx-background-color: linear-gradient(to right, rgba(102, 187, 106, 0.24), rgba(102, 187, 106, 0.08));
+    -fx-text-fill: #a5d6a7;
 }
 
 .nav-button:disabled {
@@ -79,61 +84,77 @@
 
 /* ===== Content Area ===== */
 .content-area {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: #181819;
 }
 
 /* ===== Cards ===== */
 .card {
-    -fx-background-color: #2a2a2a;
-    -fx-background-radius: 12;
-    -fx-border-color: #3a3a3a;
-    -fx-border-radius: 12;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 8, 0, 0, 2);
+    -fx-background-color: #26262a;
+    -fx-background-radius: 14;
+    -fx-border-color: #323236;
+    -fx-border-radius: 14;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 16, 0, 0, 4);
+}
+
+.hero-card {
+    -fx-background-color: linear-gradient(to bottom, #2a2a2e 0%, #232327 100%);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 22, 0, 0, 5);
 }
 
 .stats-card {
-    -fx-min-height: 100;
+    -fx-min-height: 96;
+}
+
+.upload-card {
+    -fx-border-color: transparent;
+    -fx-background-color: linear-gradient(to bottom right, #26262a 40%, #3a2c20 100%);
+}
+
+.download-card {
+    -fx-border-color: transparent;
+    -fx-background-color: linear-gradient(to bottom right, #26262a 40%, #1e2d40 100%);
 }
 
 /* ===== Dashboard Status ===== */
-.status-icon-disconnected {
-    -fx-font-size: 48px;
-    -fx-text-fill: #757575;
+.status-halo {
+    -fx-background-radius: 36;
+    -fx-background-color: #2d2d31;
 }
 
-.status-icon-connected {
-    -fx-font-size: 48px;
-    -fx-text-fill: #66bb6a;
+.status-halo-disconnected {
+    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #3a3a3e 0%, #2a2a2d 100%);
 }
 
-.status-icon-connecting {
-    -fx-font-size: 48px;
-    -fx-text-fill: #ffa726;
+.status-halo-connected {
+    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #2e4a30 0%, #223324 100%);
 }
 
-.status-icon-error {
-    -fx-font-size: 48px;
-    -fx-text-fill: #ef5350;
+.status-halo-connecting {
+    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #4a3520 0%, #332614 100%);
 }
 
-.status-label-disconnected {
-    -fx-font-size: 14px;
+.status-halo-error {
+    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #4a2020 0%, #331414 100%);
+}
+
+.status-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #f5f5f5;
+}
+
+.status-title-connected   { -fx-text-fill: #81c784; }
+.status-title-connecting  { -fx-text-fill: #ffb74d; }
+.status-title-error       { -fx-text-fill: #ef9a9a; }
+.status-title-disconnected { -fx-text-fill: #e0e0e0; }
+
+.status-subtitle {
+    -fx-font-size: 13px;
     -fx-text-fill: #9e9e9e;
 }
 
-.status-label-connected {
-    -fx-font-size: 14px;
-    -fx-text-fill: #81c784;
-}
-
-.status-label-connecting {
-    -fx-font-size: 14px;
-    -fx-text-fill: #ffb74d;
-}
-
-.status-label-error {
-    -fx-font-size: 14px;
-    -fx-text-fill: #bdbdbd;
+.status-subtitle-error {
+    -fx-text-fill: #d9a4a4;
 }
 
 .server-name-label {
@@ -141,60 +162,92 @@
     -fx-text-fill: #757575;
 }
 
+.status-label-disconnected,
+.status-label-connected,
+.status-label-connecting,
+.status-label-error {
+    -fx-font-size: 13px;
+    -fx-text-fill: #9e9e9e;
+}
+
 /* ===== Connect/Disconnect Button ===== */
 .connect-button {
-    -fx-background-color: #2e7d32;
+    -fx-background-color: linear-gradient(to bottom, #43a047, #2e7d32);
     -fx-text-fill: white;
     -fx-font-size: 15px;
     -fx-font-weight: bold;
-    -fx-background-radius: 10;
+    -fx-background-radius: 12;
     -fx-cursor: hand;
     -fx-padding: 12 32;
+    -fx-effect: dropshadow(gaussian, rgba(76, 175, 80, 0.4), 14, 0, 0, 3);
 }
 
 .connect-button:hover {
-    -fx-background-color: #388e3c;
+    -fx-background-color: linear-gradient(to bottom, #4caf50, #388e3c);
+    -fx-effect: dropshadow(gaussian, rgba(76, 175, 80, 0.55), 18, 0, 0, 4);
 }
 
 .connect-button:pressed {
-    -fx-background-color: #1b5e20;
+    -fx-background-color: linear-gradient(to bottom, #2e7d32, #1b5e20);
+    -fx-effect: dropshadow(gaussian, rgba(76, 175, 80, 0.25), 6, 0, 0, 1);
 }
 
 .disconnect-button {
-    -fx-background-color: #c62828;
+    -fx-background-color: linear-gradient(to bottom, #ef5350, #c62828);
     -fx-text-fill: white;
     -fx-font-size: 15px;
     -fx-font-weight: bold;
-    -fx-background-radius: 10;
+    -fx-background-radius: 12;
     -fx-cursor: hand;
     -fx-padding: 12 32;
+    -fx-effect: dropshadow(gaussian, rgba(239, 83, 80, 0.4), 14, 0, 0, 3);
 }
 
 .disconnect-button:hover {
-    -fx-background-color: #e53935;
+    -fx-background-color: linear-gradient(to bottom, #f44336, #d32f2f);
+    -fx-effect: dropshadow(gaussian, rgba(239, 83, 80, 0.55), 18, 0, 0, 4);
 }
 
 .disconnect-button:pressed {
-    -fx-background-color: #b71c1c;
+    -fx-background-color: linear-gradient(to bottom, #c62828, #b71c1c);
+    -fx-effect: dropshadow(gaussian, rgba(239, 83, 80, 0.25), 6, 0, 0, 1);
 }
 
 /* ===== Stats ===== */
 .stats-icon {
-    -fx-font-size: 22px;
-    -fx-text-fill: #888888;
+    -fx-font-size: 18px;
+    -fx-text-fill: #9e9e9e;
+}
+
+.stats-icon-upload {
+    -fx-font-size: 16px;
+    -fx-text-fill: #ffb74d;
+}
+
+.stats-icon-download {
+    -fx-font-size: 16px;
+    -fx-text-fill: #64b5f6;
 }
 
 .stats-title {
-    -fx-font-size: 12px;
-    -fx-text-fill: #777777;
+    -fx-font-size: 11px;
+    -fx-text-fill: #8b8f96;
     -fx-font-weight: bold;
     -fx-text-transform: uppercase;
+    -fx-letter-spacing: 0.5;
 }
 
 .stats-value {
-    -fx-font-size: 20px;
+    -fx-font-size: 18px;
     -fx-font-weight: bold;
-    -fx-text-fill: #e0e0e0;
+    -fx-text-fill: #e8e8ea;
+}
+
+.speed-value {
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #f5f5f5;
+    -fx-font-family: "SF Pro Display", "Helvetica Neue", "System";
 }
 
 /* ===== View Title ===== */

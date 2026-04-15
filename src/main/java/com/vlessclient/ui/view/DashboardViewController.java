@@ -45,6 +45,8 @@ public class DashboardViewController {
     private static final Logger log = LoggerFactory.getLogger(DashboardViewController.class);
 
     @FXML private Circle statusCircle;
+    @FXML private javafx.scene.layout.StackPane statusHalo;
+    @FXML private Label statusTitle;
     @FXML private Label statusLabel;
     @FXML private Label serverNameLabel;
     @FXML private Button connectButton;
@@ -467,42 +469,67 @@ public class DashboardViewController {
     }
 
     private void updateUI(ConnectionState state) {
+        String haloClass;
         switch (state) {
             case CONNECTED -> {
-                statusCircle.setFill(Color.web("#66bb6a"));
+                statusCircle.setFill(Color.web("#2e7d32"));
                 statusCircle.getStyleClass().setAll("status-circle-connected");
-                statusLabel.setText("Connected");
-                statusLabel.getStyleClass().setAll("status-label-connected");
+                haloClass = "status-halo-connected";
+                if (statusTitle != null) {
+                    statusTitle.setText("Connected");
+                    statusTitle.getStyleClass().setAll("status-title", "status-title-connected");
+                }
+                statusLabel.setText(activeServer != null
+                        ? "Routing traffic through " + activeServer.getName()
+                        : "Routing traffic");
+                statusLabel.getStyleClass().setAll("status-subtitle");
                 connectButton.setText("Disconnect");
                 connectButton.setDisable(false);
                 connectButton.getStyleClass().removeAll("connect-button");
                 connectButton.getStyleClass().add("disconnect-button");
             }
             case CONNECTING -> {
-                statusCircle.setFill(Color.web("#ffa726"));
+                statusCircle.setFill(Color.web("#ef6c00"));
                 statusCircle.getStyleClass().setAll("status-circle-connecting");
-                statusLabel.setText("Connecting...");
-                statusLabel.getStyleClass().setAll("status-label-connecting");
+                haloClass = "status-halo-connecting";
+                if (statusTitle != null) {
+                    statusTitle.setText("Connecting…");
+                    statusTitle.getStyleClass().setAll("status-title", "status-title-connecting");
+                }
+                statusLabel.setText("Establishing tunnel, please wait");
+                statusLabel.getStyleClass().setAll("status-subtitle");
                 connectButton.setText("Cancel");
                 connectButton.setDisable(false);
             }
             case ERROR -> {
-                statusCircle.setFill(Color.web("#ef5350"));
+                statusCircle.setFill(Color.web("#c62828"));
                 statusCircle.getStyleClass().setAll("status-circle-error");
-                if (!statusLabel.getText().startsWith("Process exited")) {
-                    statusLabel.setText("Connection Error");
+                haloClass = "status-halo-error";
+                if (statusTitle != null) {
+                    statusTitle.setText("Connection error");
+                    statusTitle.getStyleClass().setAll("status-title", "status-title-error");
                 }
-                statusLabel.getStyleClass().setAll("status-label-error");
+                if (!statusLabel.getText().startsWith("Process exited")) {
+                    statusLabel.setText("Check Logs for details");
+                }
+                statusLabel.getStyleClass().setAll("status-subtitle", "status-subtitle-error");
                 connectButton.setText("Retry");
                 connectButton.setDisable(false);
                 connectButton.getStyleClass().removeAll("disconnect-button");
                 connectButton.getStyleClass().add("connect-button");
             }
             default -> {
-                statusCircle.setFill(Color.web("#757575"));
+                statusCircle.setFill(Color.web("#9e9e9e"));
                 statusCircle.getStyleClass().setAll("status-circle-disconnected");
-                statusLabel.setText("Disconnected");
-                statusLabel.getStyleClass().setAll("status-label-disconnected");
+                haloClass = "status-halo-disconnected";
+                if (statusTitle != null) {
+                    statusTitle.setText("Disconnected");
+                    statusTitle.getStyleClass().setAll("status-title", "status-title-disconnected");
+                }
+                statusLabel.setText(activeServer != null
+                        ? "Ready to connect to " + activeServer.getName()
+                        : "Add a server to get started");
+                statusLabel.getStyleClass().setAll("status-subtitle");
                 connectButton.setText("Connect");
                 connectButton.setDisable(false);
                 connectButton.getStyleClass().removeAll("disconnect-button");
@@ -510,10 +537,20 @@ public class DashboardViewController {
             }
         }
 
+        if (statusHalo != null) {
+            statusHalo.getStyleClass().removeAll(
+                    "status-halo-connected", "status-halo-connecting",
+                    "status-halo-error", "status-halo-disconnected");
+            statusHalo.getStyleClass().add(haloClass);
+        }
+
+        // serverNameLabel is no longer rendered in the hero card (state
+        // subtitle conveys that information), but update it for anyone
+        // still observing the field.
         if (activeServer != null) {
             serverNameLabel.setText(activeServer.getName());
         } else {
-            serverNameLabel.setText("No server selected");
+            serverNameLabel.setText("");
         }
 
         if (state != ConnectionState.CONNECTED && state != ConnectionState.CONNECTING) {
