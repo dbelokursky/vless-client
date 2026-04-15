@@ -120,6 +120,18 @@
                             </arguments>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>write-jvm-args</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>bash</executable>
+                            <arguments>
+                                <argument>${project.basedir}/scripts/write-jvm-args.sh</argument>
+                                <argument>${project.build.directory}/jvm-args.txt</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
@@ -145,19 +157,21 @@
                     <options>
                         <!--
                             macOS: make the application name shown in the
-                            menu bar ("Quit <name>", "Hide <name>") and the
-                            Dock title read "VLESS-Client" instead of the
-                            fully-qualified main class name.
+                            menu bar ("Quit <name>", "Hide <name>") and
+                            the Dock title read "VLESS Client".
 
-                            The javafx-maven-plugin (via commons-exec) splits
-                            option values on whitespace, so a literal "VLESS
-                            Client" gets chopped and the second half is
-                            interpreted as a main-class argument. Use a dash
-                            here; the user-facing menu name is still set by
-                            Launcher.main() through the apple.awt system
-                            property with a real space.
+                            JavaFX's glass bridge ignores
+                            apple.awt.application.name, so we must pass
+                            -Xdock:name on the JVM command line. But the
+                            javafx-maven-plugin (commons-exec) splits
+                            option values on whitespace, destroying the
+                            literal space. Workaround: write the option
+                            into a Java argfile at generate-resources
+                            time (scripts/write-jvm-args.sh) and pass
+                            @path to that file, which is a single
+                            whitespace-free token.
                         -->
-                        <option>-Xdock:name=VLESS-Client</option>
+                        <option>@${project.build.directory}/jvm-args.txt</option>
                     </options>
                 </configuration>
             </plugin>
