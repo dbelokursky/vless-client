@@ -9,6 +9,8 @@ import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -24,6 +26,8 @@ import java.util.concurrent.TimeUnit;
  * as JavaFX observable properties suitable for UI binding.</p>
  */
 public class SingBoxEngine {
+
+    private static final Logger log = LoggerFactory.getLogger(SingBoxEngine.class);
 
     private static final int MAX_LOG_LINES = 1000;
     private static final int STOP_TIMEOUT_SECONDS = 5;
@@ -167,39 +171,90 @@ public class SingBoxEngine {
     }
 
     /**
-     * Starts sing-box with administrator privileges using macOS osascript.
-     * Required for TUN mode since creating a TUN device needs root access.
+     * Starts sing-box with administrator privileges for TUN mode.
      *
-     * <p>To avoid a second password prompt on disconnect we spawn a small
-     * shell wrapper inside the privileged context. The wrapper launches
-     * sing-box in the background, then polls for either the disappearance of
-     * the Java parent process or the creation of a user-writable
-     * "stop signal" file in {@code /tmp}. Either condition causes it to kill
-     * sing-box and exit — so {@link #stopPrivilegedProcess()} only has to
-     * {@code touch} the stop file (no {@code sudo}, no password).</p>
+     * <p>Two code paths:</p>
+     * <ol>
+     *   <li>Preferred: sudoers NOPASSWD is already installed (one-time
+     *       setup by {@link PrivilegeHelper}). The wrapper is spawned
+     *       directly as the current user and invokes
+     *       {@code sudo -n sing-box run -c ...}, so no password prompt
+     *       appears. Stop is signalled via the user-writable stop file.</li>
+     *   <li>Fallback: if NOPASSWD is not available (e.g. user declined the
+     *       one-time configure step), spawn the wrapper inside
+     *       {@code osascript ... with administrator privileges} as before.
+     *       A password prompt appears on every Connect.</li>
+     * </ol>
      */
     private void startWithPrivileges() throws IOException {
         // Use /tmp so both root and the user can read/write the signal file.
         stopSignalFile = Path.of("/tmp",
                 "vless-client-stop-" + System.nanoTime() + ".signal");
-        // Make sure the signal file is absent at start time.
         Files.deleteIfExists(stopSignalFile);
 
+        // Try to install the sudoers rule on first run (one password prompt,
+        // ever). If it's already installed this is a fast no-op.
+        if (!PrivilegeHelper.isConfigured(singBoxBinary)) {
+            try {
+                PrivilegeHelper.configure(singBoxBinary);
+            } catch (IOException e) {
+                log.warn("Could not install sudoers NOPASSWD rule, "
+                        + "falling back to osascript prompt: {}", e.getMessage());
+            }
+        }
+
+        if (PrivilegeHelper.isConfigured(singBoxBinary)) {
+            startViaSudoNoPassword();
+        } else {
+            startViaOsascriptPrompt();
+        }
+    }
+
+    /**
+     * Starts sing-box via {@code sudo -n} — no password prompt. Requires the
+     * sudoers NOPASSWD rule installed by {@link PrivilegeHelper#configure}.
+     * The wrapper itself runs as the current user; only the sing-box child
+     * process is root, which means we can still observe its output through
+     * the normal Process pipes and stop it by signalling the user-owned
+     * wrapper (who forwards SIGTERM to the root-owned sing-box via sudo).
+     */
+    private void startViaSudoNoPassword() throws IOException {
+        String singBoxCmd = shellQuote(singBoxBinary.toAbsolutePath().toString());
+        String configPath = shellQuote(tempConfigFile.toAbsolutePath().toString());
+        String stopPath = shellQuote(stopSignalFile.toAbsolutePath().toString());
+
+        // sudo forwards TERM/INT to its child (sing-box), so killing the
+        // user-owned sudo propagates to root-owned sing-box cleanly.
+        String shellCommand = String.format(
+                "sudo -n %s run -c %s & SBPID=$!; "
+                        + "trap 'kill $SBPID 2>/dev/null' EXIT; "
+                        + "while kill -0 $SBPID 2>/dev/null "
+                        + "&& [ ! -f %s ]; do sleep 0.3; done; "
+                        + "kill $SBPID 2>/dev/null; "
+                        + "wait $SBPID 2>/dev/null; "
+                        + "rm -f %s",
+                singBoxCmd, configPath, stopPath, stopPath);
+
+        ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", shellCommand);
+        pb.directory(singBoxBinary.getParent().toFile());
+        pb.redirectErrorStream(true);
+        process = pb.start();
+        log.info("Started sing-box via sudo -n (no password prompt)");
+    }
+
+    /**
+     * Legacy fallback: launch sing-box inside an osascript admin-privileges
+     * context. Prompts for a password on every Connect. Used only when
+     * NOPASSWD configuration is unavailable (e.g. the user cancelled the
+     * one-time install dialog).
+     */
+    private void startViaOsascriptPrompt() throws IOException {
         long parentPid = ProcessHandle.current().pid();
 
         String singBoxCmd = shellQuote(singBoxBinary.toAbsolutePath().toString());
         String configPath = shellQuote(tempConfigFile.toAbsolutePath().toString());
         String stopPath = shellQuote(stopSignalFile.toAbsolutePath().toString());
 
-        // The wrapper:
-        //  1. Launches sing-box in background and captures its PID.
-        //  2. Sets an EXIT trap so sing-box is killed no matter how the shell
-        //     exits (signal, stop file, parent death, internal error).
-        //  3. Polls every 300 ms for three stop conditions:
-        //       - sing-box process died on its own,
-        //       - Java parent process died (orphan cleanup),
-        //       - stop signal file appeared (user clicked Disconnect).
-        //  4. Removes the stop file so re-runs start from a clean state.
         String shellCommand = String.format(
                 "%s run -c %s & SBPID=$!; "
                         + "trap 'kill $SBPID 2>/dev/null' EXIT; "
@@ -219,8 +274,8 @@ public class SingBoxEngine {
         );
         pb.directory(singBoxBinary.getParent().toFile());
         pb.redirectErrorStream(true);
-
         process = pb.start();
+        log.info("Started sing-box via osascript (password prompt expected)");
     }
 
     /**
