@@ -45,7 +45,8 @@
 
         <Circle fx:id="statusCircle" radius="12" styleClass="status-circle-disconnected"/>
 
-        <Label fx:id="statusLabel" text="Disconnected" styleClass="status-label-disconnected"/>
+        <Label fx:id="statusLabel" text="Disconnected" styleClass="status-label-disconnected"
+               wrapText="true" maxWidth="560" alignment="CENTER" textAlignment="CENTER"/>
 
         <Label fx:id="serverNameLabel" text="No server selected" styleClass="server-name-label"/>
 

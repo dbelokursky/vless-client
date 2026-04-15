@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 /**
  * Reads an {@link InputStream} line by line in a daemon thread, appending each line
@@ -15,6 +16,9 @@ import java.util.function.Consumer;
  * and detects the sing-box "started" message to signal a successful connection.
  */
 public class LogReader {
+
+    /** Matches ANSI CSI SGR escape sequences (e.g. {@code \u001B[31m}, {@code \u001B[0m}). */
+    private static final Pattern ANSI_ESCAPE = Pattern.compile("\\x1B\\[[\\d;]*[A-Za-z]");
 
     private final InputStream inputStream;
     private final ObservableList<String> logLines;
@@ -65,7 +69,7 @@ public class LogReader {
                 new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String logLine = line;
+                String logLine = stripAnsi(line);
                 Platform.runLater(() -> appendLine(logLine));
 
                 if (isStartedMessage(logLine)) {
@@ -78,6 +82,14 @@ public class LogReader {
                 Platform.runLater(() -> appendLine(errorLine));
             }
         }
+    }
+
+    /** Removes ANSI color escape codes from {@code line}. */
+    static String stripAnsi(String line) {
+        if (line == null || line.isEmpty()) {
+            return line;
+        }
+        return ANSI_ESCAPE.matcher(line).replaceAll("");
     }
 
     private void appendLine(String line) {
