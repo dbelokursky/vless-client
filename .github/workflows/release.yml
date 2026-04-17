@@ -33,6 +33,7 @@ jobs:
             --input staging \
             --main-jar vless-client-0.1.0-SNAPSHOT.jar \
             --main-class com.vlessclient.app.Launcher \
+            --icon src/main/resources/icons/app-icon.icns \
             --dest dist \
             --mac-package-name "VLESSClient" \
             --java-options "--enable-preview" \

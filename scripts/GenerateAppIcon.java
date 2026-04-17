@@ -1,7 +1,8 @@
 // Generates the VLESS Client app icon at multiple resolutions using AWT.
 // Run with: java scripts/GenerateAppIcon.java
 //
-// Writes PNG files to src/main/resources/icons/.
+// Writes PNG files to src/main/resources/icons/ and — on macOS, when
+// `iconutil` is on PATH — an app-icon.icns alongside them for jpackage.
 // Master resolution is 1024x1024; smaller sizes are rendered fresh at each
 // size (not downscaled) to keep crisp edges on the shield and bolt.
 
@@ -39,6 +40,69 @@ public class GenerateAppIcon {
         ImageIO.write(render(512), "png", outDir.resolve("app-icon.png").toFile());
 
         System.out.println("Generated " + (sizes.length + 1) + " PNGs in " + outDir.toAbsolutePath());
+
+        buildIcns(outDir);
+    }
+
+    /**
+     * Assembles an Apple .iconset directory from the rendered PNGs and asks
+     * {@code iconutil} to compile it into {@code app-icon.icns} — the format
+     * {@code jpackage --icon} expects for crisp Retina Dock/Finder rendering.
+     * Silently skipped on non-macOS systems where {@code iconutil} is absent.
+     */
+    private static void buildIcns(Path outDir) throws Exception {
+        Path iconset = outDir.resolve("AppIcon.iconset");
+        if (Files.exists(iconset)) {
+            deleteRecursive(iconset);
+        }
+        Files.createDirectories(iconset);
+
+        // Apple's iconutil expects these exact filenames (size + @2x retina pair).
+        String[][] mapping = {
+                {"16",   "icon_16x16.png"},
+                {"32",   "icon_16x16@2x.png"},
+                {"32",   "icon_32x32.png"},
+                {"64",   "icon_32x32@2x.png"},
+                {"128",  "icon_128x128.png"},
+                {"256",  "icon_128x128@2x.png"},
+                {"256",  "icon_256x256.png"},
+                {"512",  "icon_256x256@2x.png"},
+                {"512",  "icon_512x512.png"},
+                {"1024", "icon_512x512@2x.png"},
+        };
+        for (String[] m : mapping) {
+            Files.copy(outDir.resolve("app-icon-" + m[0] + ".png"), iconset.resolve(m[1]));
+        }
+
+        Path icns = outDir.resolve("app-icon.icns");
+        ProcessBuilder pb = new ProcessBuilder(
+                "iconutil", "-c", "icns", iconset.toString(), "-o", icns.toString());
+        pb.redirectErrorStream(true);
+        pb.inheritIO();
+        Process proc = pb.start();
+        int exit = proc.waitFor();
+        deleteRecursive(iconset);
+        if (exit == 0) {
+            System.out.println("Generated " + icns.toAbsolutePath());
+        } else {
+            System.err.println("iconutil exited " + exit + "; .icns not written (non-macOS?)");
+        }
+    }
+
+    private static void deleteRecursive(Path p) throws Exception {
+        if (!Files.exists(p)) {
+            return;
+        }
+        try (var stream = Files.walk(p)) {
+            stream.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.delete(path);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+        }
     }
 
     private static BufferedImage render(int size) {
