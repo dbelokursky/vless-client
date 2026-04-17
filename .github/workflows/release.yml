@@ -26,10 +26,15 @@ jobs:
       - name: Create DMG with jpackage
         run: |
           VERSION=${GITHUB_REF_NAME#v}
+          # macOS CFBundleVersion rejects a zero major ("The first number in
+          # an app-version cannot be zero or negative"). For 0.x.y tags we
+          # still want to ship, so we normalise the CFBundle version to 1.x.y
+          # while keeping the real version on the tag and release name.
+          MAC_VERSION=$(echo "$VERSION" | sed 's/^0\./1./')
           jpackage \
             --type dmg \
             --name "VLESS Client" \
-            --app-version "${VERSION}" \
+            --app-version "${MAC_VERSION}" \
             --input staging \
             --main-jar vless-client-0.1.0-SNAPSHOT.jar \
             --main-class com.vlessclient.app.Launcher \
