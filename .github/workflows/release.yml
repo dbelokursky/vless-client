@@ -15,14 +15,14 @@ jobs:
           distribution: 'temurin'
       - name: Build fat JAR
         run: mvn clean package -DskipTests
-      - name: Download sing-box
+      - name: Stage artifacts
+        # sing-box is already baked into the shaded JAR by
+        # scripts/bundle-singbox.sh during `mvn package` — no separate
+        # download needed. Copy just the shaded jar (not the
+        # `original-*.jar` the shade plugin leaves alongside it).
         run: |
-          SINGBOX_VERSION="1.11.0"
-          curl -L -o sing-box.tar.gz "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-${SINGBOX_VERSION}-darwin-universal.tar.gz"
-          tar xzf sing-box.tar.gz
           mkdir -p staging
-          cp sing-box-*/sing-box staging/
-          cp target/vless-client-*.jar staging/
+          cp target/vless-client-0.1.0-SNAPSHOT.jar staging/
       - name: Create DMG with jpackage
         run: |
           VERSION=${GITHUB_REF_NAME#v}
