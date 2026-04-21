@@ -495,14 +495,19 @@ public class SingBoxConfigGenerator {
                 country = "ru";
             }
 
-            String geositeTag = "geosite-" + country;
-            ruleSetTags.add(geositeTag);
-            ObjectNode geositeRule = mapper.createObjectNode();
-            ArrayNode geositeRefs = mapper.createArrayNode();
-            geositeRefs.add(geositeTag);
-            geositeRule.set("rule_set", geositeRefs);
-            geositeRule.put("outbound", "direct");
-            rules.add(geositeRule);
+            // geosite aggregate — only some countries have one (see
+            // geositeTagFor). Countries without a geosite set still get the
+            // geoip rule below, which is enough for IP-level routing.
+            String geositeTag = geositeTagFor(country);
+            if (geositeTag != null) {
+                ruleSetTags.add(geositeTag);
+                ObjectNode geositeRule = mapper.createObjectNode();
+                ArrayNode geositeRefs = mapper.createArrayNode();
+                geositeRefs.add(geositeTag);
+                geositeRule.set("rule_set", geositeRefs);
+                geositeRule.put("outbound", "direct");
+                rules.add(geositeRule);
+            }
 
             String geoipTag = "geoip-" + country;
             ruleSetTags.add(geoipTag);
@@ -552,32 +557,44 @@ public class SingBoxConfigGenerator {
     }
 
     /**
+     * Resolves the geosite rule-set tag to use for a given country, or
+     * {@code null} if no sing-geosite aggregate exists for it. The sing-geosite
+     * {@code rule-set} branch is inconsistent: CN keeps its legacy short name
+     * ({@code geosite-cn.srs}), RU/IR are under the {@code category-*} prefix,
+     * and most other countries (US, DE, GB, JP, …) simply have no geosite
+     * aggregate at all. Returning null lets the caller skip the geosite rule
+     * and rely on geoip alone — an IP-level match is still useful.
+     */
+    private static String geositeTagFor(String country) {
+        return switch (country) {
+            case "cn" -> "geosite-cn";
+            case "ru", "ir" -> "geosite-category-" + country;
+            default -> null;
+        };
+    }
+
+    /**
      * Builds a single {@code route.rule_set} entry that tells sing-box where
-     * to fetch the binary rule set from. Tags follow the convention
-     * {@code geoip-<code>} / {@code geosite-<code>} so we can cheaply split
-     * them back into kind + ISO code here. {@code download_detour: "direct"}
-     * makes the download bypass the (not-yet-up) proxy tunnel.
+     * to fetch the binary rule set from. Tags are used verbatim as the file
+     * name ({@code <tag>.srs}) under
+     * {@code github.com/SagerNet/sing-{geoip|geosite}/rule-set/}; the kind is
+     * taken from the first path segment of the tag. {@code download_detour:
+     * "direct"} makes the download bypass the (not-yet-up) proxy tunnel.
      */
     private ObjectNode buildRemoteRuleSet(String tag) {
-        String kind;
-        String code;
+        // Kind ('geoip' or 'geosite') is the first dash-separated segment
+        // of the tag; the entire tag is used verbatim as the .srs filename,
+        // so multi-segment tags like 'geosite-category-ru' resolve to
+        // 'geosite-category-ru.srs' in the sing-geosite repo.
         int dash = tag.indexOf('-');
-        if (dash > 0) {
-            kind = tag.substring(0, dash);
-            code = tag.substring(dash + 1);
-        } else {
-            // Fallback for malformed tags — emit what we can; sing-box will
-            // error clearly if the URL doesn't resolve.
-            kind = tag;
-            code = tag;
-        }
+        String kind = dash > 0 ? tag.substring(0, dash) : tag;
 
         ObjectNode entry = mapper.createObjectNode();
         entry.put("tag", tag);
         entry.put("type", "remote");
         entry.put("format", "binary");
         entry.put("url", "https://raw.githubusercontent.com/SagerNet/sing-"
-                + kind + "/rule-set/" + kind + "-" + code + ".srs");
+                + kind + "/rule-set/" + tag + ".srs");
         entry.put("download_detour", "direct");
         return entry;
     }

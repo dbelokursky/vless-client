@@ -129,11 +129,13 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode route = root.get("route");
         assertThat(route).isNotNull();
 
-        // Three rules: geosite-ru, geoip-ru, ip_is_private — all direct.
+        // Three rules: geosite (RU only available under category-* prefix),
+        // geoip-ru, ip_is_private — all direct.
         JsonNode rules = route.get("rules");
         assertThat(rules.size()).isEqualTo(3);
 
-        assertThat(rules.get(0).get("rule_set").get(0).asText()).isEqualTo("geosite-ru");
+        assertThat(rules.get(0).get("rule_set").get(0).asText())
+                .isEqualTo("geosite-category-ru");
         assertThat(rules.get(0).get("outbound").asText()).isEqualTo("direct");
 
         assertThat(rules.get(1).get("rule_set").get(0).asText()).isEqualTo("geoip-ru");
@@ -142,40 +144,65 @@ class SingBoxConfigGeneratorRoutingTest {
         assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
         assertThat(rules.get(2).get("outbound").asText()).isEqualTo("direct");
 
-        // Matching remote rule_set definitions must be registered on route.
+        // Matching remote rule_set definitions must be registered on route
+        // and resolve to the real files in SagerNet/sing-geosite's rule-set
+        // branch (which for RU lives under 'category-*', not a bare 'ru').
         JsonNode ruleSet = route.get("rule_set");
         assertThat(ruleSet).isNotNull();
         assertThat(ruleSet.size()).isEqualTo(2);
-        assertThat(ruleSet.get(0).get("tag").asText()).isEqualTo("geosite-ru");
+        assertThat(ruleSet.get(0).get("tag").asText()).isEqualTo("geosite-category-ru");
         assertThat(ruleSet.get(0).get("type").asText()).isEqualTo("remote");
         assertThat(ruleSet.get(0).get("format").asText()).isEqualTo("binary");
         assertThat(ruleSet.get(0).get("url").asText())
                 .isEqualTo("https://raw.githubusercontent.com/SagerNet/sing-geosite/"
-                        + "rule-set/geosite-ru.srs");
+                        + "rule-set/geosite-category-ru.srs");
         assertThat(ruleSet.get(0).get("download_detour").asText()).isEqualTo("direct");
         assertThat(ruleSet.get(1).get("tag").asText()).isEqualTo("geoip-ru");
+        assertThat(ruleSet.get(1).get("url").asText())
+                .isEqualTo("https://raw.githubusercontent.com/SagerNet/sing-geoip/"
+                        + "rule-set/geoip-ru.srs");
 
         assertThat(route.get("final").asText()).isEqualTo("proxy");
     }
 
     @Test
-    void bypassDomestic_honoursExplicitBypassCountry() throws Exception {
+    void bypassDomestic_chinaUsesPlainGeositeTag() throws Exception {
+        // CN is the one country with a bare 'geosite-cn.srs' aggregate; all
+        // others either use 'geosite-category-<code>' or have no geosite set.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
-        routingConfig.setBypassCountry("DE"); // user picks Germany; setter lowercases
+        routingConfig.setBypassCountry("cn");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
-        JsonNode root = parse(json);
+        JsonNode route = parse(json).get("route");
 
-        JsonNode route = root.get("route");
+        assertThat(route.get("rules").get(0).get("rule_set").get(0).asText())
+                .isEqualTo("geosite-cn");
+        assertThat(route.get("rule_set").get(0).get("url").asText())
+                .endsWith("/geosite-cn.srs");
+    }
+
+    @Test
+    void bypassDomestic_skipsGeositeWhenCountryHasNoAggregate() throws Exception {
+        // Germany (and most others) has no sing-geosite aggregate; the
+        // generator must drop the geosite rule rather than emit a 404 URL.
+        // The geoip rule alone still handles IP-level routing to .de hosts.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("bypass_domestic");
+        routingConfig.setBypassCountry("DE");
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode route = parse(json).get("route");
+
         JsonNode rules = route.get("rules");
-        assertThat(rules.get(0).get("rule_set").get(0).asText()).isEqualTo("geosite-de");
-        assertThat(rules.get(1).get("rule_set").get(0).asText()).isEqualTo("geoip-de");
-        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.size()).isEqualTo(2); // geoip-de + ip_is_private only
+        assertThat(rules.get(0).get("rule_set").get(0).asText()).isEqualTo("geoip-de");
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
 
         JsonNode ruleSet = route.get("rule_set");
-        assertThat(ruleSet.get(0).get("url").asText()).contains("geosite-de.srs");
-        assertThat(ruleSet.get(1).get("url").asText()).contains("geoip-de.srs");
+        assertThat(ruleSet.size()).isEqualTo(1);
+        assertThat(ruleSet.get(0).get("tag").asText()).isEqualTo("geoip-de");
+        assertThat(ruleSet.get(0).get("url").asText()).endsWith("/geoip-de.srs");
     }
 
     @Test
