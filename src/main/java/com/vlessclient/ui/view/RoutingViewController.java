@@ -36,6 +36,8 @@ public class RoutingViewController {
     private static final Logger log = LoggerFactory.getLogger(RoutingViewController.class);
 
     @FXML private ComboBox<String> presetCombo;
+    @FXML private HBox bypassCountryRow;
+    @FXML private ComboBox<String> bypassCountryCombo;
     @FXML private VBox customRulesSection;
     @FXML private ListView<RoutingRule> rulesListView;
     @FXML private VBox emptyState;
@@ -69,8 +71,11 @@ public class RoutingViewController {
                 String presetValue = displayNameToPreset(newVal);
                 routingService.setPreset(presetValue);
                 updateCustomRulesVisibility(presetValue);
+                updateBypassCountryVisibility(presetValue);
             }
         });
+
+        initBypassCountryCombo(config);
 
         rulesListView.setItems(rulesList);
         rulesListView.setCellFactory(list -> new RuleListCell());
@@ -78,7 +83,41 @@ public class RoutingViewController {
         loadRules();
         loadBypassList();
         updateCustomRulesVisibility(config.getPreset());
+        updateBypassCountryVisibility(config.getPreset());
         updateGeodataStatus();
+    }
+
+    /**
+     * Populates the country ComboBox with a handful of commonly-requested ISO
+     * codes, binds the current routing config's value, and persists changes.
+     * The combo is editable so users who need anything exotic can just type
+     * the ISO code (sing-box accepts any that its geoip/geosite database
+     * supports — the dropdown is just a convenience).
+     */
+    private void initBypassCountryCombo(RoutingConfig config) {
+        if (bypassCountryCombo == null) {
+            return;
+        }
+        bypassCountryCombo.getItems().addAll("ru", "cn", "ir", "us", "de", "gb", "jp", "kr");
+        bypassCountryCombo.setValue(config.getBypassCountry());
+
+        Runnable saveCountry = () -> {
+            String value = bypassCountryCombo.getEditor() != null
+                    ? bypassCountryCombo.getEditor().getText()
+                    : bypassCountryCombo.getValue();
+            RoutingConfig current = routingService.getConfig();
+            current.setBypassCountry(value);
+            routingService.saveConfig(current);
+        };
+
+        bypassCountryCombo.valueProperty().addListener((obs, oldVal, newVal) -> saveCountry.run());
+        if (bypassCountryCombo.getEditor() != null) {
+            bypassCountryCombo.getEditor().focusedProperty().addListener((obs, was, isNow) -> {
+                if (!isNow) {
+                    saveCountry.run();
+                }
+            });
+        }
     }
 
     private void loadBypassList() {
@@ -256,6 +295,15 @@ public class RoutingViewController {
         boolean isCustom = "custom".equals(preset);
         customRulesSection.setVisible(isCustom);
         customRulesSection.setManaged(isCustom);
+    }
+
+    private void updateBypassCountryVisibility(String preset) {
+        if (bypassCountryRow == null) {
+            return;
+        }
+        boolean show = "bypass_domestic".equals(preset);
+        bypassCountryRow.setVisible(show);
+        bypassCountryRow.setManaged(show);
     }
 
     private void updateGeodataStatus() {

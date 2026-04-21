@@ -482,16 +482,21 @@ public class SingBoxConfigGenerator {
         String preset = routingConfig.getPreset();
 
         if ("bypass_domestic".equals(preset)) {
+            String country = routingConfig.getBypassCountry();
+            if (country == null || country.isBlank()) {
+                country = "ru";
+            }
+
             ObjectNode geositeRule = mapper.createObjectNode();
             ArrayNode geositeValues = mapper.createArrayNode();
-            geositeValues.add("cn");
+            geositeValues.add(country);
             geositeRule.set("geosite", geositeValues);
             geositeRule.put("outbound", "direct");
             rules.add(geositeRule);
 
             ObjectNode geoipRule = mapper.createObjectNode();
             ArrayNode geoipValues = mapper.createArrayNode();
-            geoipValues.add("cn");
+            geoipValues.add(country);
             geoipValues.add("private");
             geoipRule.set("geoip", geoipValues);
             geoipRule.put("outbound", "direct");

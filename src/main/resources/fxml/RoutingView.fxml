@@ -30,6 +30,16 @@
         <ComboBox fx:id="presetCombo" prefWidth="200"/>
     </HBox>
 
+    <!-- Bypass country picker: shown only for the Bypass Domestic preset.
+         Editable so power users can type ISO codes beyond the common list. -->
+    <HBox fx:id="bypassCountryRow" alignment="CENTER_LEFT" spacing="12"
+          managed="false" visible="false">
+        <Label text="Bypass country:" styleClass="section-title"/>
+        <ComboBox fx:id="bypassCountryCombo" prefWidth="200" editable="true"/>
+        <Label styleClass="server-address" wrapText="true"
+               text="Geosite/geoip rules for this country + private LAN go direct; everything else through the VPN."/>
+    </HBox>
+
     <!-- Geodata status -->
     <Label fx:id="geodataStatusLabel" text="" styleClass="server-address"/>
 

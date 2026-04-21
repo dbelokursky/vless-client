@@ -119,7 +119,7 @@ class SingBoxConfigGeneratorRoutingTest {
     }
 
     @Test
-    void bypassDomestic_generatesGeositeAndGeoipRules() throws Exception {
+    void bypassDomestic_defaultsToRussianGeositeAndGeoip() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
 
@@ -132,21 +132,34 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode rules = route.get("rules");
         assertThat(rules.size()).isEqualTo(2);
 
-        // First rule: geosite:cn -> direct
+        // First rule: geosite:ru -> direct (default bypass country)
         JsonNode geositeRule = rules.get(0);
-        assertThat(geositeRule.get("geosite")).isNotNull();
-        assertThat(geositeRule.get("geosite").get(0).asText()).isEqualTo("cn");
+        assertThat(geositeRule.get("geosite").get(0).asText()).isEqualTo("ru");
         assertThat(geositeRule.get("outbound").asText()).isEqualTo("direct");
 
-        // Second rule: geoip:cn,private -> direct
+        // Second rule: geoip:ru,private -> direct (private keeps LAN off-VPN)
         JsonNode geoipRule = rules.get(1);
-        assertThat(geoipRule.get("geoip")).isNotNull();
         assertThat(geoipRule.get("geoip").size()).isEqualTo(2);
-        assertThat(geoipRule.get("geoip").get(0).asText()).isEqualTo("cn");
+        assertThat(geoipRule.get("geoip").get(0).asText()).isEqualTo("ru");
         assertThat(geoipRule.get("geoip").get(1).asText()).isEqualTo("private");
         assertThat(geoipRule.get("outbound").asText()).isEqualTo("direct");
 
         assertThat(route.get("final").asText()).isEqualTo("proxy");
+    }
+
+    @Test
+    void bypassDomestic_honoursExplicitBypassCountry() throws Exception {
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("bypass_domestic");
+        routingConfig.setBypassCountry("DE"); // user picks Germany; setter lowercases
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode root = parse(json);
+
+        JsonNode rules = root.get("route").get("rules");
+        assertThat(rules.get(0).get("geosite").get(0).asText()).isEqualTo("de");
+        assertThat(rules.get(1).get("geoip").get(0).asText()).isEqualTo("de");
+        assertThat(rules.get(1).get("geoip").get(1).asText()).isEqualTo("private");
     }
 
     @Test

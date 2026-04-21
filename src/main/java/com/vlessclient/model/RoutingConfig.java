@@ -12,6 +12,15 @@ public class RoutingConfig {
     @JsonProperty("preset")
     private String preset = "route_all";
 
+    /**
+     * ISO-3166 country code (lowercase) used by the {@code bypass_domestic}
+     * preset to decide which geosite / geoip region stays off the VPN.
+     * Defaults to {@code ru} — matches the typical user of this build.
+     * Ignored for other presets.
+     */
+    @JsonProperty("bypass_country")
+    private String bypassCountry = "ru";
+
     @JsonProperty("rules")
     private List<RoutingRule> rules = new ArrayList<>();
 
@@ -53,6 +62,18 @@ public class RoutingConfig {
 
     public void setPreset(String preset) {
         this.preset = preset;
+    }
+
+    public String getBypassCountry() {
+        return bypassCountry;
+    }
+
+    public void setBypassCountry(String bypassCountry) {
+        // Normalise to lowercase ISO code; sing-box's geosite/geoip lookups
+        // are case-sensitive and the shipped databases use lowercase keys.
+        this.bypassCountry = bypassCountry == null || bypassCountry.isBlank()
+                ? "ru"
+                : bypassCountry.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     public List<RoutingRule> getRules() {
