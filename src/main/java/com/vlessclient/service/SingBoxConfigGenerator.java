@@ -517,9 +517,16 @@ public class SingBoxConfigGenerator {
         route.put("final", "proxy");
         route.put("auto_detect_interface", true);
 
-        String geoAssetPath = resolveGeoAssetPath(routingConfig);
-        if (geoAssetPath != null) {
-            route.put("geo_asset_path", geoAssetPath);
+        // Вместо geo_asset_path — раздельные объекты geoip/geosite
+        if (routingConfig.getGeoipPath() != null && !routingConfig.getGeoipPath().isEmpty()) {
+            ObjectNode geoip = mapper.createObjectNode();
+            geoip.put("path", routingConfig.getGeoipPath());
+            route.set("geoip", geoip);
+        }
+        if (routingConfig.getGeositePath() != null && !routingConfig.getGeositePath().isEmpty()) {
+            ObjectNode geosite = mapper.createObjectNode();
+            geosite.put("path", routingConfig.getGeositePath());
+            route.set("geosite", geosite);
         }
 
         return route;
@@ -625,18 +632,6 @@ public class SingBoxConfigGenerator {
 
         ruleNode.put("outbound", outbound);
         return ruleNode;
-    }
-
-    private String resolveGeoAssetPath(RoutingConfig routingConfig) {
-        if (routingConfig.getGeoipPath() != null && !routingConfig.getGeoipPath().isEmpty()) {
-            java.nio.file.Path path = java.nio.file.Path.of(routingConfig.getGeoipPath());
-            return path.getParent().toAbsolutePath().toString();
-        }
-        if (routingConfig.getGeositePath() != null && !routingConfig.getGeositePath().isEmpty()) {
-            java.nio.file.Path path = java.nio.file.Path.of(routingConfig.getGeositePath());
-            return path.getParent().toAbsolutePath().toString();
-        }
-        return null;
     }
 
     private ObjectNode buildExperimental(AppSettings settings) {

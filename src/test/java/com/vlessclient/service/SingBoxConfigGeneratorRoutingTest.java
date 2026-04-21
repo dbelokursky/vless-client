@@ -213,20 +213,28 @@ class SingBoxConfigGeneratorRoutingTest {
     }
 
     @Test
-    void geoAssetPath_setFromGeoipPath() throws Exception {
+    void geodataPaths_emittedAsNestedGeoipAndGeositeObjects() throws Exception {
+        // sing-box 1.8+ replaced the flat route.geo_asset_path with a pair of
+        // nested { geoip: { path }, geosite: { path } } objects; 1.13 rejects
+        // the legacy field with 'unknown field "geo_asset_path"'.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
         routingConfig.setGeoipPath("/Users/test/geodata/geoip.db");
+        routingConfig.setGeositePath("/Users/test/geodata/geosite.db");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode root = parse(json);
 
         JsonNode route = root.get("route");
-        assertThat(route.get("geo_asset_path").asText()).isEqualTo("/Users/test/geodata");
+        assertThat(route.has("geo_asset_path")).isFalse();
+        assertThat(route.get("geoip").get("path").asText())
+                .isEqualTo("/Users/test/geodata/geoip.db");
+        assertThat(route.get("geosite").get("path").asText())
+                .isEqualTo("/Users/test/geodata/geosite.db");
     }
 
     @Test
-    void geoAssetPath_notSetWhenNoGeodataPaths() throws Exception {
+    void geodataPaths_absentWhenNotConfigured() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("route_all");
 
@@ -235,6 +243,8 @@ class SingBoxConfigGeneratorRoutingTest {
 
         JsonNode route = root.get("route");
         assertThat(route.has("geo_asset_path")).isFalse();
+        assertThat(route.has("geoip")).isFalse();
+        assertThat(route.has("geosite")).isFalse();
     }
 
     @Test
