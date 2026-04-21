@@ -18,8 +18,10 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class SingBoxConfigGenerator {
 
@@ -479,6 +481,12 @@ public class SingBoxConfigGenerator {
         ObjectNode route = mapper.createObjectNode();
         ArrayNode rules = mapper.createArrayNode();
 
+        // sing-box 1.12 removed the legacy geosite/geoip database form entirely;
+        // country rules must reference remote rule_sets by tag. Collect every
+        // rule_set tag used by any rule so we can emit the matching route.rule_set
+        // block once at the end (deduped, in insertion order).
+        Set<String> ruleSetTags = new LinkedHashSet<>();
+
         String preset = routingConfig.getPreset();
 
         if ("bypass_domestic".equals(preset)) {
@@ -487,25 +495,35 @@ public class SingBoxConfigGenerator {
                 country = "ru";
             }
 
+            String geositeTag = "geosite-" + country;
+            ruleSetTags.add(geositeTag);
             ObjectNode geositeRule = mapper.createObjectNode();
-            ArrayNode geositeValues = mapper.createArrayNode();
-            geositeValues.add(country);
-            geositeRule.set("geosite", geositeValues);
+            ArrayNode geositeRefs = mapper.createArrayNode();
+            geositeRefs.add(geositeTag);
+            geositeRule.set("rule_set", geositeRefs);
             geositeRule.put("outbound", "direct");
             rules.add(geositeRule);
 
+            String geoipTag = "geoip-" + country;
+            ruleSetTags.add(geoipTag);
             ObjectNode geoipRule = mapper.createObjectNode();
-            ArrayNode geoipValues = mapper.createArrayNode();
-            geoipValues.add(country);
-            geoipValues.add("private");
-            geoipRule.set("geoip", geoipValues);
+            ArrayNode geoipRefs = mapper.createArrayNode();
+            geoipRefs.add(geoipTag);
+            geoipRule.set("rule_set", geoipRefs);
             geoipRule.put("outbound", "direct");
             rules.add(geoipRule);
+
+            // 'private' was previously bundled into the geoip rule; in the
+            // new schema it's a dedicated boolean matcher on the rule itself.
+            ObjectNode privateRule = mapper.createObjectNode();
+            privateRule.put("ip_is_private", true);
+            privateRule.put("outbound", "direct");
+            rules.add(privateRule);
         } else if ("custom".equals(preset)) {
             List<RoutingRule> customRules = routingConfig.getRules();
             if (customRules != null) {
                 for (RoutingRule rule : customRules) {
-                    rules.add(buildCustomRule(rule));
+                    rules.add(buildCustomRule(rule, ruleSetTags));
                 }
             }
         }
@@ -522,19 +540,46 @@ public class SingBoxConfigGenerator {
         route.put("final", "proxy");
         route.put("auto_detect_interface", true);
 
-        // Вместо geo_asset_path — раздельные объекты geoip/geosite
-        if (routingConfig.getGeoipPath() != null && !routingConfig.getGeoipPath().isEmpty()) {
-            ObjectNode geoip = mapper.createObjectNode();
-            geoip.put("path", routingConfig.getGeoipPath());
-            route.set("geoip", geoip);
-        }
-        if (routingConfig.getGeositePath() != null && !routingConfig.getGeositePath().isEmpty()) {
-            ObjectNode geosite = mapper.createObjectNode();
-            geosite.put("path", routingConfig.getGeositePath());
-            route.set("geosite", geosite);
+        if (!ruleSetTags.isEmpty()) {
+            ArrayNode ruleSetNodes = mapper.createArrayNode();
+            for (String tag : ruleSetTags) {
+                ruleSetNodes.add(buildRemoteRuleSet(tag));
+            }
+            route.set("rule_set", ruleSetNodes);
         }
 
         return route;
+    }
+
+    /**
+     * Builds a single {@code route.rule_set} entry that tells sing-box where
+     * to fetch the binary rule set from. Tags follow the convention
+     * {@code geoip-<code>} / {@code geosite-<code>} so we can cheaply split
+     * them back into kind + ISO code here. {@code download_detour: "direct"}
+     * makes the download bypass the (not-yet-up) proxy tunnel.
+     */
+    private ObjectNode buildRemoteRuleSet(String tag) {
+        String kind;
+        String code;
+        int dash = tag.indexOf('-');
+        if (dash > 0) {
+            kind = tag.substring(0, dash);
+            code = tag.substring(dash + 1);
+        } else {
+            // Fallback for malformed tags — emit what we can; sing-box will
+            // error clearly if the URL doesn't resolve.
+            kind = tag;
+            code = tag;
+        }
+
+        ObjectNode entry = mapper.createObjectNode();
+        entry.put("tag", tag);
+        entry.put("type", "remote");
+        entry.put("format", "binary");
+        entry.put("url", "https://raw.githubusercontent.com/SagerNet/sing-"
+                + kind + "/rule-set/" + kind + "-" + code + ".srs");
+        entry.put("download_detour", "direct");
+        return entry;
     }
 
     /**
@@ -593,7 +638,7 @@ public class SingBoxConfigGenerator {
         return rule;
     }
 
-    private ObjectNode buildCustomRule(RoutingRule rule) {
+    private ObjectNode buildCustomRule(RoutingRule rule, Set<String> ruleSetTags) {
         ObjectNode ruleNode = mapper.createObjectNode();
         String outbound = rule.getAction().getValue();
 
@@ -619,9 +664,14 @@ public class SingBoxConfigGenerator {
                 ruleNode.set("domain_regex", values);
             }
             case GEOSITE -> {
-                ArrayNode values = mapper.createArrayNode();
-                values.add(rule.getValue());
-                ruleNode.set("geosite", values);
+                // Legacy geosite: [code] removed in 1.12 — reference a remote
+                // rule_set by a stable tag, and record the tag so the caller
+                // can emit the matching route.rule_set entry.
+                String tag = "geosite-" + rule.getValue();
+                ruleSetTags.add(tag);
+                ArrayNode refs = mapper.createArrayNode();
+                refs.add(tag);
+                ruleNode.set("rule_set", refs);
             }
             case IP_CIDR -> {
                 ArrayNode values = mapper.createArrayNode();
@@ -629,9 +679,13 @@ public class SingBoxConfigGenerator {
                 ruleNode.set("ip_cidr", values);
             }
             case GEOIP -> {
-                ArrayNode values = mapper.createArrayNode();
-                values.add(rule.getValue());
-                ruleNode.set("geoip", values);
+                // Same migration as GEOSITE — references a geoip-<code>
+                // remote rule_set instead of the retired geoip: [] matcher.
+                String tag = "geoip-" + rule.getValue();
+                ruleSetTags.add(tag);
+                ArrayNode refs = mapper.createArrayNode();
+                refs.add(tag);
+                ruleNode.set("rule_set", refs);
             }
         }
 

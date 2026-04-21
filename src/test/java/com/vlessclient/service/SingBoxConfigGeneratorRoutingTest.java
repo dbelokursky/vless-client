@@ -119,7 +119,7 @@ class SingBoxConfigGeneratorRoutingTest {
     }
 
     @Test
-    void bypassDomestic_defaultsToRussianGeositeAndGeoip() throws Exception {
+    void bypassDomestic_defaultsToRussianRuleSets() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
 
@@ -129,20 +129,31 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode route = root.get("route");
         assertThat(route).isNotNull();
 
+        // Three rules: geosite-ru, geoip-ru, ip_is_private — all direct.
         JsonNode rules = route.get("rules");
-        assertThat(rules.size()).isEqualTo(2);
+        assertThat(rules.size()).isEqualTo(3);
 
-        // First rule: geosite:ru -> direct (default bypass country)
-        JsonNode geositeRule = rules.get(0);
-        assertThat(geositeRule.get("geosite").get(0).asText()).isEqualTo("ru");
-        assertThat(geositeRule.get("outbound").asText()).isEqualTo("direct");
+        assertThat(rules.get(0).get("rule_set").get(0).asText()).isEqualTo("geosite-ru");
+        assertThat(rules.get(0).get("outbound").asText()).isEqualTo("direct");
 
-        // Second rule: geoip:ru,private -> direct (private keeps LAN off-VPN)
-        JsonNode geoipRule = rules.get(1);
-        assertThat(geoipRule.get("geoip").size()).isEqualTo(2);
-        assertThat(geoipRule.get("geoip").get(0).asText()).isEqualTo("ru");
-        assertThat(geoipRule.get("geoip").get(1).asText()).isEqualTo("private");
-        assertThat(geoipRule.get("outbound").asText()).isEqualTo("direct");
+        assertThat(rules.get(1).get("rule_set").get(0).asText()).isEqualTo("geoip-ru");
+        assertThat(rules.get(1).get("outbound").asText()).isEqualTo("direct");
+
+        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(2).get("outbound").asText()).isEqualTo("direct");
+
+        // Matching remote rule_set definitions must be registered on route.
+        JsonNode ruleSet = route.get("rule_set");
+        assertThat(ruleSet).isNotNull();
+        assertThat(ruleSet.size()).isEqualTo(2);
+        assertThat(ruleSet.get(0).get("tag").asText()).isEqualTo("geosite-ru");
+        assertThat(ruleSet.get(0).get("type").asText()).isEqualTo("remote");
+        assertThat(ruleSet.get(0).get("format").asText()).isEqualTo("binary");
+        assertThat(ruleSet.get(0).get("url").asText())
+                .isEqualTo("https://raw.githubusercontent.com/SagerNet/sing-geosite/"
+                        + "rule-set/geosite-ru.srs");
+        assertThat(ruleSet.get(0).get("download_detour").asText()).isEqualTo("direct");
+        assertThat(ruleSet.get(1).get("tag").asText()).isEqualTo("geoip-ru");
 
         assertThat(route.get("final").asText()).isEqualTo("proxy");
     }
@@ -156,10 +167,15 @@ class SingBoxConfigGeneratorRoutingTest {
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode root = parse(json);
 
-        JsonNode rules = root.get("route").get("rules");
-        assertThat(rules.get(0).get("geosite").get(0).asText()).isEqualTo("de");
-        assertThat(rules.get(1).get("geoip").get(0).asText()).isEqualTo("de");
-        assertThat(rules.get(1).get("geoip").get(1).asText()).isEqualTo("private");
+        JsonNode route = root.get("route");
+        JsonNode rules = route.get("rules");
+        assertThat(rules.get(0).get("rule_set").get(0).asText()).isEqualTo("geosite-de");
+        assertThat(rules.get(1).get("rule_set").get(0).asText()).isEqualTo("geoip-de");
+        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
+
+        JsonNode ruleSet = route.get("rule_set");
+        assertThat(ruleSet.get(0).get("url").asText()).contains("geosite-de.srs");
+        assertThat(ruleSet.get(1).get("url").asText()).contains("geoip-de.srs");
     }
 
     @Test
@@ -199,15 +215,22 @@ class SingBoxConfigGeneratorRoutingTest {
         assertThat(rule1.get("ip_cidr").get(0).asText()).isEqualTo("10.0.0.0/8");
         assertThat(rule1.get("outbound").asText()).isEqualTo("direct");
 
-        // geosite rule
+        // geosite rule — migrated to rule_set reference
         JsonNode rule2 = rules.get(2);
-        assertThat(rule2.get("geosite").get(0).asText()).isEqualTo("cn");
+        assertThat(rule2.get("rule_set").get(0).asText()).isEqualTo("geosite-cn");
         assertThat(rule2.get("outbound").asText()).isEqualTo("direct");
 
-        // geoip rule
+        // geoip rule — migrated to rule_set reference
         JsonNode rule3 = rules.get(3);
-        assertThat(rule3.get("geoip").get(0).asText()).isEqualTo("cn");
+        assertThat(rule3.get("rule_set").get(0).asText()).isEqualTo("geoip-cn");
         assertThat(rule3.get("outbound").asText()).isEqualTo("direct");
+
+        // The matching remote rule_set entries should be registered on route.
+        JsonNode ruleSet = root.get("route").get("rule_set");
+        assertThat(ruleSet).isNotNull();
+        assertThat(ruleSet.size()).isEqualTo(2);
+        assertThat(ruleSet.get(0).get("tag").asText()).isEqualTo("geosite-cn");
+        assertThat(ruleSet.get(1).get("tag").asText()).isEqualTo("geoip-cn");
 
         // domain rule
         JsonNode rule4 = rules.get(4);
@@ -226,10 +249,11 @@ class SingBoxConfigGeneratorRoutingTest {
     }
 
     @Test
-    void geodataPaths_emittedAsNestedGeoipAndGeositeObjects() throws Exception {
-        // sing-box 1.8+ replaced the flat route.geo_asset_path with a pair of
-        // nested { geoip: { path }, geosite: { path } } objects; 1.13 rejects
-        // the legacy field with 'unknown field "geo_asset_path"'.
+    void legacyGeoFields_neverEmitted() throws Exception {
+        // sing-box 1.12 removed both the flat route.geo_asset_path and the
+        // nested route.geoip / route.geosite database forms entirely. The
+        // generator must not emit any of them — country matching is done
+        // through rule_set only.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
         routingConfig.setGeoipPath("/Users/test/geodata/geoip.db");
@@ -240,14 +264,12 @@ class SingBoxConfigGeneratorRoutingTest {
 
         JsonNode route = root.get("route");
         assertThat(route.has("geo_asset_path")).isFalse();
-        assertThat(route.get("geoip").get("path").asText())
-                .isEqualTo("/Users/test/geodata/geoip.db");
-        assertThat(route.get("geosite").get("path").asText())
-                .isEqualTo("/Users/test/geodata/geosite.db");
+        assertThat(route.has("geoip")).isFalse();
+        assertThat(route.has("geosite")).isFalse();
     }
 
     @Test
-    void geodataPaths_absentWhenNotConfigured() throws Exception {
+    void routeAll_emitsNoRuleSetOrLegacyGeoBlocks() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("route_all");
 
@@ -258,6 +280,8 @@ class SingBoxConfigGeneratorRoutingTest {
         assertThat(route.has("geo_asset_path")).isFalse();
         assertThat(route.has("geoip")).isFalse();
         assertThat(route.has("geosite")).isFalse();
+        // No country matching needed, so no rule_set block either.
+        assertThat(route.has("rule_set")).isFalse();
     }
 
     @Test
