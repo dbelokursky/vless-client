@@ -15,8 +15,11 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
+import javafx.application.Platform;
+import javafx.geometry.Orientation;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
@@ -103,10 +106,34 @@ public class LogsViewController {
         searchField.textProperty().addListener((obs, oldVal, newVal) -> applyFilter());
 
         filteredLogLines.addListener((ListChangeListener<String>) change -> {
-            if (autoScrollCheckBox.isSelected() && !filteredLogLines.isEmpty()) {
-                logListView.scrollTo(filteredLogLines.size() - 1);
+            if (filteredLogLines.isEmpty()) {
+                return;
             }
+            if (autoScrollCheckBox.isSelected()) {
+                logListView.scrollTo(filteredLogLines.size() - 1);
+                return;
+            }
+            // Auto-scroll is off: VirtualFlow keeps the viewport stuck at the
+            // bottom whenever new items are appended while the last cell is
+            // visible, so freeze the vertical scrollbar value across the
+            // append. Snapshot taken on this same JFX pulse before layout
+            // sees the new items, restored on the next pulse.
+            ScrollBar vbar = findVerticalScrollBar();
+            if (vbar == null) {
+                return;
+            }
+            double frozen = vbar.getValue();
+            Platform.runLater(() -> vbar.setValue(frozen));
         });
+    }
+
+    private ScrollBar findVerticalScrollBar() {
+        for (var node : logListView.lookupAll(".scroll-bar")) {
+            if (node instanceof ScrollBar bar && bar.getOrientation() == Orientation.VERTICAL) {
+                return bar;
+            }
+        }
+        return null;
     }
 
     @FXML
