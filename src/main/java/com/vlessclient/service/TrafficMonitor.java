@@ -28,6 +28,13 @@ public class TrafficMonitor {
     private static final long MB = 1024L * 1024L;
     private static final long GB = 1024L * 1024L * 1024L;
 
+    // The clash_api server is started by sing-box only after routes (and any
+    // remote rule_sets) finish loading, so the first few connect attempts can
+    // hit "connection refused" before the listener is up. Reconnect with a
+    // bounded back-off until the stream attaches or stop() is called.
+    private static final long INITIAL_BACKOFF_MS = 300L;
+    private static final long MAX_BACKOFF_MS = 5_000L;
+
     private final LongProperty uploadSpeed = new SimpleLongProperty(0);
     private final LongProperty downloadSpeed = new SimpleLongProperty(0);
     private final LongProperty totalUpload = new SimpleLongProperty(0);
@@ -104,6 +111,29 @@ public class TrafficMonitor {
     }
 
     private void connectAndStream(int clashApiPort) throws Exception {
+        long backoff = INITIAL_BACKOFF_MS;
+        while (running.get()) {
+            try {
+                streamOnce(clashApiPort);
+                return;
+            } catch (java.net.ConnectException e) {
+                if (!running.get()) {
+                    return;
+                }
+                log.debug("Clash API not yet reachable on port {} ({}); "
+                        + "retrying in {} ms", clashApiPort, e.getMessage(), backoff);
+                try {
+                    Thread.sleep(backoff);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
+            }
+        }
+    }
+
+    private void streamOnce(int clashApiPort) throws Exception {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
@@ -121,6 +151,7 @@ public class TrafficMonitor {
             return;
         }
 
+        log.info("TrafficMonitor connected to Clash API on port {}", clashApiPort);
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(response.body()))) {
             String line;
