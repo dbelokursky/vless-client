@@ -49,7 +49,7 @@ public class SingBoxConfigGenerator {
             root.set("dns", buildDns(settings));
         }
 
-        root.set("inbounds", buildInbounds(settings));
+        root.set("inbounds", buildInbounds(settings, routingConfig));
         root.set("outbounds", buildOutbounds(server));
 
         if (routingConfig != null) {
@@ -207,6 +207,27 @@ public class SingBoxConfigGenerator {
     }
 
     /**
+     * The CIDR list fed to {@code route_exclude_address} on the TUN inbound.
+     * Covers everything that should structurally never traverse the VPN:
+     * RFC1918, link-local unicast and multicast for both IPv4 and IPv6.
+     * 127/8 and ::1 are already excluded by sing-box's auto_route, so we
+     * don't list them again.
+     */
+    private ArrayNode buildLanExcludeList() {
+        ArrayNode exclude = mapper.createArrayNode();
+        exclude.add("10.0.0.0/8");
+        exclude.add("172.16.0.0/12");
+        exclude.add("192.168.0.0/16");
+        exclude.add("169.254.0.0/16");
+        // IPv4 multicast — covers mDNS (224.0.0.251), SSDP, etc.
+        exclude.add("224.0.0.0/4");
+        exclude.add("fc00::/7");
+        exclude.add("fe80::/10");
+        exclude.add("ff00::/8");
+        return exclude;
+    }
+
+    /**
      * Populates a DNS server object using the sing-box 1.13 schema. Accepts
      * both the legacy URL-style address (e.g. {@code https://1.1.1.1/dns-query})
      * and bare IPs/hostnames.
@@ -249,7 +270,7 @@ public class SingBoxConfigGenerator {
         }
     }
 
-    private ArrayNode buildInbounds(AppSettings settings) {
+    private ArrayNode buildInbounds(AppSettings settings, RoutingConfig routingConfig) {
         ArrayNode inbounds = mapper.createArrayNode();
 
         if (settings.getProxyMode() == ProxyMode.TUN) {
@@ -267,6 +288,20 @@ public class SingBoxConfigGenerator {
             tun.put("stack", "system");
             // `sniff` and `sniff_override_destination` were removed from
             // inbound in 1.13; sniffing is now expressed as a route action.
+
+            // When bypassLan is on, tell sing-box to NOT install OS routes
+            // for private / link-local / multicast subnets. Without this,
+            // auto_route's /1+/2+… coverage of 0.0.0.0/0 captures e.g.
+            // 192.168.0.0/16 into the TUN device, and strict_route then
+            // prevents direct outbound from escaping it — Screen Sharing /
+            // SMB / mDNS to a LAN host (e.g. 192.168.1.140 or macmini.local)
+            // hang. The route-rule ip_is_private→direct stays as a safety
+            // net but cannot fix this on its own.
+            boolean bypassLan = routingConfig == null || routingConfig.isBypassLan();
+            if (bypassLan) {
+                tun.set("route_exclude_address", buildLanExcludeList());
+            }
+
             inbounds.add(tun);
         }
 

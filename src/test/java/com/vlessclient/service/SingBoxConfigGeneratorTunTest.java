@@ -96,6 +96,81 @@ class SingBoxConfigGeneratorTunTest {
     }
 
     @Test
+    void tunMode_excludesPrivateAndMulticastFromAutoRoute() throws Exception {
+        // Without route_exclude_address, auto_route's /1+/2+… coverage of
+        // 0.0.0.0/0 swallows 192.168.0.0/16 into the TUN device, and then
+        // strict_route blocks the route-rule ip_is_private->direct from
+        // escaping it — Screen Sharing to 192.168.1.140 or macmini.local
+        // would hang. The exclude list is the structural fix; the route
+        // rule remains as a safety net.
+        String json = generator.generate(createVlessServer(), tunSettings());
+        JsonNode inbounds = parse(json).get("inbounds");
+
+        JsonNode tun = null;
+        for (JsonNode inbound : inbounds) {
+            if ("tun".equals(inbound.get("type").asText())) {
+                tun = inbound;
+                break;
+            }
+        }
+
+        assertThat(tun).isNotNull();
+        JsonNode exclude = tun.get("route_exclude_address");
+        assertThat(exclude).isNotNull();
+        assertThat(exclude.isArray()).isTrue();
+
+        java.util.List<String> entries = new java.util.ArrayList<>();
+        for (JsonNode e : exclude) {
+            entries.add(e.asText());
+        }
+        // IPv4 private + link-local + multicast (mDNS, SSDP).
+        assertThat(entries).contains(
+                "10.0.0.0/8",
+                "172.16.0.0/12",
+                "192.168.0.0/16",
+                "169.254.0.0/16",
+                "224.0.0.0/4");
+        // IPv6 ULA + link-local + multicast.
+        assertThat(entries).contains("fc00::/7", "fe80::/10", "ff00::/8");
+    }
+
+    @Test
+    void tunMode_withBypassLanDisabled_omitsRouteExcludeAddress() throws Exception {
+        // Honour the user's explicit opt-out at the OS-routes level too.
+        // The TUN route-rule safety net still keeps LAN reachable inside
+        // sing-box, but the OS will install full auto_route coverage.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setBypassLan(false);
+
+        String json = generator.generate(createVlessServer(), tunSettings(), routingConfig);
+        JsonNode inbounds = parse(json).get("inbounds");
+
+        JsonNode tun = null;
+        for (JsonNode inbound : inbounds) {
+            if ("tun".equals(inbound.get("type").asText())) {
+                tun = inbound;
+                break;
+            }
+        }
+
+        assertThat(tun).isNotNull();
+        assertThat(tun.has("route_exclude_address")).isFalse();
+    }
+
+    @Test
+    void systemProxyMode_doesNotEmitRouteExcludeAddress() throws Exception {
+        // route_exclude_address is a TUN-inbound option only; it has no
+        // analogue in socks/http inbound, and emitting it there would be
+        // a config error.
+        String json = generator.generate(createVlessServer(), systemProxySettings());
+        JsonNode inbounds = parse(json).get("inbounds");
+
+        for (JsonNode inbound : inbounds) {
+            assertThat(inbound.has("route_exclude_address")).isFalse();
+        }
+    }
+
+    @Test
     void tunMode_stillIncludesSocksAndHttpInbounds() throws Exception {
         String json = generator.generate(createVlessServer(), tunSettings());
         JsonNode inbounds = parse(json).get("inbounds");
