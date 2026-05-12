@@ -1,6 +1,7 @@
 package com.vlessclient.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -145,8 +146,11 @@ public class SingBoxConfigGenerator {
             route.set("rules", rules);
         }
 
-        // Prepend the protocol-sniffing and DNS-hijack rules, followed by a
-        // private-ip direct rule so LAN traffic bypasses the proxy.
+        // Prepend the protocol-sniffing and DNS-hijack rules. The private-IP
+        // direct rule is only added here when buildRoute didn't already emit
+        // one (e.g. user disabled bypassLan or no routing config was passed) —
+        // TUN literally cannot relay LAN packets to a remote proxy, so the
+        // bypass is a safety net the user can't usefully turn off in TUN mode.
         ArrayNode prepended = mapper.createArrayNode();
 
         ObjectNode sniffRule = mapper.createObjectNode();
@@ -158,17 +162,48 @@ public class SingBoxConfigGenerator {
         hijackDns.put("action", "hijack-dns");
         prepended.add(hijackDns);
 
-        ObjectNode privateIp = mapper.createObjectNode();
-        privateIp.put("ip_is_private", true);
-        privateIp.put("action", "route");
-        privateIp.put("outbound", "direct");
-        prepended.add(privateIp);
+        if (!hasPrivateIpDirectRule(rules)) {
+            prepended.add(buildPrivateIpDirectRule());
+        }
 
         // Preserve any pre-existing rules after our essentials.
         for (int i = 0; i < rules.size(); i++) {
             prepended.add(rules.get(i));
         }
         route.set("rules", prepended);
+    }
+
+    /**
+     * True if the given rules array already contains a rule that sends
+     * {@code ip_is_private: true} traffic to the {@code direct} outbound.
+     * Used by {@link #ensureTunRouteEssentials} to avoid duplicating the
+     * LAN-bypass rule that {@link #buildRoute} may have already emitted.
+     */
+    private boolean hasPrivateIpDirectRule(ArrayNode rules) {
+        if (rules == null) {
+            return false;
+        }
+        for (int i = 0; i < rules.size(); i++) {
+            JsonNode rule = rules.get(i);
+            if (rule == null) {
+                continue;
+            }
+            JsonNode privateFlag = rule.get("ip_is_private");
+            JsonNode outbound = rule.get("outbound");
+            if (privateFlag != null && privateFlag.asBoolean()
+                    && outbound != null && "direct".equals(outbound.asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private ObjectNode buildPrivateIpDirectRule() {
+        ObjectNode privateIp = mapper.createObjectNode();
+        privateIp.put("ip_is_private", true);
+        privateIp.put("action", "route");
+        privateIp.put("outbound", "direct");
+        return privateIp;
     }
 
     /**
@@ -518,12 +553,9 @@ public class SingBoxConfigGenerator {
             geoipRule.put("outbound", "direct");
             rules.add(geoipRule);
 
-            // 'private' was previously bundled into the geoip rule; in the
-            // new schema it's a dedicated boolean matcher on the rule itself.
-            ObjectNode privateRule = mapper.createObjectNode();
-            privateRule.put("ip_is_private", true);
-            privateRule.put("outbound", "direct");
-            rules.add(privateRule);
+            // The dedicated ip_is_private rule used to live here, but it now
+            // belongs to the universal bypassLan toggle (prepended below) so a
+            // user with bypassLan=false also gets the chance to opt out.
         } else if ("custom".equals(preset)) {
             List<RoutingRule> customRules = routingConfig.getRules();
             if (customRules != null) {
@@ -533,6 +565,14 @@ public class SingBoxConfigGenerator {
             }
         }
         // "route_all" — no special rules, everything goes through proxy via final
+
+        // Universal LAN-bypass rule. Enabled by default and independent of
+        // preset, so route_all / custom in system-proxy mode also keep local
+        // traffic off the VPN. Prepended so it precedes preset/custom rules,
+        // but the user's bypass list still wins above it.
+        if (routingConfig.isBypassLan()) {
+            rules.insert(0, buildPrivateIpDirectRule());
+        }
 
         // User bypass list is honored in every preset: matching hosts always
         // go direct regardless of route_all / bypass_domestic / custom.

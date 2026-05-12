@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.Protocol;
 import com.vlessclient.model.ProxyMode;
+import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.TransportType;
 import org.junit.jupiter.api.BeforeEach;
@@ -201,6 +202,96 @@ class SingBoxConfigGeneratorTunTest {
         }
         assertThat(tun).isNotNull();
         assertThat(tun.get("interface_name").asText()).isEqualTo("utun42");
+    }
+
+    @Test
+    void tunMode_noRoutingConfig_essentialsAddLanBypass() throws Exception {
+        // With no RoutingConfig passed, TUN mode still needs the LAN bypass
+        // for local services to stay reachable through the TUN device. The
+        // essentials block is the only thing that adds rules in this path.
+        String json = generator.generate(createVlessServer(), tunSettings());
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        // sniff, hijack-dns, ip_is_private — in that exact order.
+        assertThat(rules.size()).isEqualTo(3);
+        assertThat(rules.get(0).get("action").asText()).isEqualTo("sniff");
+        assertThat(rules.get(1).get("action").asText()).isEqualTo("hijack-dns");
+        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(2).get("outbound").asText()).isEqualTo("direct");
+    }
+
+    @Test
+    void tunMode_withBypassLanEnabled_noDuplicatePrivateRule() throws Exception {
+        // buildRoute emits the LAN bypass when bypassLan is on; TUN essentials
+        // must dedup and not prepend a second copy. Sniff and hijack-dns are
+        // always added regardless.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("route_all");
+        // bypassLan defaults to true
+
+        String json = generator.generate(createVlessServer(), tunSettings(), routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        int privateCount = 0;
+        for (int i = 0; i < rules.size(); i++) {
+            JsonNode privateFlag = rules.get(i).get("ip_is_private");
+            if (privateFlag != null && privateFlag.asBoolean()) {
+                privateCount++;
+            }
+        }
+        assertThat(privateCount).isEqualTo(1);
+
+        // Sniff and hijack-dns are still prepended in order.
+        assertThat(rules.get(0).get("action").asText()).isEqualTo("sniff");
+        assertThat(rules.get(1).get("action").asText()).isEqualTo("hijack-dns");
+        // The single ip_is_private rule that buildRoute emitted should sit
+        // right after the two TUN-only essentials.
+        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
+    }
+
+    @Test
+    void tunMode_withBypassLanDisabled_essentialsStillAddLanBypass() throws Exception {
+        // The TUN device cannot route LAN packets to a remote proxy — they
+        // would just dead-end. So even when the user explicitly disables
+        // bypassLan, TUN essentials must add the rule as a safety net.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("route_all");
+        routingConfig.setBypassLan(false);
+
+        String json = generator.generate(createVlessServer(), tunSettings(), routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        // Exactly one ip_is_private rule — the one from the safety net.
+        int privateCount = 0;
+        int privateIndex = -1;
+        for (int i = 0; i < rules.size(); i++) {
+            JsonNode privateFlag = rules.get(i).get("ip_is_private");
+            if (privateFlag != null && privateFlag.asBoolean()) {
+                privateCount++;
+                privateIndex = i;
+            }
+        }
+        assertThat(privateCount).isEqualTo(1);
+        // The safety-net version sits inside the essentials prepend block.
+        assertThat(privateIndex).isEqualTo(2);
+        assertThat(rules.get(privateIndex).get("outbound").asText()).isEqualTo("direct");
+    }
+
+    @Test
+    void systemProxyMode_withBypassLanDisabled_noLanBypassAtAll() throws Exception {
+        // The TUN safety net is TUN-only. In system-proxy mode the toggle is
+        // the user's last word: bypassLan=false really means "no automatic
+        // LAN bypass."
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("route_all");
+        routingConfig.setBypassLan(false);
+
+        String json = generator.generate(createVlessServer(), systemProxySettings(), routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        for (int i = 0; i < rules.size(); i++) {
+            assertThat(rules.get(i).has("ip_is_private")).isFalse();
+        }
     }
 
     @Test
