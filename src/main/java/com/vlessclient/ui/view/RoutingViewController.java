@@ -12,6 +12,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
@@ -38,6 +39,7 @@ public class RoutingViewController {
     @FXML private ComboBox<String> presetCombo;
     @FXML private HBox bypassCountryRow;
     @FXML private ComboBox<String> bypassCountryCombo;
+    @FXML private CheckBox bypassLanCheckbox;
     @FXML private VBox customRulesSection;
     @FXML private ListView<RoutingRule> rulesListView;
     @FXML private VBox emptyState;
@@ -76,6 +78,7 @@ public class RoutingViewController {
         });
 
         initBypassCountryCombo(config);
+        initBypassLanCheckbox(config);
 
         rulesListView.setItems(rulesList);
         rulesListView.setCellFactory(list -> new RuleListCell());
@@ -118,6 +121,18 @@ public class RoutingViewController {
                 }
             });
         }
+    }
+
+    private void initBypassLanCheckbox(RoutingConfig config) {
+        if (bypassLanCheckbox == null) {
+            return;
+        }
+        bypassLanCheckbox.setSelected(config.isBypassLan());
+        bypassLanCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            RoutingConfig current = routingService.getConfig();
+            current.setBypassLan(newVal);
+            routingService.saveConfig(current);
+        });
     }
 
     private void loadBypassList() {

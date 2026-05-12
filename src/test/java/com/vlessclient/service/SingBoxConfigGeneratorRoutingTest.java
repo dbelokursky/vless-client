@@ -64,7 +64,11 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode rules = parse(json).get("route").get("rules");
 
         assertThat(rules).isNotNull();
-        assertThat(rules.size()).isEqualTo(1);
+        // Bypass-list rule first, then the universal ip_is_private LAN bypass
+        // (default-on). User bypass takes precedence over LAN bypass.
+        assertThat(rules.size()).isEqualTo(2);
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(1).get("outbound").asText()).isEqualTo("direct");
 
         JsonNode bypass = rules.get(0);
         assertThat(bypass.get("action").asText()).isEqualTo("route");
@@ -99,7 +103,9 @@ class SingBoxConfigGeneratorRoutingTest {
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");
 
-        assertThat(rules.size()).isEqualTo(0);
+        // Only the default-on LAN bypass remains; no domain/keyword/cidr rule.
+        assertThat(rules.size()).isEqualTo(1);
+        assertThat(rules.get(0).get("ip_is_private").asBoolean()).isTrue();
     }
 
     @Test
@@ -115,7 +121,11 @@ class SingBoxConfigGeneratorRoutingTest {
         assertThat(route.get("final").asText()).isEqualTo("proxy");
         assertThat(route.get("auto_detect_interface").asBoolean()).isTrue();
         assertThat(route.get("rules")).isNotNull();
-        assertThat(route.get("rules").size()).isEqualTo(0);
+        // route_all still emits the universal LAN-bypass rule by default —
+        // local services must stay reachable even in "everything via proxy".
+        assertThat(route.get("rules").size()).isEqualTo(1);
+        assertThat(route.get("rules").get(0).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(route.get("rules").get(0).get("outbound").asText()).isEqualTo("direct");
     }
 
     @Test
@@ -129,19 +139,19 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode route = root.get("route");
         assertThat(route).isNotNull();
 
-        // Three rules: geosite (RU only available under category-* prefix),
-        // geoip-ru, ip_is_private — all direct.
+        // Three rules: universal LAN bypass (default-on), then geosite (RU
+        // only available under category-* prefix) and geoip-ru — all direct.
         JsonNode rules = route.get("rules");
         assertThat(rules.size()).isEqualTo(3);
 
-        assertThat(rules.get(0).get("rule_set").get(0).asText())
-                .isEqualTo("geosite-category-ru");
+        assertThat(rules.get(0).get("ip_is_private").asBoolean()).isTrue();
         assertThat(rules.get(0).get("outbound").asText()).isEqualTo("direct");
 
-        assertThat(rules.get(1).get("rule_set").get(0).asText()).isEqualTo("geoip-ru");
+        assertThat(rules.get(1).get("rule_set").get(0).asText())
+                .isEqualTo("geosite-category-ru");
         assertThat(rules.get(1).get("outbound").asText()).isEqualTo("direct");
 
-        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(2).get("rule_set").get(0).asText()).isEqualTo("geoip-ru");
         assertThat(rules.get(2).get("outbound").asText()).isEqualTo("direct");
 
         // Matching remote rule_set definitions must be registered on route
@@ -176,7 +186,8 @@ class SingBoxConfigGeneratorRoutingTest {
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode route = parse(json).get("route");
 
-        assertThat(route.get("rules").get(0).get("rule_set").get(0).asText())
+        // rules.get(0) is the universal LAN bypass; preset rules start at 1.
+        assertThat(route.get("rules").get(1).get("rule_set").get(0).asText())
                 .isEqualTo("geosite-cn");
         assertThat(route.get("rule_set").get(0).get("url").asText())
                 .endsWith("/geosite-cn.srs");
@@ -195,9 +206,9 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode route = parse(json).get("route");
 
         JsonNode rules = route.get("rules");
-        assertThat(rules.size()).isEqualTo(2); // geoip-de + ip_is_private only
-        assertThat(rules.get(0).get("rule_set").get(0).asText()).isEqualTo("geoip-de");
-        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.size()).isEqualTo(2); // LAN bypass + geoip-de
+        assertThat(rules.get(0).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(1).get("rule_set").get(0).asText()).isEqualTo("geoip-de");
 
         JsonNode ruleSet = route.get("rule_set");
         assertThat(ruleSet.size()).isEqualTo(1);
@@ -209,6 +220,9 @@ class SingBoxConfigGeneratorRoutingTest {
     void customRules_generateCorrectSingBoxRouteEntries() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("custom");
+        // Disable LAN bypass so the custom-rule indexes stay readable; a
+        // separate test covers the default-on LAN bypass alongside custom.
+        routingConfig.setBypassLan(false);
         routingConfig.setRules(List.of(
                 new RoutingRule(RoutingRule.RuleType.DOMAIN_SUFFIX, ".google.com",
                         RoutingRule.RuleAction.PROXY),
@@ -328,7 +342,129 @@ class SingBoxConfigGeneratorRoutingTest {
     }
 
     @Test
-    void customPreset_emptyRulesList_generatesEmptyRulesArray() throws Exception {
+    void bypassLan_disabled_routeAll_omitsPrivateIpRule() throws Exception {
+        // With LAN bypass turned off, route_all in system-proxy mode emits
+        // NO automatic ip_is_private rule — every connection that sing-box
+        // sees goes through the proxy. This is the "I really mean route_all"
+        // setting; mostly for niche debugging / penetration tests.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("route_all");
+        routingConfig.setBypassLan(false);
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        assertThat(rules.size()).isEqualTo(0);
+    }
+
+    @Test
+    void bypassLan_disabled_bypassDomestic_omitsPrivateIpRule() throws Exception {
+        // bypass_domestic used to emit its own dedicated ip_is_private rule
+        // unconditionally. After the refactor, the canonical control is the
+        // bypassLan toggle — so disabling it must drop the rule even in
+        // bypass_domestic, leaving only the geosite / geoip rules.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("bypass_domestic");
+        routingConfig.setBypassLan(false);
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        assertThat(rules.size()).isEqualTo(2);
+        for (int i = 0; i < rules.size(); i++) {
+            assertThat(rules.get(i).has("ip_is_private")).isFalse();
+        }
+        assertThat(rules.get(0).get("rule_set").get(0).asText())
+                .isEqualTo("geosite-category-ru");
+        assertThat(rules.get(1).get("rule_set").get(0).asText()).isEqualTo("geoip-ru");
+    }
+
+    @Test
+    void bypassLan_enabled_routeAll_localTrafficGoesDirect() throws Exception {
+        // The default-on bypassLan toggle is what makes "all local traffic
+        // goes around the VPN" true for route_all in system-proxy mode.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("route_all");
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        assertThat(rules.size()).isEqualTo(1);
+        JsonNode privateRule = rules.get(0);
+        assertThat(privateRule.get("ip_is_private").asBoolean()).isTrue();
+        assertThat(privateRule.get("action").asText()).isEqualTo("route");
+        assertThat(privateRule.get("outbound").asText()).isEqualTo("direct");
+    }
+
+    @Test
+    void bypassLan_enabled_customPreset_localBypassPrecedesCustomRules() throws Exception {
+        // Ordering matters: a custom PROXY rule for 10.0.0.0/8 must not be
+        // able to drag LAN traffic through the proxy. The default-on LAN
+        // bypass is prepended so it wins first.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("custom");
+        routingConfig.setRules(List.of(
+                new RoutingRule(RoutingRule.RuleType.IP_CIDR, "10.0.0.0/8",
+                        RoutingRule.RuleAction.PROXY)
+        ));
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        assertThat(rules.size()).isEqualTo(2);
+        assertThat(rules.get(0).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(0).get("outbound").asText()).isEqualTo("direct");
+        assertThat(rules.get(1).get("ip_cidr").get(0).asText()).isEqualTo("10.0.0.0/8");
+        assertThat(rules.get(1).get("outbound").asText()).isEqualTo("proxy");
+    }
+
+    @Test
+    void bypassLan_bypassListWinsAboveLanRule() throws Exception {
+        // The user's bypass list is the most explicit signal — it must come
+        // before the LAN bypass rule so e.g. a user-listed domain on a public
+        // IP that happens to be CGNAT-private still resolves the way the user
+        // expects. (Practically this only matters for tie-breakers, but the
+        // ordering must be deterministic.)
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("route_all");
+        routingConfig.setBypassList(List.of("internal.example.com"));
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        assertThat(rules.size()).isEqualTo(2);
+        // Position 0 = user bypass list, position 1 = LAN bypass.
+        assertThat(rules.get(0).has("domain")).isTrue();
+        assertThat(rules.get(0).get("domain").get(0).asText()).isEqualTo("internal.example.com");
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
+    }
+
+    @Test
+    void bypassLan_neverDuplicatedInBypassDomestic() throws Exception {
+        // Regression guard: bypass_domestic used to add its own ip_is_private
+        // rule. With the move to the universal toggle, the preset must NOT
+        // double-emit it when bypassLan is on.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("bypass_domestic");
+        routingConfig.setBypassCountry("ru");
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        int privateCount = 0;
+        for (int i = 0; i < rules.size(); i++) {
+            JsonNode privateFlag = rules.get(i).get("ip_is_private");
+            if (privateFlag != null && privateFlag.asBoolean()) {
+                privateCount++;
+            }
+        }
+        assertThat(privateCount).isEqualTo(1);
+    }
+
+    @Test
+    void customPreset_emptyRulesList_stillEmitsLanBypass() throws Exception {
+        // Even with no user-defined rules in custom preset, the universal
+        // LAN-bypass rule keeps local services reachable by default.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("custom");
 
@@ -336,7 +472,9 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode root = parse(json);
 
         JsonNode route = root.get("route");
-        assertThat(route.get("rules").size()).isEqualTo(0);
+        assertThat(route.get("rules").size()).isEqualTo(1);
+        assertThat(route.get("rules").get(0).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(route.get("rules").get(0).get("outbound").asText()).isEqualTo("direct");
         assertThat(route.get("final").asText()).isEqualTo("proxy");
     }
 }

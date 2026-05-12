@@ -39,6 +39,22 @@ public class RoutingConfig {
     @JsonProperty("bypass_list")
     private List<String> bypassList = new ArrayList<>();
 
+    /**
+     * When {@code true} (the default), all traffic destined for private/local
+     * networks — loopback, RFC1918, link-local, ULAs, etc. — is sent direct,
+     * never through the VPN. Without this, in system-proxy mode the
+     * {@code route_all} and {@code custom} presets would route LAN traffic
+     * through the proxy outbound, breaking access to printers/NAS/local
+     * services and leaking LAN connections through the tunnel.
+     *
+     * <p>In TUN mode this rule is structurally required for LAN access to
+     * work at all (the TUN device cannot relay LAN packets to a remote proxy
+     * server), so TUN essentials still add it as a safety net if this flag is
+     * off — but the flag is the canonical, user-visible control.</p>
+     */
+    @JsonProperty("bypass_lan")
+    private boolean bypassLan = true;
+
     @JsonProperty("geoip_path")
     private String geoipPath;
 
@@ -82,6 +98,14 @@ public class RoutingConfig {
 
     public void setRules(List<RoutingRule> rules) {
         this.rules = rules;
+    }
+
+    public boolean isBypassLan() {
+        return bypassLan;
+    }
+
+    public void setBypassLan(boolean bypassLan) {
+        this.bypassLan = bypassLan;
     }
 
     public String getGeoipPath() {
