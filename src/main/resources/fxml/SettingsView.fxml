@@ -51,6 +51,8 @@
 
             <CheckBox fx:id="autoConnectCheck" text="Auto-connect on startup" styleClass="form-checkbox"/>
 
+            <CheckBox fx:id="launchAtLoginCheck" text="Launch at login" styleClass="form-checkbox"/>
+
             <Separator styleClass="sidebar-separator"/>
 
             <Label fx:id="proxyPortsLabel" text="Proxy Ports" styleClass="form-label"/>

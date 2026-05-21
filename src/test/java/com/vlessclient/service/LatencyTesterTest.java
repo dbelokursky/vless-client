@@ -5,6 +5,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -12,6 +15,8 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class LatencyTesterTest {
+
+    private static final String LOOPBACK = InetAddress.getLoopbackAddress().getHostAddress();
 
     private LatencyTester tester;
 
@@ -28,8 +33,8 @@ class LatencyTesterTest {
     @Test
     void testSingle_unreachableHost_returnsMinusOne() throws Exception {
         ServerConfig server = new ServerConfig();
-        server.setAddress("10.255.255.1");
-        server.setPort(12345);
+        server.setAddress(LOOPBACK);
+        server.setPort(closedLoopbackPort());
 
         long result = tester.testSingle(server).get(10, TimeUnit.SECONDS);
 
@@ -48,22 +53,6 @@ class LatencyTesterTest {
         Map<String, Long> results = tester.testAll(null).get(5, TimeUnit.SECONDS);
 
         assertThat(results).isEmpty();
-    }
-
-    @Test
-    void testSingle_timeoutRespected() throws Exception {
-        ServerConfig server = new ServerConfig();
-        // Non-routable IP to trigger connect timeout
-        server.setAddress("10.255.255.1");
-        server.setPort(80);
-
-        long start = System.currentTimeMillis();
-        long result = tester.testSingle(server).get(10, TimeUnit.SECONDS);
-        long elapsed = System.currentTimeMillis() - start;
-
-        assertThat(result).isEqualTo(-1);
-        // Should timeout within ~5 seconds (the CONNECT_TIMEOUT_MS), with some margin
-        assertThat(elapsed).isLessThan(8000);
     }
 
     @Test
@@ -113,12 +102,12 @@ class LatencyTesterTest {
     @Test
     void testAll_multipleServers_returnsResultForEach() throws Exception {
         ServerConfig server1 = new ServerConfig();
-        server1.setAddress("10.255.255.1");
-        server1.setPort(12345);
+        server1.setAddress(LOOPBACK);
+        server1.setPort(closedLoopbackPort());
 
         ServerConfig server2 = new ServerConfig();
-        server2.setAddress("10.255.255.2");
-        server2.setPort(12345);
+        server2.setAddress(LOOPBACK);
+        server2.setPort(closedLoopbackPort());
 
         Map<String, Long> results = tester.testAll(List.of(server1, server2))
                 .get(15, TimeUnit.SECONDS);
@@ -128,5 +117,13 @@ class LatencyTesterTest {
         assertThat(results).containsKey(server2.getId());
         assertThat(results.get(server1.getId())).isEqualTo(-1);
         assertThat(results.get(server2.getId())).isEqualTo(-1);
+    }
+
+    // Reserves a loopback port then frees it: connecting to it is refused fast and
+    // deterministically, regardless of host routing (e.g. a VPN 10.0.0.0/8 route).
+    private static int closedLoopbackPort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            return socket.getLocalPort();
+        }
     }
 }

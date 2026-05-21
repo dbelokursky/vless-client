@@ -2,11 +2,13 @@ package com.vlessclient.app;
 
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.service.ConfigStore;
+import com.vlessclient.service.LoginItemService;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.SingBoxInstaller;
 import com.vlessclient.service.ThemeManager;
 import com.vlessclient.service.TrayIconService;
+import com.vlessclient.ui.view.MainViewController;
 import com.vlessclient.ui.view.SingBoxInstallerDialog;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -43,6 +45,21 @@ public class VlessClientApp extends Application {
         setDockIcon();
         installQuitHandler();
         ServiceLocator.initialize();
+        refreshLoginItem();
+    }
+
+    /**
+     * Rewrites the macOS LaunchAgent (when "Launch at login" is enabled) so it
+     * points at the current application location. Harmless no-op otherwise.
+     * Kept out of {@link ServiceLocator#initialize()} so headless UI tests,
+     * which call that method directly, never touch the real LaunchAgents dir.
+     */
+    private void refreshLoginItem() {
+        try {
+            ServiceLocator.get(LoginItemService.class).refresh();
+        } catch (IllegalArgumentException e) {
+            log.debug("LoginItemService not available");
+        }
     }
 
     /**
@@ -178,6 +195,13 @@ public class VlessClientApp extends Application {
         log.info("VLESS Client started");
 
         installTrayIcon(primaryStage);
+
+        // Connect now if the user enabled "Auto-connect on startup". Done
+        // after the window is shown so any error dialog has a parent.
+        MainViewController mainController = loader.getController();
+        if (mainController != null) {
+            mainController.triggerAutoConnect();
+        }
     }
 
     @Override

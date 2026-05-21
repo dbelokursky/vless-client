@@ -5,6 +5,7 @@ import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ProxyMode;
 import com.vlessclient.service.ConfigStore;
+import com.vlessclient.service.LoginItemService;
 import com.vlessclient.service.ThemeManager;
 import javafx.fxml.FXML;
 import javafx.scene.control.CheckBox;
@@ -16,6 +17,7 @@ import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Locale;
 
 /**
@@ -49,6 +51,7 @@ public class SettingsViewController {
     @FXML private ComboBox<String> themeCombo;
     @FXML private ComboBox<String> languageCombo;
     @FXML private CheckBox autoConnectCheck;
+    @FXML private CheckBox launchAtLoginCheck;
     @FXML private TextField socksPortField;
     @FXML private TextField httpPortField;
     @FXML private ComboBox<ProxyMode> proxyModeCombo;
@@ -59,6 +62,8 @@ public class SettingsViewController {
 
     private ConfigStore configStore;
     private ThemeManager themeManager;
+    private LoginItemService loginItemService;
+    private boolean suppressLaunchAtLoginListener;
 
     @FXML
     public void initialize() {
@@ -73,6 +78,12 @@ public class SettingsViewController {
             themeManager = ServiceLocator.get(ThemeManager.class);
         } catch (IllegalArgumentException e) {
             log.warn("ThemeManager not available");
+        }
+
+        try {
+            loginItemService = ServiceLocator.get(LoginItemService.class);
+        } catch (IllegalArgumentException e) {
+            log.warn("LoginItemService not available");
         }
 
         AppSettings settings = configStore.getSettings();
@@ -189,6 +200,8 @@ public class SettingsViewController {
             saveSettings(settings);
         });
 
+        initLaunchAtLogin();
+
         socksPortField.setText(String.valueOf(settings.getSocksPort()));
         socksPortField.textProperty().addListener((obs, oldVal, newVal) -> {
             int port = parsePort(newVal, 1080);
@@ -206,6 +219,34 @@ public class SettingsViewController {
         // Restrict port fields to numeric input
         addNumericFilter(socksPortField);
         addNumericFilter(httpPortField);
+    }
+
+    /**
+     * Wires the "Launch at login" checkbox to the macOS LaunchAgent. The
+     * checkbox reflects whether the plist is actually installed (the source
+     * of truth) rather than a saved setting, so it stays correct even if the
+     * user removed the agent from System Settings. On a write failure the
+     * checkbox reverts so it never claims a state that did not take effect.
+     */
+    private void initLaunchAtLogin() {
+        if (loginItemService == null) {
+            launchAtLoginCheck.setDisable(true);
+            return;
+        }
+        launchAtLoginCheck.setSelected(loginItemService.isEnabled());
+        launchAtLoginCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            if (suppressLaunchAtLoginListener) {
+                return;
+            }
+            try {
+                loginItemService.setEnabled(newVal);
+            } catch (IOException e) {
+                log.error("Failed to {} launch at login", newVal ? "enable" : "disable", e);
+                suppressLaunchAtLoginListener = true;
+                launchAtLoginCheck.setSelected(oldVal);
+                suppressLaunchAtLoginListener = false;
+            }
+        });
     }
 
     private void initProxyModeCombo(AppSettings settings) {
@@ -249,6 +290,7 @@ public class SettingsViewController {
         languageLabel.textProperty().bind(I18n.binding("settings.language"));
         connectionLabel.textProperty().bind(I18n.binding("settings.connection"));
         autoConnectCheck.textProperty().bind(I18n.binding("settings.auto.connect"));
+        launchAtLoginCheck.textProperty().bind(I18n.binding("settings.launch.at.login"));
         proxyPortsLabel.textProperty().bind(I18n.binding("settings.proxy.ports"));
         socksPortLabel.textProperty().bind(I18n.binding("settings.socks.port"));
         httpPortLabel.textProperty().bind(I18n.binding("settings.http.port"));
