@@ -449,6 +449,36 @@ public class DashboardViewController {
         latencyResultLabel.setText(sb.toString());
     }
 
+    /**
+     * Connects on startup when the user enabled "Auto-connect on startup" in
+     * Settings. Silently skips when prerequisites are missing (no sing-box
+     * binary, no active server) so a fresh install does not show an error
+     * dialog at every launch. Invoked once after the main window is shown.
+     */
+    public void autoConnectIfEnabled() {
+        AppSettings settings;
+        try {
+            settings = ServiceLocator.get(AppSettings.class);
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        if (!settings.isAutoConnect()) {
+            return;
+        }
+        if (singBoxEngine == null) {
+            log.info("Auto-connect enabled but sing-box is unavailable; skipping");
+            return;
+        }
+        if (findActiveServer() == null) {
+            log.info("Auto-connect enabled but no active server; skipping");
+            return;
+        }
+        log.info("Auto-connect enabled; connecting on startup");
+        // Defer to a later pulse so the window finishes painting before the
+        // connect work (which can briefly block for TUN privilege setup).
+        Platform.runLater(this::connect);
+    }
+
     private void connect() {
         activeServer = findActiveServer();
 

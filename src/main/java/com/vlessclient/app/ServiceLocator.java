@@ -3,6 +3,7 @@ package com.vlessclient.app;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.LatencyTester;
+import com.vlessclient.service.LoginItemService;
 import com.vlessclient.service.RoutingService;
 import com.vlessclient.service.ShareLinkExporter;
 import com.vlessclient.service.ShareLinkParser;
@@ -85,6 +86,8 @@ public class ServiceLocator {
         UpdateManager updateManager = new UpdateManager();
         register(UpdateManager.class, updateManager);
         updateManager.startPeriodicCheck();
+
+        register(LoginItemService.class, new LoginItemService());
 
         log.info("ServiceLocator initialized");
     }

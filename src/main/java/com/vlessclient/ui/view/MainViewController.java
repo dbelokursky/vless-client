@@ -118,6 +118,21 @@ public class MainViewController {
         }
     }
 
+    /**
+     * Triggers auto-connect on the Dashboard when the user enabled
+     * "Auto-connect on startup" in Settings. Called once by
+     * {@link com.vlessclient.app.VlessClientApp} after the main window opens.
+     */
+    public void triggerAutoConnect() {
+        ensureViewLoaded("DashboardView", "/fxml/DashboardView.fxml");
+        Object controller = controllerCache.get("DashboardView");
+        if (controller instanceof DashboardViewController dashboardController) {
+            dashboardController.autoConnectIfEnabled();
+        } else {
+            log.warn("DashboardViewController not available for auto-connect");
+        }
+    }
+
     private void onShortcutHideWindow() {
         if (rootNode != null && rootNode.getScene() != null
                 && rootNode.getScene().getWindow() instanceof Stage stage) {
