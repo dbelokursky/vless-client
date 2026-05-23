@@ -74,7 +74,14 @@ class SingBoxConfigGeneratorTunTest {
     }
 
     @Test
-    void tunMode_tunInboundHasAutoRouteAndStrictRoute() throws Exception {
+    void tunMode_tunInboundHasAutoRouteButNoStrictRoute() throws Exception {
+        // strict_route + route_exclude_address used to be set together in
+        // v0.1.6, and they conflict: route_exclude_address tells sing-box
+        // "let LAN escape the TUN" while strict_route installs a firewall
+        // that blocks everything outside the TUN. The combination killed
+        // direct-outbound dials (RU sites under bypass_domestic, host-level
+        // connects to the proxy IP, latency probes). v0.1.7 keeps the LAN
+        // exclude list and drops strict_route.
         String json = generator.generate(createVlessServer(), tunSettings());
         JsonNode inbounds = parse(json).get("inbounds");
 
@@ -88,7 +95,9 @@ class SingBoxConfigGeneratorTunTest {
 
         assertThat(tun).isNotNull();
         assertThat(tun.get("auto_route").asBoolean()).isTrue();
-        assertThat(tun.get("strict_route").asBoolean()).isTrue();
+        // strict_route is deliberately absent — see comment above and the
+        // v0.1.7 investigation in the commit log.
+        assertThat(tun.has("strict_route")).isFalse();
         assertThat(tun.get("stack").asText()).isEqualTo("system");
         // sing-box 1.13 removed sniff/sniff_override_destination from inbounds
         assertThat(tun.has("sniff")).isFalse();
@@ -98,11 +107,10 @@ class SingBoxConfigGeneratorTunTest {
     @Test
     void tunMode_excludesPrivateAndMulticastFromAutoRoute() throws Exception {
         // Without route_exclude_address, auto_route's /1+/2+… coverage of
-        // 0.0.0.0/0 swallows 192.168.0.0/16 into the TUN device, and then
-        // strict_route blocks the route-rule ip_is_private->direct from
-        // escaping it — Screen Sharing to 192.168.1.140 or macmini.local
-        // would hang. The exclude list is the structural fix; the route
-        // rule remains as a safety net.
+        // 0.0.0.0/0 swallows 192.168.0.0/16 into the TUN device — Screen
+        // Sharing to 192.168.1.140 or macmini.local would hang. The exclude
+        // list is the structural fix; the route-rule ip_is_private→direct
+        // remains as a safety net.
         String json = generator.generate(createVlessServer(), tunSettings());
         JsonNode inbounds = parse(json).get("inbounds");
 
@@ -132,29 +140,6 @@ class SingBoxConfigGeneratorTunTest {
                 "224.0.0.0/4");
         // IPv6 ULA + link-local + multicast.
         assertThat(entries).contains("fc00::/7", "fe80::/10", "ff00::/8");
-    }
-
-    @Test
-    void tunMode_withBypassLanDisabled_omitsRouteExcludeAddress() throws Exception {
-        // Honour the user's explicit opt-out at the OS-routes level too.
-        // The TUN route-rule safety net still keeps LAN reachable inside
-        // sing-box, but the OS will install full auto_route coverage.
-        RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setBypassLan(false);
-
-        String json = generator.generate(createVlessServer(), tunSettings(), routingConfig);
-        JsonNode inbounds = parse(json).get("inbounds");
-
-        JsonNode tun = null;
-        for (JsonNode inbound : inbounds) {
-            if ("tun".equals(inbound.get("type").asText())) {
-                tun = inbound;
-                break;
-            }
-        }
-
-        assertThat(tun).isNotNull();
-        assertThat(tun.has("route_exclude_address")).isFalse();
     }
 
     @Test
@@ -296,13 +281,12 @@ class SingBoxConfigGeneratorTunTest {
     }
 
     @Test
-    void tunMode_withBypassLanEnabled_noDuplicatePrivateRule() throws Exception {
-        // buildRoute emits the LAN bypass when bypassLan is on; TUN essentials
-        // must dedup and not prepend a second copy. Sniff and hijack-dns are
+    void tunMode_withRoutingConfig_noDuplicatePrivateRule() throws Exception {
+        // buildRoute always emits the LAN bypass now; TUN essentials must
+        // dedup and not prepend a second copy. Sniff and hijack-dns are
         // always added regardless.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("route_all");
-        // bypassLan defaults to true
 
         String json = generator.generate(createVlessServer(), tunSettings(), routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");
@@ -322,51 +306,6 @@ class SingBoxConfigGeneratorTunTest {
         // The single ip_is_private rule that buildRoute emitted should sit
         // right after the two TUN-only essentials.
         assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
-    }
-
-    @Test
-    void tunMode_withBypassLanDisabled_essentialsStillAddLanBypass() throws Exception {
-        // The TUN device cannot route LAN packets to a remote proxy — they
-        // would just dead-end. So even when the user explicitly disables
-        // bypassLan, TUN essentials must add the rule as a safety net.
-        RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
-        routingConfig.setBypassLan(false);
-
-        String json = generator.generate(createVlessServer(), tunSettings(), routingConfig);
-        JsonNode rules = parse(json).get("route").get("rules");
-
-        // Exactly one ip_is_private rule — the one from the safety net.
-        int privateCount = 0;
-        int privateIndex = -1;
-        for (int i = 0; i < rules.size(); i++) {
-            JsonNode privateFlag = rules.get(i).get("ip_is_private");
-            if (privateFlag != null && privateFlag.asBoolean()) {
-                privateCount++;
-                privateIndex = i;
-            }
-        }
-        assertThat(privateCount).isEqualTo(1);
-        // The safety-net version sits inside the essentials prepend block.
-        assertThat(privateIndex).isEqualTo(2);
-        assertThat(rules.get(privateIndex).get("outbound").asText()).isEqualTo("direct");
-    }
-
-    @Test
-    void systemProxyMode_withBypassLanDisabled_noLanBypassAtAll() throws Exception {
-        // The TUN safety net is TUN-only. In system-proxy mode the toggle is
-        // the user's last word: bypassLan=false really means "no automatic
-        // LAN bypass."
-        RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
-        routingConfig.setBypassLan(false);
-
-        String json = generator.generate(createVlessServer(), systemProxySettings(), routingConfig);
-        JsonNode rules = parse(json).get("route").get("rules");
-
-        for (int i = 0; i < rules.size(); i++) {
-            assertThat(rules.get(i).has("ip_is_private")).isFalse();
-        }
     }
 
     @Test

@@ -39,27 +39,22 @@ public class RoutingConfig {
     @JsonProperty("bypass_list")
     private List<String> bypassList = new ArrayList<>();
 
-    /**
-     * When {@code true} (the default), all traffic destined for private/local
-     * networks — loopback, RFC1918, link-local, ULAs, etc. — is sent direct,
-     * never through the VPN. Without this, in system-proxy mode the
-     * {@code route_all} and {@code custom} presets would route LAN traffic
-     * through the proxy outbound, breaking access to printers/NAS/local
-     * services and leaking LAN connections through the tunnel.
-     *
-     * <p>In TUN mode this rule is structurally required for LAN access to
-     * work at all (the TUN device cannot relay LAN packets to a remote proxy
-     * server), so TUN essentials still add it as a safety net if this flag is
-     * off — but the flag is the canonical, user-visible control.</p>
-     */
-    @JsonProperty("bypass_lan")
-    private boolean bypassLan = true;
+    // The bypass_lan field used to live here as a user-visible toggle. It
+    // was removed in v0.1.7 — LAN bypass is now unconditional because there
+    // is no realistic use case for routing local traffic through a remote
+    // VPN in this client, and the toggle's "off" state combined with
+    // strict_route caused widespread direct-outbound timeouts. Legacy
+    // routing.json files with "bypass_lan": false are silently accepted and
+    // ignored via @JsonIgnoreProperties(ignoreUnknown = true).
 
-    @JsonProperty("geoip_path")
-    private String geoipPath;
-
-    @JsonProperty("geosite_path")
-    private String geositePath;
+    // geoip_path / geosite_path used to live here as paths to the
+    // sing-geoip / sing-geosite .db files downloaded by a "Download
+    // Geodata" button. sing-box 1.12+ doesn't read .db files at all —
+    // country matching is done through remote rule_set entries in the
+    // generated config (see SingBoxConfigGenerator#buildRemoteRuleSet),
+    // which sing-box itself fetches as .srs at startup. The fields are
+    // gone from the model; legacy routing.json with them is silently
+    // accepted via @JsonIgnoreProperties(ignoreUnknown = true).
 
     public RoutingConfig() {
     }
@@ -98,29 +93,5 @@ public class RoutingConfig {
 
     public void setRules(List<RoutingRule> rules) {
         this.rules = rules;
-    }
-
-    public boolean isBypassLan() {
-        return bypassLan;
-    }
-
-    public void setBypassLan(boolean bypassLan) {
-        this.bypassLan = bypassLan;
-    }
-
-    public String getGeoipPath() {
-        return geoipPath;
-    }
-
-    public void setGeoipPath(String geoipPath) {
-        this.geoipPath = geoipPath;
-    }
-
-    public String getGeositePath() {
-        return geositePath;
-    }
-
-    public void setGeositePath(String geositePath) {
-        this.geositePath = geositePath;
     }
 }

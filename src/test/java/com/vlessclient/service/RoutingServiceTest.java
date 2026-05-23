@@ -29,42 +29,29 @@ class RoutingServiceTest {
 
         assertThat(config.getPreset()).isEqualTo("route_all");
         assertThat(config.getRules()).isEmpty();
-        assertThat(config.getGeoipPath()).isNull();
-        assertThat(config.getGeositePath()).isNull();
-        // Local-network bypass is on by default — keeps LAN reachable
-        // even when the preset would otherwise route everything via the VPN.
-        assertThat(config.isBypassLan()).isTrue();
     }
 
     @Test
-    void bypassLan_persistsAcrossReload() {
-        RoutingConfig config = routingService.getConfig();
-        config.setBypassLan(false);
-        routingService.saveConfig(config);
-
-        RoutingService reloaded = new RoutingService(tempDir);
-        assertThat(reloaded.getConfig().isBypassLan()).isFalse();
-    }
-
-    @Test
-    void bypassLan_legacyConfigWithoutFieldDefaultsToTrue() throws Exception {
-        // Existing user configs predate the bypass_lan field. When the field
-        // is absent on disk, the loader must fall back to true so the safe
-        // default applies retroactively — we don't want any user to suddenly
-        // lose LAN access on upgrade.
+    void legacyConfigWithRemovedFields_loadsWithoutError() throws Exception {
+        // routing.json files saved by v0.1.6 carry "bypass_lan" plus
+        // "geoip_path" / "geosite_path" that v0.1.7 no longer models. The
+        // loader must silently accept and ignore them via
+        // @JsonIgnoreProperties — no parse error, no forced re-save,
+        // just a clean load.
         Path file = tempDir.resolve("routing.json");
-        java.nio.file.Files.writeString(file, "{\"preset\":\"route_all\"}");
+        java.nio.file.Files.writeString(file,
+                "{\"preset\":\"bypass_domestic\",\"bypass_lan\":false,"
+                        + "\"geoip_path\":\"/old/geoip.db\","
+                        + "\"geosite_path\":\"/old/geosite.db\"}");
 
         RoutingService loaded = new RoutingService(tempDir);
-        assertThat(loaded.getConfig().isBypassLan()).isTrue();
+        assertThat(loaded.getConfig().getPreset()).isEqualTo("bypass_domestic");
     }
 
     @Test
     void saveAndLoadConfig_roundTrip() {
         RoutingConfig config = new RoutingConfig();
         config.setPreset("custom");
-        config.setGeoipPath("/path/to/geoip.db");
-        config.setGeositePath("/path/to/geosite.db");
         config.setRules(List.of(
                 new RoutingRule(RoutingRule.RuleType.DOMAIN_SUFFIX, "google.com",
                         RoutingRule.RuleAction.PROXY),
@@ -79,8 +66,6 @@ class RoutingServiceTest {
         RoutingConfig loaded = reloaded.getConfig();
 
         assertThat(loaded.getPreset()).isEqualTo("custom");
-        assertThat(loaded.getGeoipPath()).isEqualTo("/path/to/geoip.db");
-        assertThat(loaded.getGeositePath()).isEqualTo("/path/to/geosite.db");
         assertThat(loaded.getRules()).hasSize(2);
         assertThat(loaded.getRules().get(0).getType()).isEqualTo(RoutingRule.RuleType.DOMAIN_SUFFIX);
         assertThat(loaded.getRules().get(0).getValue()).isEqualTo("google.com");
@@ -178,8 +163,4 @@ class RoutingServiceTest {
         assertThat(rules.get(2).getValue()).isEqualTo("second.com");
     }
 
-    @Test
-    void geodataAvailable_returnsFalseByDefault() {
-        assertThat(routingService.isGeodataAvailable()).isFalse();
-    }
 }

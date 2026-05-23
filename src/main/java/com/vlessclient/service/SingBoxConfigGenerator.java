@@ -49,7 +49,7 @@ public class SingBoxConfigGenerator {
             root.set("dns", buildDns(settings));
         }
 
-        root.set("inbounds", buildInbounds(settings, routingConfig));
+        root.set("inbounds", buildInbounds(settings));
         root.set("outbounds", buildOutbounds(server));
 
         if (routingConfig != null) {
@@ -148,9 +148,9 @@ public class SingBoxConfigGenerator {
 
         // Prepend the protocol-sniffing and DNS-hijack rules. The private-IP
         // direct rule is only added here when buildRoute didn't already emit
-        // one (e.g. user disabled bypassLan or no routing config was passed) —
-        // TUN literally cannot relay LAN packets to a remote proxy, so the
-        // bypass is a safety net the user can't usefully turn off in TUN mode.
+        // one — i.e. when generate() was called without a RoutingConfig.
+        // In the normal path buildRoute emits it unconditionally, so the
+        // dedup check below skips this branch.
         ArrayNode prepended = mapper.createArrayNode();
 
         ObjectNode sniffRule = mapper.createObjectNode();
@@ -270,7 +270,7 @@ public class SingBoxConfigGenerator {
         }
     }
 
-    private ArrayNode buildInbounds(AppSettings settings, RoutingConfig routingConfig) {
+    private ArrayNode buildInbounds(AppSettings settings) {
         ArrayNode inbounds = mapper.createArrayNode();
 
         if (settings.getProxyMode() == ProxyMode.TUN) {
@@ -284,23 +284,23 @@ public class SingBoxConfigGenerator {
             address.add(settings.getTunIpv4Address());
             tun.set("address", address);
             tun.put("auto_route", true);
-            tun.put("strict_route", true);
+            // Deliberately NOT setting strict_route: true. Combined with
+            // route_exclude_address it caused widespread direct-outbound
+            // timeouts in v0.1.6 — every connection that should escape the
+            // TUN (sing-box's own direct outbound for RU/geosite routes,
+            // host-level dials to the proxy IP, anything in the LAN
+            // exclude list) got blocked. The route-rule ip_is_private→
+            // direct already keeps RFC1918 going direct, and TUN routes
+            // are scoped to this app's utun device, so leaks outside the
+            // exclude list aren't a realistic concern.
             tun.put("stack", "system");
-            // `sniff` and `sniff_override_destination` were removed from
-            // inbound in 1.13; sniffing is now expressed as a route action.
-
-            // When bypassLan is on, tell sing-box to NOT install OS routes
-            // for private / link-local / multicast subnets. Without this,
-            // auto_route's /1+/2+… coverage of 0.0.0.0/0 captures e.g.
-            // 192.168.0.0/16 into the TUN device, and strict_route then
-            // prevents direct outbound from escaping it — Screen Sharing /
-            // SMB / mDNS to a LAN host (e.g. 192.168.1.140 or macmini.local)
-            // hang. The route-rule ip_is_private→direct stays as a safety
-            // net but cannot fix this on its own.
-            boolean bypassLan = routingConfig == null || routingConfig.isBypassLan();
-            if (bypassLan) {
-                tun.set("route_exclude_address", buildLanExcludeList());
-            }
+            // Always keep LAN / link-local / multicast off the OS routing
+            // tables sing-box installs. Without this, auto_route's
+            // /1+/2+… coverage of 0.0.0.0/0 swallows 192.168.0.0/16 etc.
+            // into the TUN device — printers, NAS, Screen Sharing to
+            // .local hosts all hang. There is no useful "VPN my LAN"
+            // workflow for this client, so the exclude list is unconditional.
+            tun.set("route_exclude_address", buildLanExcludeList());
 
             inbounds.add(tun);
         }
@@ -588,9 +588,8 @@ public class SingBoxConfigGenerator {
             geoipRule.put("outbound", "direct");
             rules.add(geoipRule);
 
-            // The dedicated ip_is_private rule used to live here, but it now
-            // belongs to the universal bypassLan toggle (prepended below) so a
-            // user with bypassLan=false also gets the chance to opt out.
+            // The dedicated ip_is_private rule lives in the universal
+            // LAN-bypass block below; not duplicated here.
         } else if ("custom".equals(preset)) {
             List<RoutingRule> customRules = routingConfig.getRules();
             if (customRules != null) {
@@ -601,13 +600,14 @@ public class SingBoxConfigGenerator {
         }
         // "route_all" — no special rules, everything goes through proxy via final
 
-        // Universal LAN-bypass rule. Enabled by default and independent of
-        // preset, so route_all / custom in system-proxy mode also keep local
-        // traffic off the VPN. Prepended so it precedes preset/custom rules,
-        // but the user's bypass list still wins above it.
-        if (routingConfig.isBypassLan()) {
-            rules.insert(0, buildPrivateIpDirectRule());
-        }
+        // Universal LAN-bypass rule. Unconditional and independent of preset,
+        // so route_all / custom in system-proxy mode also keep local traffic
+        // off the VPN. Prepended so it precedes preset/custom rules, but the
+        // user's bypass list still wins above it. There is no toggle for
+        // this — sending LAN through a remote VPN dead-ends in TUN and
+        // breaks local services in any mode, and no realistic use case for
+        // this client justifies the breakage.
+        rules.insert(0, buildPrivateIpDirectRule());
 
         // User bypass list is honored in every preset: matching hosts always
         // go direct regardless of route_all / bypass_domestic / custom.
