@@ -41,8 +41,6 @@ public class RoutingViewController {
     @FXML private VBox customRulesSection;
     @FXML private ListView<RoutingRule> rulesListView;
     @FXML private VBox emptyState;
-    @FXML private Label geodataStatusLabel;
-    @FXML private Button downloadGeodataButton;
     @FXML private Button addRuleButton;
     @FXML private TextArea bypassListArea;
     @FXML private Button saveBypassButton;
@@ -84,7 +82,6 @@ public class RoutingViewController {
         loadBypassList();
         updateCustomRulesVisibility(config.getPreset());
         updateBypassCountryVisibility(config.getPreset());
-        updateGeodataStatus();
     }
 
     /**
@@ -250,28 +247,6 @@ public class RoutingViewController {
         }
     }
 
-    @FXML
-    private void onDownloadGeodataClicked() {
-        downloadGeodataButton.setDisable(true);
-        geodataStatusLabel.setText("Downloading geodata...");
-
-        Thread.startVirtualThread(() -> {
-            try {
-                routingService.downloadGeodata();
-                Platform.runLater(() -> {
-                    geodataStatusLabel.setText("Geodata downloaded successfully");
-                    downloadGeodataButton.setDisable(false);
-                });
-            } catch (Exception e) {
-                log.error("Failed to download geodata", e);
-                Platform.runLater(() -> {
-                    geodataStatusLabel.setText("Download failed: " + e.getMessage());
-                    downloadGeodataButton.setDisable(false);
-                });
-            }
-        });
-    }
-
     private void deleteRule(RoutingRule rule) {
         routingService.removeRule(rule.getId());
         loadRules();
@@ -304,15 +279,6 @@ public class RoutingViewController {
         boolean show = "bypass_domestic".equals(preset);
         bypassCountryRow.setVisible(show);
         bypassCountryRow.setManaged(show);
-    }
-
-    private void updateGeodataStatus() {
-        if (routingService.isGeodataAvailable()) {
-            geodataStatusLabel.setText("Geodata files available");
-        } else {
-            geodataStatusLabel.setText(
-                    "Geodata not downloaded (required for geosite/geoip rules)");
-        }
     }
 
     private String presetToDisplayName(String preset) {

@@ -20,8 +20,6 @@
     <HBox alignment="CENTER_LEFT" spacing="12">
         <Label text="Routing" styleClass="view-title"/>
         <Region HBox.hgrow="ALWAYS"/>
-        <Button fx:id="downloadGeodataButton" text="Download Geodata" styleClass="secondary-button"
-                onAction="#onDownloadGeodataClicked"/>
     </HBox>
 
     <!-- Preset selector -->
@@ -39,9 +37,6 @@
         <Label styleClass="server-address" wrapText="true"
                text="Geosite/geoip rules for this country + private LAN go direct; everything else through the VPN."/>
     </HBox>
-
-    <!-- Geodata status -->
-    <Label fx:id="geodataStatusLabel" text="" styleClass="server-address"/>
 
     <!-- Bypass list: patterns matching these are sent direct, skipping the proxy -->
     <VBox spacing="6" styleClass="card">

@@ -297,11 +297,11 @@ class SingBoxConfigGeneratorRoutingTest {
         // sing-box 1.12 removed both the flat route.geo_asset_path and the
         // nested route.geoip / route.geosite database forms entirely. The
         // generator must not emit any of them — country matching is done
-        // through rule_set only.
+        // through rule_set only. The geoip_path/geosite_path fields used
+        // to feed those legacy blocks; v0.1.7 removed them from the model,
+        // so we just sanity-check that bypass_domestic still doesn't leak.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
-        routingConfig.setGeoipPath("/Users/test/geodata/geoip.db");
-        routingConfig.setGeositePath("/Users/test/geodata/geosite.db");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode root = parse(json);

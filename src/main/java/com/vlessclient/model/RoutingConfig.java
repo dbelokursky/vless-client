@@ -47,11 +47,14 @@ public class RoutingConfig {
     // routing.json files with "bypass_lan": false are silently accepted and
     // ignored via @JsonIgnoreProperties(ignoreUnknown = true).
 
-    @JsonProperty("geoip_path")
-    private String geoipPath;
-
-    @JsonProperty("geosite_path")
-    private String geositePath;
+    // geoip_path / geosite_path used to live here as paths to the
+    // sing-geoip / sing-geosite .db files downloaded by a "Download
+    // Geodata" button. sing-box 1.12+ doesn't read .db files at all —
+    // country matching is done through remote rule_set entries in the
+    // generated config (see SingBoxConfigGenerator#buildRemoteRuleSet),
+    // which sing-box itself fetches as .srs at startup. The fields are
+    // gone from the model; legacy routing.json with them is silently
+    // accepted via @JsonIgnoreProperties(ignoreUnknown = true).
 
     public RoutingConfig() {
     }
@@ -90,21 +93,5 @@ public class RoutingConfig {
 
     public void setRules(List<RoutingRule> rules) {
         this.rules = rules;
-    }
-
-    public String getGeoipPath() {
-        return geoipPath;
-    }
-
-    public void setGeoipPath(String geoipPath) {
-        this.geoipPath = geoipPath;
-    }
-
-    public String getGeositePath() {
-        return geositePath;
-    }
-
-    public void setGeositePath(String geositePath) {
-        this.geositePath = geositePath;
     }
 }

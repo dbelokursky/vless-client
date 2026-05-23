@@ -29,19 +29,20 @@ class RoutingServiceTest {
 
         assertThat(config.getPreset()).isEqualTo("route_all");
         assertThat(config.getRules()).isEmpty();
-        assertThat(config.getGeoipPath()).isNull();
-        assertThat(config.getGeositePath()).isNull();
     }
 
     @Test
-    void legacyConfigWithBypassLanField_loadsWithoutError() throws Exception {
-        // routing.json files saved by v0.1.6 carry a "bypass_lan" boolean
-        // that v0.1.7 no longer models. The loader must silently accept and
-        // ignore the field via @JsonIgnoreProperties — no parse error, no
-        // forced re-save, just a clean load.
+    void legacyConfigWithRemovedFields_loadsWithoutError() throws Exception {
+        // routing.json files saved by v0.1.6 carry "bypass_lan" plus
+        // "geoip_path" / "geosite_path" that v0.1.7 no longer models. The
+        // loader must silently accept and ignore them via
+        // @JsonIgnoreProperties — no parse error, no forced re-save,
+        // just a clean load.
         Path file = tempDir.resolve("routing.json");
         java.nio.file.Files.writeString(file,
-                "{\"preset\":\"bypass_domestic\",\"bypass_lan\":false}");
+                "{\"preset\":\"bypass_domestic\",\"bypass_lan\":false,"
+                        + "\"geoip_path\":\"/old/geoip.db\","
+                        + "\"geosite_path\":\"/old/geosite.db\"}");
 
         RoutingService loaded = new RoutingService(tempDir);
         assertThat(loaded.getConfig().getPreset()).isEqualTo("bypass_domestic");
@@ -51,8 +52,6 @@ class RoutingServiceTest {
     void saveAndLoadConfig_roundTrip() {
         RoutingConfig config = new RoutingConfig();
         config.setPreset("custom");
-        config.setGeoipPath("/path/to/geoip.db");
-        config.setGeositePath("/path/to/geosite.db");
         config.setRules(List.of(
                 new RoutingRule(RoutingRule.RuleType.DOMAIN_SUFFIX, "google.com",
                         RoutingRule.RuleAction.PROXY),
@@ -67,8 +66,6 @@ class RoutingServiceTest {
         RoutingConfig loaded = reloaded.getConfig();
 
         assertThat(loaded.getPreset()).isEqualTo("custom");
-        assertThat(loaded.getGeoipPath()).isEqualTo("/path/to/geoip.db");
-        assertThat(loaded.getGeositePath()).isEqualTo("/path/to/geosite.db");
         assertThat(loaded.getRules()).hasSize(2);
         assertThat(loaded.getRules().get(0).getType()).isEqualTo(RoutingRule.RuleType.DOMAIN_SUFFIX);
         assertThat(loaded.getRules().get(0).getValue()).isEqualTo("google.com");
@@ -166,8 +163,4 @@ class RoutingServiceTest {
         assertThat(rules.get(2).getValue()).isEqualTo("second.com");
     }
 
-    @Test
-    void geodataAvailable_returnsFalseByDefault() {
-        assertThat(routingService.isGeodataAvailable()).isFalse();
-    }
 }
