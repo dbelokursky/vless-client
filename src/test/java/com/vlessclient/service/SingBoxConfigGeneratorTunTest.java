@@ -95,10 +95,13 @@ class SingBoxConfigGeneratorTunTest {
 
         assertThat(tun).isNotNull();
         assertThat(tun.get("auto_route").asBoolean()).isTrue();
-        // strict_route is deliberately absent — see comment above and the
-        // v0.1.7 investigation in the commit log.
+        // strict_route is deliberately absent — see comment in the
+        // generator and the v0.1.7 investigation in the commit log.
         assertThat(tun.has("strict_route")).isFalse();
-        assertThat(tun.get("stack").asText()).isEqualTo("system");
+        // stack=gvisor (not system) — without strict_route's PF rules the
+        // system stack silently drops TCP traffic from the TUN on macOS;
+        // gvisor's userspace TCP/IP has no such dependency. v0.1.8 fix.
+        assertThat(tun.get("stack").asText()).isEqualTo("gvisor");
         // sing-box 1.13 removed sniff/sniff_override_destination from inbounds
         assertThat(tun.has("sniff")).isFalse();
         assertThat(tun.has("sniff_override_destination")).isFalse();
