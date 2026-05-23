@@ -293,7 +293,18 @@ public class SingBoxConfigGenerator {
             // direct already keeps RFC1918 going direct, and TUN routes
             // are scoped to this app's utun device, so leaks outside the
             // exclude list aren't a realistic concern.
-            tun.put("stack", "system");
+            //
+            // stack=gvisor (userspace TCP/IP) instead of "system" because
+            // on macOS the system stack relies on PF redirect rules that
+            // strict_route used to install — without strict_route the
+            // system stack silently drops all TCP from the TUN (UDP still
+            // works through a different kernel path, which is why YouTube
+            // QUIC kept working in v0.1.7 while everything TCP timed out).
+            // gvisor has its own self-contained TCP/IP implementation, so
+            // it does not depend on PF and works without strict_route.
+            // Slightly slower than system but absolutely fine for a VPN
+            // client at typical broadband speeds.
+            tun.put("stack", "gvisor");
             // Always keep LAN / link-local / multicast off the OS routing
             // tables sing-box installs. Without this, auto_route's
             // /1+/2+… coverage of 0.0.0.0/0 swallows 192.168.0.0/16 etc.
