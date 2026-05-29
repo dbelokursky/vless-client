@@ -638,6 +638,42 @@
     -fx-text-fill: #999999;
 }
 
+/* ===== Service availability ===== */
+.service-name {
+    -fx-font-size: 13px;
+    -fx-text-fill: #e0e0e0;
+}
+
+.service-ok {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #66bb6a;
+}
+
+.service-fail {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ef5350;
+}
+
+.service-pending {
+    -fx-font-size: 12px;
+    -fx-text-fill: #999999;
+}
+
+.reconnect-banner {
+    -fx-background-color: #3a2c1a;
+    -fx-border-color: #6d4c2f;
+    -fx-border-width: 1;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+.reconnect-banner-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #ffb74d;
+}
+
 /* ===== Logs View ===== */
 .logs-toolbar {
     -fx-padding: 4 0;

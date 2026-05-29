@@ -5,6 +5,7 @@ import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.LatencyTester;
 import com.vlessclient.service.LoginItemService;
 import com.vlessclient.service.RoutingService;
+import com.vlessclient.service.ServiceReachabilityChecker;
 import com.vlessclient.service.ShareLinkExporter;
 import com.vlessclient.service.ShareLinkParser;
 import com.vlessclient.service.SingBoxConfigGenerator;
@@ -74,6 +75,9 @@ public class ServiceLocator {
 
         LatencyTester latencyTester = new LatencyTester();
         register(LatencyTester.class, latencyTester);
+
+        ServiceReachabilityChecker reachabilityChecker = new ServiceReachabilityChecker();
+        register(ServiceReachabilityChecker.class, reachabilityChecker);
 
         RoutingService routingService = new RoutingService();
         register(RoutingService.class, routingService);
@@ -163,6 +167,15 @@ public class ServiceLocator {
             }
         } catch (Exception e) {
             log.error("Error stopping LatencyTester during shutdown", e);
+        }
+
+        try {
+            Object checker = services.get(ServiceReachabilityChecker.class);
+            if (checker instanceof ServiceReachabilityChecker reachabilityChecker) {
+                reachabilityChecker.shutdown();
+            }
+        } catch (Exception e) {
+            log.error("Error stopping ServiceReachabilityChecker during shutdown", e);
         }
 
         try {

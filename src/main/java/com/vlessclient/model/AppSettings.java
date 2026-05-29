@@ -3,6 +3,9 @@ package com.vlessclient.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AppSettings {
 
@@ -45,7 +48,27 @@ public class AppSettings {
     @JsonProperty("tun_ipv4_address")
     private String tunIpv4Address = "172.19.0.1/30";
 
+    @JsonProperty("health_check_enabled")
+    private boolean healthCheckEnabled = true;
+
+    @JsonProperty("health_check_auto_reconnect")
+    private boolean healthCheckAutoReconnect = true;
+
+    @JsonProperty("health_check_delay_seconds")
+    private int healthCheckDelaySeconds = 10;
+
+    @JsonProperty("health_check_targets")
+    private List<HealthCheckTarget> healthCheckTargets = defaultHealthCheckTargets();
+
     public AppSettings() {
+    }
+
+    private static List<HealthCheckTarget> defaultHealthCheckTargets() {
+        List<HealthCheckTarget> targets = new ArrayList<>();
+        // generate_204 returns an empty 204 — the cheapest possible reachability ping.
+        targets.add(new HealthCheckTarget("Google", "https://www.google.com/generate_204"));
+        targets.add(new HealthCheckTarget("X", "https://x.com"));
+        return targets;
     }
 
     public String getTheme() {
@@ -150,5 +173,37 @@ public class AppSettings {
 
     public void setTunIpv4Address(String tunIpv4Address) {
         this.tunIpv4Address = tunIpv4Address;
+    }
+
+    public boolean isHealthCheckEnabled() {
+        return healthCheckEnabled;
+    }
+
+    public void setHealthCheckEnabled(boolean healthCheckEnabled) {
+        this.healthCheckEnabled = healthCheckEnabled;
+    }
+
+    public boolean isHealthCheckAutoReconnect() {
+        return healthCheckAutoReconnect;
+    }
+
+    public void setHealthCheckAutoReconnect(boolean healthCheckAutoReconnect) {
+        this.healthCheckAutoReconnect = healthCheckAutoReconnect;
+    }
+
+    public int getHealthCheckDelaySeconds() {
+        return healthCheckDelaySeconds;
+    }
+
+    public void setHealthCheckDelaySeconds(int healthCheckDelaySeconds) {
+        this.healthCheckDelaySeconds = healthCheckDelaySeconds;
+    }
+
+    public List<HealthCheckTarget> getHealthCheckTargets() {
+        return healthCheckTargets;
+    }
+
+    public void setHealthCheckTargets(List<HealthCheckTarget> healthCheckTargets) {
+        this.healthCheckTargets = healthCheckTargets;
     }
 }

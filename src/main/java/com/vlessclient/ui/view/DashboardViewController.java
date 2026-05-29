@@ -3,12 +3,14 @@ package com.vlessclient.ui.view;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ConnectionState;
+import com.vlessclient.model.HealthCheckTarget;
 import com.vlessclient.model.ProxyMode;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.LatencyTester;
 import com.vlessclient.service.RoutingService;
+import com.vlessclient.service.ServiceReachabilityChecker;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.SingBoxInstaller;
@@ -17,6 +19,7 @@ import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.fxml.FXML;
+import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
@@ -26,6 +29,9 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import org.slf4j.Logger;
@@ -64,6 +70,13 @@ public class DashboardViewController {
     @FXML private Label brewCommandLabel;
     @FXML private Button copyBrewButton;
     @FXML private Button retryInstallButton;
+    @FXML private VBox healthCard;
+    @FXML private Label healthSummaryLabel;
+    @FXML private Button recheckButton;
+    @FXML private VBox serviceStatusList;
+    @FXML private HBox reconnectBanner;
+    @FXML private Label reconnectBannerLabel;
+    @FXML private Button cancelReconnectButton;
 
     private final ObjectProperty<ConnectionState> connectionState =
             new SimpleObjectProperty<>(ConnectionState.DISCONNECTED);
@@ -72,9 +85,20 @@ public class DashboardViewController {
     private SingBoxEngine singBoxEngine;
     private TrafficMonitor trafficMonitor;
     private LatencyTester latencyTester;
+    private ServiceReachabilityChecker reachabilityChecker;
 
     private javafx.animation.Timeline latencyTimeline;
     private volatile boolean latencyInFlight;
+
+    // Health-check / auto-reconnect state. All mutated only on the FX thread.
+    private javafx.animation.PauseTransition reconnectDelay;
+    private volatile boolean healthCheckInFlight;
+    private int healthGeneration;
+    private int reconnectAttempt;
+    // True while we are tearing down and restarting the tunnel ourselves, so
+    // the self-inflicted DISCONNECTED/ERROR transition is not mistaken for a
+    // user disconnect that should cancel the health loop.
+    private boolean suppressDisconnectHandling;
 
     @FXML
     public void initialize() {
@@ -99,6 +123,13 @@ public class DashboardViewController {
             latencyTester = null;
         }
 
+        try {
+            reachabilityChecker = ServiceLocator.get(ServiceReachabilityChecker.class);
+        } catch (IllegalArgumentException e) {
+            log.warn("ServiceReachabilityChecker not available; health check disabled");
+            reachabilityChecker = null;
+        }
+
         initProxyModeCombo();
         initSparklines();
 
@@ -120,6 +151,7 @@ public class DashboardViewController {
                     (obs, oldState, newState) -> {
                         updateUI(newState);
                         handleTrafficMonitor(newState);
+                        handleHealthCheck(newState);
                     });
 
             singBoxEngine.errorMessageProperty().addListener(
@@ -132,6 +164,7 @@ public class DashboardViewController {
             ConnectionState current = singBoxEngine.connectionStateProperty().get();
             updateUI(current);
             handleTrafficMonitor(current);
+            handleHealthCheck(current);
         } else {
             connectionState.addListener((obs, oldState, newState) -> updateUI(newState));
             updateUI(ConnectionState.DISCONNECTED);
@@ -183,6 +216,7 @@ public class DashboardViewController {
                         (obs, oldState, newState) -> {
                             updateUI(newState);
                             handleTrafficMonitor(newState);
+                            handleHealthCheck(newState);
                         });
                 singBoxEngine.errorMessageProperty().addListener(
                         (obs, oldMsg, newMsg) -> {
@@ -535,6 +569,282 @@ public class DashboardViewController {
         } else {
             connectionState.set(ConnectionState.DISCONNECTED);
         }
+    }
+
+    // ===== Service availability / auto-reconnect =====
+
+    /**
+     * Reacts to connection-state changes for the health-check feature.
+     * On CONNECTED we verify the tunnel actually carries traffic; on a
+     * user-initiated DISCONNECTED/ERROR we tear the health loop down. A
+     * self-inflicted transition during our own auto-reconnect restart is
+     * ignored via {@link #suppressDisconnectHandling}.
+     */
+    private void handleHealthCheck(ConnectionState state) {
+        if (healthCard == null) {
+            return;
+        }
+        if (state == ConnectionState.CONNECTED) {
+            runReachabilityCheck();
+        } else if (state == ConnectionState.DISCONNECTED || state == ConnectionState.ERROR) {
+            if (suppressDisconnectHandling) {
+                return;
+            }
+            cancelHealthLoop();
+        }
+    }
+
+    /**
+     * Probes the configured services through the local proxy and renders the
+     * results. Skips silently when the feature is disabled or prerequisites
+     * are missing. Stale results (a newer check started, or the loop was
+     * cancelled) are dropped via a generation token.
+     */
+    private void runReachabilityCheck() {
+        if (reachabilityChecker == null || singBoxEngine == null) {
+            setHealthCardVisible(false);
+            return;
+        }
+        AppSettings settings;
+        try {
+            settings = ServiceLocator.get(AppSettings.class);
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        if (!settings.isHealthCheckEnabled()) {
+            setHealthCardVisible(false);
+            return;
+        }
+        List<HealthCheckTarget> targets = settings.getHealthCheckTargets();
+        if (targets == null || targets.isEmpty()) {
+            setHealthCardVisible(false);
+            return;
+        }
+        if (healthCheckInFlight) {
+            return;
+        }
+
+        setHealthCardVisible(true);
+        renderPendingRows(targets);
+        healthSummaryLabel.setText("Checking…");
+
+        healthCheckInFlight = true;
+        final int gen = ++healthGeneration;
+        final int httpPort = settings.getHttpPort();
+
+        reachabilityChecker.checkAll(targets, httpPort).whenComplete((results, err) ->
+                Platform.runLater(() -> {
+                    healthCheckInFlight = false;
+                    if (gen != healthGeneration) {
+                        return;   // superseded by a newer check or cancelled
+                    }
+                    if (singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
+                        return;   // no longer connected
+                    }
+                    if (err != null) {
+                        log.warn("Reachability check failed", err);
+                        healthSummaryLabel.setText("Check failed");
+                        return;
+                    }
+                    renderResultRows(results);
+                    evaluateReconnect(results, settings);
+                }));
+    }
+
+    private void evaluateReconnect(List<ServiceReachabilityChecker.ProbeResult> results,
+                                   AppSettings settings) {
+        boolean broken = settings.isHealthCheckEnabled()
+                && settings.isHealthCheckAutoReconnect()
+                && ServiceReachabilityChecker.allUnreachable(results);
+        if (broken) {
+            scheduleReconnect(settings);
+        } else {
+            reconnectAttempt = 0;
+            hideReconnectBanner();
+        }
+    }
+
+    /**
+     * Starts the (cancelable) countdown to the next reconnect. No-op if a
+     * countdown is already running. The loop is unbounded by design — it
+     * repeats every {@code health_check_delay_seconds} until a service becomes
+     * reachable or the user disconnects/cancels.
+     */
+    private void scheduleReconnect(AppSettings settings) {
+        if (reconnectDelay != null) {
+            return;
+        }
+        int seconds = Math.max(1, settings.getHealthCheckDelaySeconds());
+        reconnectAttempt++;
+        showReconnectBanner("All services unreachable — reconnecting in " + seconds
+                + "s… (attempt " + reconnectAttempt + ")");
+        reconnectDelay = new javafx.animation.PauseTransition(javafx.util.Duration.seconds(seconds));
+        reconnectDelay.setOnFinished(e -> performReconnect());
+        reconnectDelay.play();
+    }
+
+    /**
+     * Tears down and re-establishes the tunnel. The DISCONNECTED that our own
+     * stop() produces is suppressed so it is not treated as a user disconnect;
+     * a short gap lets the old process fully exit before reconnecting. The
+     * subsequent CONNECTED drives the next reachability check, continuing the
+     * loop.
+     */
+    private void performReconnect() {
+        reconnectDelay = null;
+        if (singBoxEngine == null
+                || singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
+            return;   // user disconnected or state changed during the wait
+        }
+        log.info("Auto-reconnect (attempt {}): all services unreachable, restarting tunnel",
+                reconnectAttempt);
+        hideReconnectBanner();
+        suppressDisconnectHandling = true;
+        disconnect();
+        javafx.animation.PauseTransition gap =
+                new javafx.animation.PauseTransition(javafx.util.Duration.millis(700));
+        gap.setOnFinished(e -> {
+            suppressDisconnectHandling = false;
+            connect();
+        });
+        gap.play();
+    }
+
+    /**
+     * Stops the health loop entirely: cancels any pending reconnect, drops any
+     * in-flight probe, and hides the card. Invoked on a genuine (user or crash)
+     * disconnect.
+     */
+    private void cancelHealthLoop() {
+        if (reconnectDelay != null) {
+            reconnectDelay.stop();
+            reconnectDelay = null;
+        }
+        reconnectAttempt = 0;
+        healthGeneration++;            // invalidate any in-flight probe result
+        healthCheckInFlight = false;
+        hideReconnectBanner();
+        if (serviceStatusList != null) {
+            serviceStatusList.getChildren().clear();
+        }
+        if (healthSummaryLabel != null) {
+            healthSummaryLabel.setText("—");
+        }
+        setHealthCardVisible(false);
+    }
+
+    private void renderPendingRows(List<HealthCheckTarget> targets) {
+        if (serviceStatusList == null) {
+            return;
+        }
+        serviceStatusList.getChildren().clear();
+        for (HealthCheckTarget t : targets) {
+            String name = t.getName() != null && !t.getName().isBlank() ? t.getName() : t.getUrl();
+            serviceStatusList.getChildren().add(
+                    buildServiceRow(name, "status-circle-connecting", "Checking…", "service-pending"));
+        }
+    }
+
+    private void renderResultRows(List<ServiceReachabilityChecker.ProbeResult> results) {
+        if (serviceStatusList == null) {
+            return;
+        }
+        serviceStatusList.getChildren().clear();
+        int reachable = 0;
+        for (ServiceReachabilityChecker.ProbeResult r : results) {
+            boolean ok = r.reachable();
+            if (ok) {
+                reachable++;
+            }
+            String dotClass = ok ? "status-circle-connected" : "status-circle-error";
+            String resultText = ok ? r.latencyMs() + " ms" : "Unreachable";
+            String resultClass = ok ? "service-ok" : "service-fail";
+            serviceStatusList.getChildren().add(
+                    buildServiceRow(r.name(), dotClass, resultText, resultClass));
+        }
+        healthSummaryLabel.setText(summarize(reachable, results.size()));
+    }
+
+    private static String summarize(int reachable, int total) {
+        if (reachable == total) {
+            return "All reachable";
+        }
+        if (reachable == 0) {
+            return "All unreachable";
+        }
+        return reachable + "/" + total + " reachable";
+    }
+
+    private HBox buildServiceRow(String name, String dotStyleClass,
+                                 String resultText, String resultStyleClass) {
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+
+        Circle dot = new Circle(5);
+        dot.getStyleClass().setAll(dotStyleClass);
+
+        Label nameLabel = new Label(name);
+        nameLabel.getStyleClass().setAll("service-name");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Label resultLabel = new Label(resultText);
+        resultLabel.getStyleClass().setAll(resultStyleClass);
+
+        row.getChildren().addAll(dot, nameLabel, spacer, resultLabel);
+        return row;
+    }
+
+    private void showReconnectBanner(String text) {
+        if (reconnectBanner == null) {
+            return;
+        }
+        if (reconnectBannerLabel != null) {
+            reconnectBannerLabel.setText(text);
+        }
+        reconnectBanner.setVisible(true);
+        reconnectBanner.setManaged(true);
+    }
+
+    private void hideReconnectBanner() {
+        if (reconnectBanner == null) {
+            return;
+        }
+        reconnectBanner.setVisible(false);
+        reconnectBanner.setManaged(false);
+    }
+
+    private void setHealthCardVisible(boolean visible) {
+        if (healthCard == null) {
+            return;
+        }
+        healthCard.setVisible(visible);
+        healthCard.setManaged(visible);
+    }
+
+    @FXML
+    private void onRecheckClicked() {
+        if (singBoxEngine == null
+                || singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
+            return;
+        }
+        // A manual re-check supersedes any pending auto-reconnect countdown.
+        if (reconnectDelay != null) {
+            reconnectDelay.stop();
+            reconnectDelay = null;
+        }
+        runReachabilityCheck();
+    }
+
+    @FXML
+    private void onCancelReconnectClicked() {
+        if (reconnectDelay != null) {
+            reconnectDelay.stop();
+            reconnectDelay = null;
+        }
+        reconnectAttempt = 0;
+        hideReconnectBanner();
     }
 
     private ServerConfig findActiveServer() {
