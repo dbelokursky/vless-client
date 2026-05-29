@@ -143,4 +143,33 @@
                 styleClass="secondary-button"
                 onAction="#onTestLatencyClicked"/>
     </HBox>
+
+    <!-- Service availability: reachability of key services through the tunnel -->
+    <VBox fx:id="healthCard" styleClass="card" spacing="10"
+          visible="false" managed="false">
+        <padding>
+            <Insets top="14" right="18" bottom="14" left="20"/>
+        </padding>
+
+        <HBox alignment="CENTER_LEFT" spacing="10">
+            <Label text="Service availability" styleClass="section-header"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="healthSummaryLabel" text="—" styleClass="latency-result"/>
+            <Button fx:id="recheckButton" text="Re-check" styleClass="secondary-button"
+                    onAction="#onRecheckClicked"/>
+        </HBox>
+
+        <VBox fx:id="serviceStatusList" spacing="6"/>
+
+        <HBox fx:id="reconnectBanner" styleClass="reconnect-banner" spacing="12"
+              alignment="CENTER_LEFT" visible="false" managed="false">
+            <padding>
+                <Insets top="8" right="12" bottom="8" left="12"/>
+            </padding>
+            <Label fx:id="reconnectBannerLabel" text="" styleClass="reconnect-banner-label"
+                   wrapText="true" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+            <Button fx:id="cancelReconnectButton" text="Cancel" styleClass="secondary-button"
+                    onAction="#onCancelReconnectClicked"/>
+        </HBox>
+    </VBox>
 </VBox>

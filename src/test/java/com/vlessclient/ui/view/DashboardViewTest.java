@@ -2,6 +2,7 @@ package com.vlessclient.ui.view;
 
 import com.vlessclient.app.ServiceLocator;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
@@ -63,5 +64,24 @@ public class DashboardViewTest extends ApplicationTest {
             clickOn("#connectButton");
         }
         assertThat(connect).isNotNull();
+    }
+
+    @Test
+    void serviceAvailabilityNodesExist() {
+        assertThat(lookup("#healthCard").tryQuery()).isPresent();
+        assertThat(lookup("#serviceStatusList").tryQuery()).isPresent();
+        assertThat(lookup("#recheckButton").tryQuery()).isPresent();
+        assertThat(lookup("#reconnectBanner").tryQuery()).isPresent();
+        assertThat(lookup("#healthSummaryLabel").tryQuery()).isPresent();
+    }
+
+    @Test
+    void healthCardAndBannerHiddenWhileDisconnected() {
+        // Disconnected on load: the availability card and the reconnect banner
+        // start hidden until the tunnel comes up.
+        Node healthCard = lookup("#healthCard").query();
+        Node reconnectBanner = lookup("#reconnectBanner").query();
+        assertThat(healthCard.isVisible()).isFalse();
+        assertThat(reconnectBanner.isVisible()).isFalse();
     }
 }
