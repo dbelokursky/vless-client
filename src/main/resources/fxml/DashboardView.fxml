@@ -56,22 +56,22 @@
                    styleClass="status-subtitle" wrapText="true" maxWidth="520"/>
         </VBox>
 
-        <!-- Mode selector and hint, stacked. minWidth=-Infinity (USE_PREF_SIZE)
-             keeps it from being squeezed when the status text is long. -->
-        <VBox alignment="CENTER_RIGHT" spacing="2" minWidth="-Infinity">
-            <HBox alignment="CENTER_LEFT" spacing="8">
+        <!-- Mode selector + connect button on one row so the combo and the
+             button stay vertically aligned; the TUN warning wraps underneath.
+             fillHeight=false stops the HBox from stretching the 44px button to
+             the warning's height (it used to balloon to ~68px). minWidth=
+             -Infinity keeps the whole group from being squeezed by a long
+             status message. -->
+        <VBox alignment="CENTER_RIGHT" spacing="4" minWidth="-Infinity">
+            <HBox alignment="CENTER_RIGHT" spacing="12" fillHeight="false">
                 <Label text="Mode" styleClass="stats-title"/>
                 <ComboBox fx:id="proxyModeCombo" prefWidth="130" styleClass="mode-combo"/>
+                <Button fx:id="connectButton" text="Connect" styleClass="connect-button"
+                        onAction="#onConnectClicked" prefWidth="170" prefHeight="44"/>
             </HBox>
             <Label fx:id="proxyModeWarning" text="" styleClass="hint-label"
-                   wrapText="true" maxWidth="180" visible="false" managed="false"/>
+                   wrapText="true" maxWidth="320" visible="false" managed="false"/>
         </VBox>
-
-        <!-- minWidth=-Infinity so a long error message can never shrink the
-             button below its preferred width (it used to truncate to "…"). -->
-        <Button fx:id="connectButton" text="Connect" styleClass="connect-button"
-                onAction="#onConnectClicked" prefWidth="170" prefHeight="44"
-                minWidth="-Infinity"/>
     </HBox>
 
     <!-- Hidden legacy field used elsewhere; no longer rendered. -->
@@ -144,7 +144,7 @@
         <Region HBox.hgrow="ALWAYS"/>
 
         <Button fx:id="testLatencyButton" text="Test Latency"
-                styleClass="secondary-button"
+                styleClass="secondary-button" prefWidth="120"
                 onAction="#onTestLatencyClicked"/>
     </HBox>
 
@@ -160,7 +160,7 @@
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="healthSummaryLabel" text="—" styleClass="latency-result"/>
             <Button fx:id="recheckButton" text="Re-check" styleClass="secondary-button"
-                    onAction="#onRecheckClicked"/>
+                    prefWidth="120" onAction="#onRecheckClicked"/>
         </HBox>
 
         <VBox fx:id="serviceStatusList" spacing="6"/>
