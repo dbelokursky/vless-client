@@ -38,11 +38,13 @@ public class RoutingViewController {
     @FXML private ComboBox<String> presetCombo;
     @FXML private HBox bypassCountryRow;
     @FXML private ComboBox<String> bypassCountryCombo;
+    @FXML private Label bypassCountryHint;
     @FXML private VBox customRulesSection;
     @FXML private ListView<RoutingRule> rulesListView;
     @FXML private VBox emptyState;
     @FXML private Button addRuleButton;
     @FXML private TextArea bypassListArea;
+    @FXML private Label bypassCountLabel;
     @FXML private Button saveBypassButton;
 
     private RoutingService routingService;
@@ -80,6 +82,10 @@ public class RoutingViewController {
 
         loadRules();
         loadBypassList();
+        if (bypassListArea != null) {
+            bypassListArea.textProperty().addListener((obs, oldText, newText) -> updateBypassCount());
+        }
+        updateBypassCount();
         updateCustomRulesVisibility(config.getPreset());
         updateBypassCountryVisibility(config.getPreset());
     }
@@ -279,6 +285,31 @@ public class RoutingViewController {
         boolean show = "bypass_domestic".equals(preset);
         bypassCountryRow.setVisible(show);
         bypassCountryRow.setManaged(show);
+        if (bypassCountryHint != null) {
+            bypassCountryHint.setVisible(show);
+            bypassCountryHint.setManaged(show);
+        }
+    }
+
+    /**
+     * Refreshes the "N entries" badge from the textarea, counting only
+     * non-blank, non-comment lines (matching what {@link #onSaveBypassClicked()}
+     * actually persists).
+     */
+    private void updateBypassCount() {
+        if (bypassCountLabel == null) {
+            return;
+        }
+        int count = 0;
+        if (bypassListArea != null && bypassListArea.getText() != null) {
+            for (String line : bypassListArea.getText().split("\\R")) {
+                String trimmed = line.trim();
+                if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+                    count++;
+                }
+            }
+        }
+        bypassCountLabel.setText(count == 1 ? "1 entry" : count + " entries");
     }
 
     private String presetToDisplayName(String preset) {

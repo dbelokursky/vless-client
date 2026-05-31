@@ -357,6 +357,26 @@
     -fx-background-color: #d8d8d8;
 }
 
+/* Compact square button holding a single icon (toolbar actions). */
+.icon-button {
+    -fx-background-color: #e8e8e8;
+    -fx-background-radius: 6;
+    -fx-padding: 5 8;
+    -fx-cursor: hand;
+}
+
+.icon-button:hover {
+    -fx-background-color: #d8d8d8;
+}
+
+.icon-button .nav-icon-glyph {
+    -fx-fill: #555555;
+}
+
+.icon-button:hover .nav-icon-glyph {
+    -fx-fill: #222222;
+}
+
 .danger-button {
     -fx-background-color: #ffebee;
     -fx-text-fill: #d32f2f;
@@ -448,6 +468,88 @@
 .empty-state-hint {
     -fx-font-size: 13px;
     -fx-text-fill: #bbbbbb;
+}
+
+/* ===== Text inputs (TextField / TextArea + editable ComboBox editor) ===== */
+.text-field,
+.text-area {
+    -fx-text-fill: #333333;
+    -fx-prompt-text-fill: #9e9e9e;
+    -fx-highlight-fill: #c8e6c9;
+    -fx-highlight-text-fill: #1b5e20;
+    -fx-background-color: #f8f8f8;
+    -fx-background-radius: 6;
+    -fx-border-color: #e0e0e0;
+    -fx-border-radius: 6;
+}
+
+.text-area {
+    -fx-padding: 0;
+}
+
+.text-area .content {
+    -fx-background-color: #f8f8f8;
+    -fx-background-radius: 6;
+    -fx-padding: 8 10;
+}
+
+.text-field:focused,
+.text-area:focused {
+    -fx-border-color: #2e7d32;
+    -fx-background-color: #ffffff;
+}
+
+.text-area:focused .content {
+    -fx-background-color: #ffffff;
+}
+
+/* Editable ComboBox editor lives inside the already-styled .combo-box, so keep
+   it transparent + border-less instead of the default boxed field. */
+.combo-box-base:editable > .text-field,
+.combo-box .text-field {
+    -fx-background-color: transparent;
+    -fx-background-radius: 0;
+    -fx-border-width: 0;
+    -fx-text-fill: #333333;
+    -fx-prompt-text-fill: #9e9e9e;
+    -fx-padding: 6 8;
+}
+
+/* ===== Section / field labels & badges ===== */
+.section-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2b2f33;
+}
+
+/* Inline label in an aligned label column. */
+.field-label {
+    -fx-font-size: 13px;
+    -fx-text-fill: #5b6570;
+}
+
+/* Small pill showing a live count (e.g. bypass-list entries). */
+.count-badge {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #6b7078;
+    -fx-background-color: #eceef0;
+    -fx-background-radius: 10;
+    -fx-padding: 2 9;
+}
+
+/* Monospace, terminal-like textarea for editing host/CIDR lists. */
+.code-area {
+    -fx-font-family: "Menlo", "Monaco", "Courier New", monospace;
+    -fx-font-size: 12.5px;
+}
+
+.code-area .content {
+    -fx-background-color: #f4f6f8;
+}
+
+.code-area:focused .content {
+    -fx-background-color: #ffffff;
 }
 
 /* ===== Form Styles ===== */

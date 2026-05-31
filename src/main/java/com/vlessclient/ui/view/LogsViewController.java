@@ -8,6 +8,7 @@ import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
+import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
@@ -15,11 +16,15 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
-import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.application.Platform;
-import javafx.geometry.Orientation;
+import javafx.geometry.Bounds;
+import javafx.scene.Node;
+import javafx.scene.control.Alert;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
@@ -31,6 +36,12 @@ import javafx.scene.text.TextFlow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -45,6 +56,8 @@ public class LogsViewController {
     @FXML private ComboBox<String> logLevelFilter;
     @FXML private TextField searchField;
     @FXML private CheckBox autoScrollCheckBox;
+    @FXML private Button downloadButton;
+    @FXML private Button clearButton;
     @FXML private ListView<String> logListView;
 
     private ObservableList<String> sourceLogLines;
@@ -55,6 +68,14 @@ public class LogsViewController {
         logLevelFilter.setItems(FXCollections.observableArrayList(
                 "All", "Info", "Warn", "Error", "Debug"));
         logLevelFilter.getSelectionModel().select("All");
+        logLevelFilter.setTooltip(new Tooltip("Filter by level"));
+
+        // Compact icon buttons keep the toolbar from overflowing on a narrow
+        // window; tooltips preserve discoverability without the text labels.
+        downloadButton.setGraphic(Icons.download(16));
+        downloadButton.setTooltip(new Tooltip("Download log"));
+        clearButton.setGraphic(Icons.clear(16));
+        clearButton.setTooltip(new Tooltip("Clear logs"));
 
         SingBoxEngine engine = null;
         try {
@@ -105,6 +126,13 @@ public class LogsViewController {
         logLevelFilter.valueProperty().addListener((obs, oldVal, newVal) -> applyFilter());
         searchField.textProperty().addListener((obs, oldVal, newVal) -> applyFilter());
 
+        // Re-enabling auto-scroll should immediately snap to the tail.
+        autoScrollCheckBox.selectedProperty().addListener((obs, was, isOn) -> {
+            if (isOn && !filteredLogLines.isEmpty()) {
+                logListView.scrollTo(filteredLogLines.size() - 1);
+            }
+        });
+
         filteredLogLines.addListener((ListChangeListener<String>) change -> {
             if (filteredLogLines.isEmpty()) {
                 return;
@@ -113,32 +141,111 @@ public class LogsViewController {
                 logListView.scrollTo(filteredLogLines.size() - 1);
                 return;
             }
-            // Auto-scroll is off: VirtualFlow keeps the viewport stuck at the
-            // bottom whenever new items are appended while the last cell is
-            // visible, so freeze the vertical scrollbar value across the
-            // append. Snapshot taken on this same JFX pulse before layout
-            // sees the new items, restored on the next pulse.
-            ScrollBar vbar = findVerticalScrollBar();
-            if (vbar == null) {
+            // Auto-scroll is off: hold the lines the user is reading in place.
+            // VirtualFlow pins the viewport to the tail cell while it is
+            // visible, and LogReader's ring buffer trims the oldest line off
+            // the front, shifting every index down by one. A scrollbar-ratio
+            // freeze survives neither — ratio 1.0 always maps to the new
+            // bottom, which is why toggling the box used to keep following the
+            // tail. Anchor on the first visible row index instead (captured
+            // here, before the pulse re-lays-out the flow) and re-assert it on
+            // the next pulse, compensating for any front-trimmed line.
+            int firstVisible = firstVisibleIndex();
+            if (firstVisible < 0) {
                 return;
             }
-            double frozen = vbar.getValue();
-            Platform.runLater(() -> vbar.setValue(frozen));
+            int anchor = Math.max(0, firstVisible - removedFromFront(change));
+            Platform.runLater(() -> logListView.scrollTo(anchor));
         });
     }
 
-    private ScrollBar findVerticalScrollBar() {
-        for (var node : logListView.lookupAll(".scroll-bar")) {
-            if (node instanceof ScrollBar bar && bar.getOrientation() == Orientation.VERTICAL) {
-                return bar;
+    /**
+     * Index of the first row intersecting the viewport, or {@code -1} when no
+     * rendered cell is visible. Called from a list-change notification — before
+     * the pulse re-lays-out the flow — it reports the pre-change (old) index
+     * space, which is exactly what the anchor restore needs.
+     */
+    private int firstVisibleIndex() {
+        Bounds viewport = logListView.localToScene(logListView.getBoundsInLocal());
+        double top = viewport.getMinY();
+        double bottom = viewport.getMaxY();
+        int first = -1;
+        for (Node node : logListView.lookupAll(".list-cell")) {
+            if (!(node instanceof ListCell<?> cell) || cell.isEmpty()) {
+                continue;
+            }
+            Bounds b = cell.localToScene(cell.getBoundsInLocal());
+            if (b.getMaxY() > top + 1 && b.getMinY() < bottom - 1
+                    && (first < 0 || cell.getIndex() < first)) {
+                first = cell.getIndex();
             }
         }
-        return null;
+        return first;
+    }
+
+    /**
+     * Count of rows this change removed from the front of the list. The ring
+     * buffer drops the oldest line, so the anchor index must shift down by the
+     * same amount to keep tracking the same content.
+     */
+    private static int removedFromFront(ListChangeListener.Change<? extends String> change) {
+        int removed = 0;
+        change.reset();
+        while (change.next()) {
+            if (change.wasRemoved() && change.getFrom() == 0) {
+                removed += change.getRemovedSize();
+            }
+        }
+        change.reset();
+        return removed;
     }
 
     @FXML
     private void onClearClicked() {
         sourceLogLines.clear();
+    }
+
+    @FXML
+    private void onDownloadClicked() {
+        if (sourceLogLines == null || sourceLogLines.isEmpty()) {
+            return;
+        }
+        Window owner = logListView.getScene() == null
+                ? null : logListView.getScene().getWindow();
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Save Log");
+        String stamp = LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        chooser.setInitialFileName("vless-log-" + stamp + ".txt");
+        chooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Log files", "*.log", "*.txt"),
+                new FileChooser.ExtensionFilter("All files", "*.*"));
+
+        File file = chooser.showSaveDialog(owner);
+        if (file == null) {
+            return;
+        }
+
+        // Snapshot here is safe: appends run on the FX thread too, so the list
+        // cannot mutate mid-iteration. Saves the full buffer, not the filtered
+        // view — the level/search filters are a transient reading aid.
+        String content = sourceLogLines.stream()
+                .filter(line -> line != null)
+                .collect(Collectors.joining(
+                        System.lineSeparator(), "", System.lineSeparator()));
+        try {
+            Files.writeString(file.toPath(), content, StandardCharsets.UTF_8);
+            log.info("Saved {} log lines to {}", sourceLogLines.size(), file);
+        } catch (IOException e) {
+            log.error("Failed to save log to {}", file, e);
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Could not save log file");
+            alert.setContentText(e.getMessage());
+            alert.initOwner(owner);
+            alert.showAndWait();
+        }
     }
 
     private void applyFilter() {
