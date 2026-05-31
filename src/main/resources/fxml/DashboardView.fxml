@@ -56,18 +56,22 @@
                    styleClass="status-subtitle" wrapText="true" maxWidth="520"/>
         </VBox>
 
-        <!-- Mode selector and hint, stacked -->
-        <VBox alignment="CENTER_RIGHT" spacing="2">
+        <!-- Mode selector and hint, stacked. minWidth=-Infinity (USE_PREF_SIZE)
+             keeps it from being squeezed when the status text is long. -->
+        <VBox alignment="CENTER_RIGHT" spacing="2" minWidth="-Infinity">
             <HBox alignment="CENTER_LEFT" spacing="8">
                 <Label text="Mode" styleClass="stats-title"/>
                 <ComboBox fx:id="proxyModeCombo" prefWidth="130" styleClass="mode-combo"/>
             </HBox>
             <Label fx:id="proxyModeWarning" text="" styleClass="hint-label"
-                   visible="false" managed="false"/>
+                   wrapText="true" maxWidth="180" visible="false" managed="false"/>
         </VBox>
 
+        <!-- minWidth=-Infinity so a long error message can never shrink the
+             button below its preferred width (it used to truncate to "…"). -->
         <Button fx:id="connectButton" text="Connect" styleClass="connect-button"
-                onAction="#onConnectClicked" prefWidth="170" prefHeight="44"/>
+                onAction="#onConnectClicked" prefWidth="170" prefHeight="44"
+                minWidth="-Infinity"/>
     </HBox>
 
     <!-- Hidden legacy field used elsewhere; no longer rendered. -->

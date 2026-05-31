@@ -1,12 +1,9 @@
 package com.vlessclient.ui.view;
 
 import com.vlessclient.app.ServiceLocator;
-import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.Subscription;
-import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.SubscriptionService;
 import javafx.application.Platform;
-import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
@@ -38,19 +35,15 @@ public class SubscriptionsViewController {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
     @FXML private ListView<Subscription> subscriptionListView;
-    @FXML private ListView<ServerConfig> serverListView;
     @FXML private VBox emptyState;
-    @FXML private Label serversLabel;
     @FXML private Button addSubscriptionButton;
     @FXML private Button refreshAllButton;
 
     private SubscriptionService subscriptionService;
-    private ConfigStore configStore;
 
     @FXML
     public void initialize() {
         subscriptionService = ServiceLocator.get(SubscriptionService.class);
-        configStore = ServiceLocator.get(ConfigStore.class);
 
         ObservableList<Subscription> subs = subscriptionService.getSubscriptions();
         subscriptionListView.setItems(subs);
@@ -59,11 +52,6 @@ public class SubscriptionsViewController {
         subs.addListener((javafx.collections.ListChangeListener<Subscription>) change ->
                 updateEmptyState(subs));
         updateEmptyState(subs);
-
-        subscriptionListView.getSelectionModel().selectedItemProperty().addListener(
-                (obs, oldVal, newVal) -> showSubscriptionServers(newVal));
-
-        serverListView.setCellFactory(list -> new ServerInfoCell());
     }
 
     private void updateEmptyState(ObservableList<Subscription> subs) {
@@ -72,21 +60,6 @@ public class SubscriptionsViewController {
         emptyState.setManaged(empty);
         subscriptionListView.setVisible(!empty);
         subscriptionListView.setManaged(!empty);
-    }
-
-    private void showSubscriptionServers(Subscription sub) {
-        if (sub == null) {
-            serverListView.setItems(FXCollections.emptyObservableList());
-            serversLabel.setText("Servers");
-            return;
-        }
-        serversLabel.setText("Servers - " + sub.getName()
-                + " (" + sub.getServerIds().size() + ")");
-        ObservableList<ServerConfig> servers = FXCollections.observableArrayList();
-        for (String id : sub.getServerIds()) {
-            configStore.getServerById(id).ifPresent(servers::add);
-        }
-        serverListView.setItems(servers);
     }
 
     @FXML
@@ -149,23 +122,14 @@ public class SubscriptionsViewController {
     private void onRefreshAllClicked() {
         Thread.startVirtualThread(() -> {
             subscriptionService.refreshAll();
-            Platform.runLater(() -> {
-                subscriptionListView.refresh();
-                Subscription selected = subscriptionListView.getSelectionModel().getSelectedItem();
-                if (selected != null) {
-                    showSubscriptionServers(selected);
-                }
-            });
+            Platform.runLater(() -> subscriptionListView.refresh());
         });
     }
 
     private void refreshSubscription(Subscription sub) {
         Thread.startVirtualThread(() -> {
             subscriptionService.refreshSubscription(sub.getId());
-            Platform.runLater(() -> {
-                subscriptionListView.refresh();
-                showSubscriptionServers(sub);
-            });
+            Platform.runLater(() -> subscriptionListView.refresh());
         });
     }
 
@@ -179,7 +143,6 @@ public class SubscriptionsViewController {
         Optional<ButtonType> result = confirm.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
             subscriptionService.removeSubscription(sub.getId());
-            serverListView.setItems(FXCollections.emptyObservableList());
             log.info("Deleted subscription: {}", sub.getName());
         }
     }
@@ -210,11 +173,12 @@ public class SubscriptionsViewController {
             Label urlLabel = new Label(urlDisplay);
             urlLabel.getStyleClass().add("server-address");
 
-            String lastRefresh = sub.getLastRefreshedAt() > 0
-                    ? TIME_FORMAT.format(Instant.ofEpochMilli(sub.getLastRefreshedAt()))
-                    : "Never";
-            Label statusLabel = new Label(
-                    sub.getServerIds().size() + " servers | Last refresh: " + lastRefresh);
+            int serverCount = sub.getServerIds().size();
+            String servers = serverCount + (serverCount == 1 ? " server" : " servers");
+            String refresh = sub.getLastRefreshedAt() > 0
+                    ? "refreshed " + TIME_FORMAT.format(Instant.ofEpochMilli(sub.getLastRefreshedAt()))
+                    : "never refreshed";
+            Label statusLabel = new Label(servers + " · " + refresh);
             statusLabel.getStyleClass().add("server-address");
 
             info.getChildren().addAll(nameLabel, urlLabel, statusLabel);
@@ -238,47 +202,4 @@ public class SubscriptionsViewController {
         }
     }
 
-    private static class ServerInfoCell extends ListCell<ServerConfig> {
-
-        @Override
-        protected void updateItem(ServerConfig server, boolean empty) {
-            super.updateItem(server, empty);
-            if (empty || server == null) {
-                setGraphic(null);
-                setText(null);
-                return;
-            }
-
-            HBox row = new HBox(12);
-            row.getStyleClass().add("server-list-item");
-            row.setAlignment(Pos.CENTER_LEFT);
-
-            VBox info = new VBox(2);
-            Label nameLabel = new Label(server.getName() != null ? server.getName() : "Unnamed");
-            nameLabel.getStyleClass().add("server-name");
-
-            Label addressLabel = new Label(server.getAddress() + ":" + server.getPort());
-            addressLabel.getStyleClass().add("server-address");
-
-            info.getChildren().addAll(nameLabel, addressLabel);
-
-            Region spacer = new Region();
-            HBox.setHgrow(spacer, Priority.ALWAYS);
-
-            Label protocolBadge = new Label(
-                    server.getProtocol() != null
-                            ? server.getProtocol().getValue().toUpperCase() : "VLESS");
-            protocolBadge.getStyleClass().add("protocol-badge");
-
-            row.getChildren().addAll(info, spacer, protocolBadge);
-
-            if (server.isActive()) {
-                Label activeBadge = new Label("ACTIVE");
-                activeBadge.getStyleClass().add("active-badge");
-                row.getChildren().add(activeBadge);
-            }
-
-            setGraphic(row);
-        }
-    }
 }

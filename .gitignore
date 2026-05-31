@@ -7,3 +7,5 @@ target/
 .DS_Store
 *.swp
 *.swo
+.claude/
+dependency-reduced-pom.xml

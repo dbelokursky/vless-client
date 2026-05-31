@@ -61,6 +61,12 @@ public final class Icons {
                     + ",18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18."
                     + "73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z";
 
+    private static final String DOWNLOAD =
+            "M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z";
+    private static final String TRASH =
+            "M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,"
+                    + "19V7H6V19Z";
+
     private Icons() {
     }
 
@@ -70,6 +76,8 @@ public final class Icons {
     public static Node routing(double size)       { return make(ROUTING,   size); }
     public static Node list(double size)          { return make(LIST,      size); }
     public static Node settings(double size)      { return make(SETTINGS,  size); }
+    public static Node download(double size)      { return make(DOWNLOAD,  size); }
+    public static Node clear(double size)         { return make(TRASH,     size); }
 
     /**
      * Builds a sized {@link StackPane} containing an {@link SVGPath} scaled

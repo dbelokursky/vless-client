@@ -17,48 +17,62 @@
       spacing="16">
 
     <!-- Header -->
-    <HBox alignment="CENTER_LEFT" spacing="12">
-        <Label text="Routing" styleClass="view-title"/>
-        <Region HBox.hgrow="ALWAYS"/>
-    </HBox>
+    <Label text="Routing" styleClass="view-title"/>
 
-    <!-- Preset selector -->
-    <HBox alignment="CENTER_LEFT" spacing="12">
-        <Label text="Preset:" styleClass="section-title"/>
-        <ComboBox fx:id="presetCombo" prefWidth="200"/>
-    </HBox>
+    <!-- Routing mode card: preset + (optional) bypass country, aligned in a
+         single label column so the controls line up. -->
+    <VBox styleClass="card" spacing="12">
+        <padding>
+            <Insets top="16" right="18" bottom="16" left="18"/>
+        </padding>
 
-    <!-- Bypass country picker: shown only for the Bypass Domestic preset.
-         Editable so power users can type ISO codes beyond the common list. -->
-    <HBox fx:id="bypassCountryRow" alignment="CENTER_LEFT" spacing="12"
-          managed="false" visible="false">
-        <Label text="Bypass country:" styleClass="section-title"/>
-        <ComboBox fx:id="bypassCountryCombo" prefWidth="200" editable="true"/>
-        <Label styleClass="server-address" wrapText="true"
-               text="Geosite/geoip rules for this country + private LAN go direct; everything else through the VPN."/>
-    </HBox>
+        <Label text="Routing mode" styleClass="section-title"/>
+
+        <HBox alignment="CENTER_LEFT" spacing="12">
+            <Label text="Preset" styleClass="field-label" minWidth="130" prefWidth="130"/>
+            <ComboBox fx:id="presetCombo" prefWidth="220"/>
+        </HBox>
+
+        <!-- Bypass country: shown only for the Bypass Domestic preset.
+             Editable so power users can type ISO codes beyond the common list. -->
+        <HBox fx:id="bypassCountryRow" alignment="CENTER_LEFT" spacing="12"
+              managed="false" visible="false">
+            <Label text="Bypass country" styleClass="field-label" minWidth="130" prefWidth="130"/>
+            <ComboBox fx:id="bypassCountryCombo" prefWidth="220" editable="true"/>
+        </HBox>
+
+        <Label fx:id="bypassCountryHint" styleClass="hint-label" wrapText="true"
+               managed="false" visible="false"
+               text="Geosite/geoip rules for this country and the private LAN go direct; everything else is routed through the VPN."/>
+    </VBox>
 
     <!-- Bypass list: patterns matching these are sent direct, skipping the proxy -->
-    <VBox spacing="6" styleClass="card">
+    <VBox spacing="8" styleClass="card" VBox.vgrow="ALWAYS">
         <padding>
-            <Insets top="14" right="16" bottom="14" left="16"/>
+            <Insets top="14" right="16" bottom="16" left="16"/>
         </padding>
         <HBox alignment="CENTER_LEFT" spacing="10">
             <Label text="Bypass list" styleClass="section-title"/>
+            <Label fx:id="bypassCountLabel" text="0 entries" styleClass="count-badge"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button fx:id="saveBypassButton" text="Save" styleClass="primary-button"
                     onAction="#onSaveBypassClicked"/>
         </HBox>
-        <Label styleClass="server-address" wrapText="true"
-               text="One entry per line. These hosts go direct and bypass the VPN. Supports wildcards: *.example.com, .example.com, *google*, CIDR (192.168.0.0/16), bare IPs, URLs. Lines starting with # are comments."/>
-        <TextArea fx:id="bypassListArea" prefRowCount="6" wrapText="false"
+        <Label styleClass="hint-label" wrapText="true"
+               text="One entry per line — these hosts go direct and bypass the VPN. Wildcards: *.example.com, .example.com, *google*; CIDR (192.168.0.0/16); bare IPs; URLs. Lines starting with # are comments."/>
+        <TextArea fx:id="bypassListArea" styleClass="code-area" prefRowCount="8"
+                  wrapText="false" VBox.vgrow="ALWAYS"
                   promptText="*.github.com&#10;api.openai.com&#10;192.168.0.0/16&#10;# legacy in-house services&#10;.corp.local"/>
     </VBox>
 
     <!-- Custom rules section (visible only when preset is Custom) -->
-    <VBox fx:id="customRulesSection" spacing="8" VBox.vgrow="ALWAYS" managed="false" visible="false">
+    <VBox fx:id="customRulesSection" spacing="8" styleClass="card" VBox.vgrow="ALWAYS"
+          managed="false" visible="false">
+        <padding>
+            <Insets top="14" right="16" bottom="16" left="16"/>
+        </padding>
         <HBox alignment="CENTER_LEFT" spacing="12">
-            <Label text="Custom Rules" styleClass="section-title"/>
+            <Label text="Custom rules" styleClass="section-title"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button fx:id="addRuleButton" text="+ Add Rule" styleClass="primary-button"
                     onAction="#onAddRuleClicked"/>

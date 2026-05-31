@@ -10,7 +10,6 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.layout.Priority?>
-<?import javafx.scene.layout.Region?>
 
 <VBox xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml"
@@ -20,24 +19,28 @@
     <!-- Header -->
     <Label text="Logs" styleClass="view-title"/>
 
-    <!-- Toolbar -->
-    <HBox spacing="12" alignment="CENTER_LEFT" styleClass="logs-toolbar">
+    <!-- Toolbar. The search field is the single elastic element (HBox.hgrow);
+         every other control keeps its preferred size (minWidth=-Infinity =
+         USE_PREF_SIZE) so labels never get squeezed/truncated on a narrow
+         window — only the search field shrinks, down to its minWidth. -->
+    <HBox spacing="10" alignment="CENTER_LEFT" styleClass="logs-toolbar">
         <padding>
             <Insets top="4" bottom="4"/>
         </padding>
 
-        <Label text="Level:" styleClass="form-label"/>
-        <ComboBox fx:id="logLevelFilter" prefWidth="100" styleClass="combo-box"/>
+        <ComboBox fx:id="logLevelFilter" prefWidth="110" minWidth="-Infinity"
+                  styleClass="combo-box"/>
 
-        <TextField fx:id="searchField" promptText="Search logs..." prefWidth="220"
-                   styleClass="form-field"/>
-
-        <Region HBox.hgrow="ALWAYS"/>
+        <TextField fx:id="searchField" promptText="Search logs..." minWidth="90"
+                   HBox.hgrow="ALWAYS" styleClass="form-field"/>
 
         <CheckBox fx:id="autoScrollCheckBox" text="Auto-scroll" selected="true"
-                  styleClass="form-checkbox"/>
+                  minWidth="-Infinity" styleClass="form-checkbox"/>
 
-        <Button fx:id="clearButton" text="Clear" styleClass="small-button"
+        <Button fx:id="downloadButton" styleClass="icon-button" minWidth="-Infinity"
+                onAction="#onDownloadClicked"/>
+
+        <Button fx:id="clearButton" styleClass="icon-button" minWidth="-Infinity"
                 onAction="#onClearClicked"/>
     </HBox>
 
