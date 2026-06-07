@@ -42,6 +42,7 @@ jobs:
             --dest dist \
             --mac-package-name "VLESSClient" \
             --java-options "--enable-preview" \
+            --java-options "-Dapp.version=${VERSION}" \
             --verbose
       - uses: softprops/action-gh-release@v2
         with:
