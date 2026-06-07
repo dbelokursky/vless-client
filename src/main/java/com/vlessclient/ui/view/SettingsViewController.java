@@ -1,5 +1,6 @@
 package com.vlessclient.ui.view;
 
+import com.vlessclient.app.AppVersion;
 import com.vlessclient.app.I18n;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.AppSettings;
@@ -276,8 +277,7 @@ public class SettingsViewController {
     }
 
     private void initAboutSection() {
-        String appVersion = System.getProperty("app.version", "1.0.0");
-        appVersionValue.setText(appVersion);
+        appVersionValue.setText(AppVersion.VERSION);
 
         String singboxVersion = detectSingBoxVersion();
         singboxVersionValue.setText(singboxVersion);
