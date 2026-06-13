@@ -10,7 +10,7 @@ import java.util.List;
 public class AppSettings {
 
     @JsonProperty("theme")
-    private String theme = "system";
+    private String theme = "auto";
 
     @JsonProperty("language")
     private String language = "en";
