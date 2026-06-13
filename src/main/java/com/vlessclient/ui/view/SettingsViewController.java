@@ -125,7 +125,7 @@ public class SettingsViewController {
     }
 
     private void initThemeCombo(AppSettings settings) {
-        themeCombo.getItems().addAll("system", "light", "dark");
+        themeCombo.getItems().addAll("auto", "light", "dark");
         themeCombo.setConverter(new StringConverter<>() {
             @Override
             public String toString(String value) {
@@ -133,7 +133,7 @@ public class SettingsViewController {
                     return "";
                 }
                 return switch (value) {
-                    case "system" -> I18n.get("settings.theme.system");
+                    case "auto", "system" -> I18n.get("settings.theme.auto");
                     case "light" -> I18n.get("settings.theme.light");
                     case "dark" -> I18n.get("settings.theme.dark");
                     default -> value;
@@ -145,7 +145,9 @@ public class SettingsViewController {
                 return string;
             }
         });
-        themeCombo.setValue(settings.getTheme());
+        // Normalize any previously stored legacy "system" value to "auto" so it
+        // matches a combo item and displays correctly.
+        themeCombo.setValue(ThemeManager.normalize(settings.getTheme()));
 
         themeCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null && !newVal.equals(oldVal)) {

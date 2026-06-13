@@ -179,6 +179,15 @@ public class ServiceLocator {
         }
 
         try {
+            Object theme = services.get(ThemeManager.class);
+            if (theme instanceof ThemeManager themeManager) {
+                themeManager.stopWatching();
+            }
+        } catch (Exception e) {
+            log.error("Error stopping ThemeManager during shutdown", e);
+        }
+
+        try {
             Object engine = services.get(SingBoxEngine.class);
             if (engine instanceof SingBoxEngine singBoxEngine && singBoxEngine.isRunning()) {
                 log.info("Stopping sing-box engine");
