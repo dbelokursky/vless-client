@@ -43,6 +43,9 @@ public class SettingsViewController {
     @FXML private Label singboxVersionLabel;
     @FXML private Label appVersionValue;
     @FXML private Label singboxVersionValue;
+    @FXML private Label healthCheckLabel;
+    @FXML private Label healthCheckIntervalLabel;
+    @FXML private Label healthCheckReconnectDelayLabel;
     @FXML private Label advancedLabel;
     @FXML private Label proxyDnsLabel;
     @FXML private Label directDnsLabel;
@@ -55,6 +58,10 @@ public class SettingsViewController {
     @FXML private CheckBox launchAtLoginCheck;
     @FXML private TextField socksPortField;
     @FXML private TextField httpPortField;
+    @FXML private CheckBox healthCheckEnabledCheck;
+    @FXML private CheckBox healthCheckAutoReconnectCheck;
+    @FXML private TextField healthCheckIntervalField;
+    @FXML private TextField healthCheckReconnectDelayField;
     @FXML private ComboBox<ProxyMode> proxyModeCombo;
     @FXML private TextField proxyDnsField;
     @FXML private TextField directDnsField;
@@ -92,6 +99,7 @@ public class SettingsViewController {
         initThemeCombo(settings);
         initLanguageCombo(settings);
         initConnectionSettings(settings);
+        initHealthCheckSettings(settings);
         initProxyModeCombo(settings);
         initAdvancedSettings(settings);
         initAboutSection();
@@ -224,6 +232,35 @@ public class SettingsViewController {
         addNumericFilter(httpPortField);
     }
 
+    private void initHealthCheckSettings(AppSettings settings) {
+        healthCheckEnabledCheck.setSelected(settings.isHealthCheckEnabled());
+        healthCheckEnabledCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setHealthCheckEnabled(newVal);
+            saveSettings(settings);
+        });
+
+        healthCheckAutoReconnectCheck.setSelected(settings.isHealthCheckAutoReconnect());
+        healthCheckAutoReconnectCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setHealthCheckAutoReconnect(newVal);
+            saveSettings(settings);
+        });
+
+        healthCheckIntervalField.setText(String.valueOf(settings.getHealthCheckIntervalSeconds()));
+        healthCheckIntervalField.textProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setHealthCheckIntervalSeconds(parseSeconds(newVal, 5));
+            saveSettings(settings);
+        });
+
+        healthCheckReconnectDelayField.setText(String.valueOf(settings.getHealthCheckDelaySeconds()));
+        healthCheckReconnectDelayField.textProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setHealthCheckDelaySeconds(parseSeconds(newVal, 10));
+            saveSettings(settings);
+        });
+
+        addNumericFilter(healthCheckIntervalField);
+        addNumericFilter(healthCheckReconnectDelayField);
+    }
+
     /**
      * Wires the "Launch at login" checkbox to the macOS LaunchAgent. The
      * checkbox reflects whether the plist is actually installed (the source
@@ -297,6 +334,13 @@ public class SettingsViewController {
         socksPortLabel.textProperty().bind(I18n.binding("settings.socks.port"));
         httpPortLabel.textProperty().bind(I18n.binding("settings.http.port"));
         proxyModeLabel.textProperty().bind(I18n.binding("settings.proxy.mode"));
+        healthCheckLabel.textProperty().bind(I18n.binding("settings.health.check"));
+        healthCheckEnabledCheck.textProperty().bind(I18n.binding("settings.health.check.enabled"));
+        healthCheckAutoReconnectCheck.textProperty()
+                .bind(I18n.binding("settings.health.check.auto.reconnect"));
+        healthCheckIntervalLabel.textProperty().bind(I18n.binding("settings.health.check.interval"));
+        healthCheckReconnectDelayLabel.textProperty()
+                .bind(I18n.binding("settings.health.check.reconnect.delay"));
         aboutLabel.textProperty().bind(I18n.binding("settings.about"));
         appVersionLabel.textProperty().bind(I18n.binding("settings.app.version"));
         singboxVersionLabel.textProperty().bind(I18n.binding("settings.singbox.version"));
@@ -345,6 +389,21 @@ public class SettingsViewController {
             // fall through
         }
         return defaultPort;
+    }
+
+    private int parseSeconds(String text, int defaultSeconds) {
+        if (text == null || text.isBlank()) {
+            return defaultSeconds;
+        }
+        try {
+            int seconds = Integer.parseInt(text.trim());
+            if (seconds >= 1) {
+                return seconds;
+            }
+        } catch (NumberFormatException e) {
+            // fall through
+        }
+        return defaultSeconds;
     }
 
     private void addNumericFilter(TextField field) {

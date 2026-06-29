@@ -92,6 +92,8 @@ public class DashboardViewController {
 
     // Health-check / auto-reconnect state. All mutated only on the FX thread.
     private javafx.animation.PauseTransition reconnectDelay;
+    // Schedules the next periodic reachability probe while the tunnel is up.
+    private javafx.animation.PauseTransition periodicCheckDelay;
     private volatile boolean healthCheckInFlight;
     private int healthGeneration;
     private int reconnectAttempt;
@@ -601,6 +603,9 @@ public class DashboardViewController {
      * cancelled) are dropped via a generation token.
      */
     private void runReachabilityCheck() {
+        // A check is starting now, so drop any pending periodic re-check; a new
+        // one is scheduled once this probe completes.
+        cancelPeriodicCheck();
         if (reachabilityChecker == null || singBoxEngine == null) {
             setHealthCardVisible(false);
             return;
@@ -661,6 +666,41 @@ public class DashboardViewController {
         } else {
             reconnectAttempt = 0;
             hideReconnectBanner();
+            // Keep monitoring: re-probe after the configured interval. When the
+            // reconnect path runs instead, the restart itself drives the next
+            // check, so we don't double-schedule here.
+            schedulePeriodicCheck(settings);
+        }
+    }
+
+    /**
+     * Schedules the next reachability probe {@code health_check_interval_seconds}
+     * from now, so the tunnel keeps being monitored while connected rather than
+     * only at connect time. No-op when the feature is disabled or the tunnel is
+     * no longer up.
+     */
+    private void schedulePeriodicCheck(AppSettings settings) {
+        cancelPeriodicCheck();
+        if (!settings.isHealthCheckEnabled()) {
+            return;
+        }
+        if (singBoxEngine == null
+                || singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
+            return;
+        }
+        int seconds = Math.max(1, settings.getHealthCheckIntervalSeconds());
+        periodicCheckDelay = new javafx.animation.PauseTransition(javafx.util.Duration.seconds(seconds));
+        periodicCheckDelay.setOnFinished(e -> {
+            periodicCheckDelay = null;
+            runReachabilityCheck();
+        });
+        periodicCheckDelay.play();
+    }
+
+    private void cancelPeriodicCheck() {
+        if (periodicCheckDelay != null) {
+            periodicCheckDelay.stop();
+            periodicCheckDelay = null;
         }
     }
 
@@ -720,6 +760,7 @@ public class DashboardViewController {
             reconnectDelay.stop();
             reconnectDelay = null;
         }
+        cancelPeriodicCheck();
         reconnectAttempt = 0;
         healthGeneration++;            // invalidate any in-flight probe result
         healthCheckInFlight = false;
