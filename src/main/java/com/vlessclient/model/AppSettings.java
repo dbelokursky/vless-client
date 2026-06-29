@@ -54,6 +54,11 @@ public class AppSettings {
     @JsonProperty("health_check_auto_reconnect")
     private boolean healthCheckAutoReconnect = true;
 
+    // How often the tunnel is re-probed while connected. Kept short so a dropped
+    // connection is noticed quickly rather than only at connect time.
+    @JsonProperty("health_check_interval_seconds")
+    private int healthCheckIntervalSeconds = 5;
+
     @JsonProperty("health_check_delay_seconds")
     private int healthCheckDelaySeconds = 10;
 
@@ -189,6 +194,14 @@ public class AppSettings {
 
     public void setHealthCheckAutoReconnect(boolean healthCheckAutoReconnect) {
         this.healthCheckAutoReconnect = healthCheckAutoReconnect;
+    }
+
+    public int getHealthCheckIntervalSeconds() {
+        return healthCheckIntervalSeconds;
+    }
+
+    public void setHealthCheckIntervalSeconds(int healthCheckIntervalSeconds) {
+        this.healthCheckIntervalSeconds = healthCheckIntervalSeconds;
     }
 
     public int getHealthCheckDelaySeconds() {

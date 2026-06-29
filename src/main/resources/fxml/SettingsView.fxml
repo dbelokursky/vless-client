@@ -77,6 +77,37 @@
             </HBox>
         </VBox>
 
+        <!-- Health Check Section -->
+        <VBox spacing="12" styleClass="card">
+            <padding>
+                <Insets top="16" right="20" bottom="16" left="20"/>
+            </padding>
+
+            <Label fx:id="healthCheckLabel" text="Health Check" styleClass="form-section-title"/>
+
+            <CheckBox fx:id="healthCheckEnabledCheck" text="Enable health check"
+                      styleClass="form-checkbox"/>
+
+            <CheckBox fx:id="healthCheckAutoReconnectCheck" text="Auto-reconnect when unreachable"
+                      styleClass="form-checkbox"/>
+
+            <Separator styleClass="sidebar-separator"/>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="healthCheckIntervalLabel" text="Check interval (sec)"
+                       styleClass="form-label" prefWidth="200"/>
+                <TextField fx:id="healthCheckIntervalField" styleClass="form-field" prefWidth="120"
+                           promptText="5"/>
+            </HBox>
+
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <Label fx:id="healthCheckReconnectDelayLabel" text="Reconnect delay (sec)"
+                       styleClass="form-label" prefWidth="200"/>
+                <TextField fx:id="healthCheckReconnectDelayField" styleClass="form-field" prefWidth="120"
+                           promptText="10"/>
+            </HBox>
+        </VBox>
+
         <!-- Advanced Section -->
         <VBox spacing="12" styleClass="card">
             <padding>
