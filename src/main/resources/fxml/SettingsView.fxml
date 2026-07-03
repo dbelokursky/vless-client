@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
@@ -162,6 +164,19 @@
                        prefWidth="120"/>
                 <Label fx:id="singboxVersionValue" text="Unknown" styleClass="stats-value"
                        style="-fx-font-size: 13px;"/>
+            </HBox>
+
+            <!-- In-app sing-box core update / rollback -->
+            <Label fx:id="coreUpdateStatusLabel" text="" wrapText="true"
+                   style="-fx-font-size: 12px;"/>
+            <ProgressBar fx:id="coreUpdateProgress" visible="false" managed="false"
+                         maxWidth="Infinity" prefHeight="14"/>
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <Button fx:id="checkCoreUpdateButton" text="Check for updates"/>
+                <Button fx:id="installCoreUpdateButton" text="Update" visible="false"
+                        managed="false"/>
+                <Button fx:id="rollbackCoreButton" text="Roll back" visible="false"
+                        managed="false"/>
             </HBox>
         </VBox>
 

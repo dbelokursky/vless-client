@@ -44,6 +44,14 @@ public class SingBoxEngine {
     private ProxyMode activeProxyMode;
 
     /**
+     * Set before tearing the process down so the process monitor can tell a
+     * user-initiated stop from a crash. Without it, the monitor's exit
+     * handler can observe the still-CONNECTING/CONNECTED state before stop()
+     * publishes DISCONNECTED and misreport the shutdown as ERROR.
+     */
+    private volatile boolean stopRequested;
+
+    /**
      * Creates a new SingBoxEngine.
      *
      * @param singBoxBinary path to the sing-box executable
@@ -83,6 +91,7 @@ public class SingBoxEngine {
         }
 
         this.activeProxyMode = proxyMode;
+        this.stopRequested = false;
 
         Platform.runLater(() -> {
             connectionState.set(ConnectionState.CONNECTING);
@@ -294,6 +303,7 @@ public class SingBoxEngine {
      * temporary configuration file.</p>
      */
     public void stop() {
+        stopRequested = true;
         if (!isRunning()) {
             Platform.runLater(() -> connectionState.set(ConnectionState.DISCONNECTED));
             return;
@@ -415,7 +425,8 @@ public class SingBoxEngine {
             try {
                 int exitCode = process.waitFor();
                 Platform.runLater(() -> {
-                    if (connectionState.get() != ConnectionState.DISCONNECTED) {
+                    if (!stopRequested
+                            && connectionState.get() != ConnectionState.DISCONNECTED) {
                         String lastLine = logLines.isEmpty()
                                 ? "sing-box exited with code " + exitCode
                                 : logLines.getLast();
@@ -438,6 +449,7 @@ public class SingBoxEngine {
      * Used by the JVM shutdown hook.
      */
     private void forceStop() {
+        stopRequested = true;
         // TUN mode: signal the wrapper via the stop file so it kills the
         // root-owned sing-box gracefully. Parent-PID watch in the wrapper
         // also catches this case, but touching the file is faster.
