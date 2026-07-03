@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vlessclient.model.AppSettings;
+import com.vlessclient.model.Protocol;
 import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.RoutingRule;
 import com.vlessclient.model.ServerConfig;
@@ -50,6 +51,16 @@ public class SingBoxConfigGenerator {
         }
 
         root.set("inbounds", buildInbounds(settings));
+
+        // WireGuard is not an outbound anymore: sing-box 1.13 removed the
+        // legacy wireguard outbound (deprecated since 1.11) in favor of a
+        // top-level endpoints entry. The endpoint keeps the "proxy" tag so
+        // route.final and dns detour references resolve to it unchanged.
+        if (server.getProtocol() == Protocol.WIREGUARD) {
+            ArrayNode endpoints = mapper.createArrayNode();
+            endpoints.add(buildWireguardEndpoint(server));
+            root.set("endpoints", endpoints);
+        }
         root.set("outbounds", buildOutbounds(server));
 
         if (routingConfig != null) {
@@ -63,6 +74,21 @@ public class SingBoxConfigGenerator {
             ObjectNode route = mapper.createObjectNode();
             ensureTunRouteEssentials(route, settings);
             root.set("route", route);
+        }
+
+        // Endpoints don't participate in default-outbound selection: without
+        // an explicit route.final the first outbound ("direct" for WireGuard)
+        // would silently swallow all traffic. buildRoute already sets final,
+        // so this only fills the no-RoutingConfig paths.
+        if (server.getProtocol() == Protocol.WIREGUARD) {
+            ObjectNode route = (ObjectNode) root.get("route");
+            if (route == null) {
+                route = mapper.createObjectNode();
+                root.set("route", route);
+            }
+            if (!route.has("final")) {
+                route.put("final", "proxy");
+            }
         }
 
         root.set("experimental", buildExperimental(settings));
@@ -335,7 +361,9 @@ public class SingBoxConfigGenerator {
 
     private ArrayNode buildOutbounds(ServerConfig server) {
         ArrayNode outbounds = mapper.createArrayNode();
-        outbounds.add(buildProxyOutbound(server));
+        if (server.getProtocol() != Protocol.WIREGUARD) {
+            outbounds.add(buildProxyOutbound(server));
+        }
 
         ObjectNode direct = mapper.createObjectNode();
         direct.put("type", "direct");
@@ -352,7 +380,8 @@ public class SingBoxConfigGenerator {
             case TROJAN -> buildTrojanOutbound(server);
             case SHADOWSOCKS -> buildShadowsocksOutbound(server);
             case HYSTERIA2 -> buildHysteria2Outbound(server);
-            case WIREGUARD -> buildWireguardOutbound(server);
+            case WIREGUARD -> throw new IllegalStateException(
+                    "WireGuard is emitted as an endpoint, not an outbound");
         };
     }
 
@@ -436,49 +465,94 @@ public class SingBoxConfigGenerator {
         return outbound;
     }
 
-    private ObjectNode buildWireguardOutbound(ServerConfig server) {
-        ObjectNode outbound = mapper.createObjectNode();
-        outbound.put("type", "wireguard");
-        outbound.put("tag", "proxy");
-        outbound.put("server", server.getAddress());
-        outbound.put("server_port", server.getPort());
-        outbound.put("private_key", server.getUuid());
+    /**
+     * Builds a WireGuard endpoint (sing-box 1.11+ schema; the legacy
+     * {@code wireguard} outbound was removed in 1.13). Field sources keep the
+     * ServerConfig mapping the legacy outbound used: uuid → private_key,
+     * encryption → peer public_key, flow → interface address,
+     * tls.serverName → reserved bytes.
+     */
+    private ObjectNode buildWireguardEndpoint(ServerConfig server) {
+        ObjectNode endpoint = mapper.createObjectNode();
+        endpoint.put("type", "wireguard");
+        endpoint.put("tag", "proxy");
+
+        if (server.getFlow() != null && !server.getFlow().isBlank()) {
+            ArrayNode address = mapper.createArrayNode();
+            address.add(server.getFlow().trim());
+            endpoint.set("address", address);
+        }
+
+        endpoint.put("private_key", server.getUuid());
+
+        ObjectNode peer = mapper.createObjectNode();
+        peer.put("address", server.getAddress());
+        peer.put("port", server.getPort());
 
         if (server.getEncryption() != null && !server.getEncryption().isEmpty()
                 && !"none".equals(server.getEncryption())) {
-            outbound.put("peer_public_key", server.getEncryption());
+            peer.put("public_key", server.getEncryption());
         }
 
-        if (server.getFlow() != null && !server.getFlow().isBlank()) {
-            ArrayNode localAddress = mapper.createArrayNode();
-            localAddress.add(server.getFlow().trim());
-            outbound.set("local_address", localAddress);
+        // The legacy single-peer outbound implicitly routed everything through
+        // the peer; the endpoint schema makes allowed_ips explicit.
+        ArrayNode allowedIps = mapper.createArrayNode();
+        allowedIps.add("0.0.0.0/0");
+        allowedIps.add("::/0");
+        peer.set("allowed_ips", allowedIps);
+
+        ArrayNode reserved = parseReservedBytes(server);
+        if (reserved != null) {
+            peer.set("reserved", reserved);
         }
 
-        if (server.getTls() != null && server.getTls().getServerName() != null
-                && !server.getTls().getServerName().isBlank()) {
-            String[] parts = server.getTls().getServerName().split(",");
-            if (parts.length > 0) {
-                ArrayNode reserved = mapper.createArrayNode();
-                for (String part : parts) {
-                    String trimmed = part.trim();
-                    if (trimmed.isEmpty()) {
-                        continue;
-                    }
-                    try {
-                        reserved.add(Integer.parseInt(trimmed));
-                    } catch (NumberFormatException e) {
-                        log.warn("Skipping invalid reserved byte value '{}' for WireGuard server {}",
-                                trimmed, server.getAddress());
-                    }
+        ArrayNode peers = mapper.createArrayNode();
+        peers.add(peer);
+        endpoint.set("peers", peers);
+
+        return endpoint;
+    }
+
+    /**
+     * Parses the comma-separated reserved-bytes list (stored in
+     * tls.serverName). sing-box fatally rejects a reserved array that is not
+     * exactly 3 values, and JSON-decodes each value as uint8 — so anything
+     * other than exactly three ints in 0..255 must be dropped entirely,
+     * or the config won't start at all.
+     */
+    private ArrayNode parseReservedBytes(ServerConfig server) {
+        if (server.getTls() == null || server.getTls().getServerName() == null
+                || server.getTls().getServerName().isBlank()) {
+            return null;
+        }
+        ArrayNode reserved = mapper.createArrayNode();
+        for (String part : server.getTls().getServerName().split(",")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            try {
+                int value = Integer.parseInt(trimmed);
+                if (value < 0 || value > 255) {
+                    log.warn("Skipping out-of-range reserved byte value '{}' for WireGuard server {}",
+                            trimmed, server.getAddress());
+                    continue;
                 }
-                if (reserved.size() > 0) {
-                    outbound.set("reserved", reserved);
-                }
+                reserved.add(value);
+            } catch (NumberFormatException e) {
+                log.warn("Skipping invalid reserved byte value '{}' for WireGuard server {}",
+                        trimmed, server.getAddress());
             }
         }
-
-        return outbound;
+        if (reserved.size() == 0) {
+            return null;
+        }
+        if (reserved.size() != 3) {
+            log.warn("Ignoring WireGuard reserved bytes for server {}: need exactly 3 values, got {}",
+                    server.getAddress(), reserved.size());
+            return null;
+        }
+        return reserved;
     }
 
     private void addTlsIfEnabled(ObjectNode outbound, TlsConfig tls) {
