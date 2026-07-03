@@ -226,7 +226,7 @@ public class SingBoxInstaller {
         log.info("SHA-256 verified: {}", actual);
     }
 
-    private String sha256(Path file) throws IOException {
+    String sha256(Path file) throws IOException {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             try (InputStream in = Files.newInputStream(file)) {
@@ -274,7 +274,7 @@ public class SingBoxInstaller {
         }
     }
 
-    private String detectArch() {
+    String detectArch() {
         String osArch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
         if (osArch.contains("aarch64") || osArch.contains("arm64")) {
             return "arm64";
@@ -285,7 +285,16 @@ public class SingBoxInstaller {
         throw new IllegalStateException("Unsupported CPU architecture: " + osArch);
     }
 
-    private void downloadWithProgress(String url, Path target, DoubleConsumer progress)
+    void downloadWithProgress(String url, Path target, DoubleConsumer progress)
+            throws IOException, InterruptedException {
+        downloadWithProgress(url, target, progress, 0);
+    }
+
+    /**
+     * @param maxBytes abort the download once this many bytes have been
+     *                 written; 0 disables the cap
+     */
+    void downloadWithProgress(String url, Path target, DoubleConsumer progress, long maxBytes)
             throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -315,6 +324,10 @@ public class SingBoxInstaller {
                 }
                 out.write(buffer, 0, read);
                 downloaded += read;
+                if (maxBytes > 0 && downloaded > maxBytes) {
+                    throw new IOException("Download exceeds the " + maxBytes
+                            + "-byte size cap: " + url);
+                }
                 if (progress != null) {
                     if (contentLength > 0) {
                         progress.accept(Math.min(1.0, (double) downloaded / contentLength));
@@ -326,7 +339,7 @@ public class SingBoxInstaller {
         }
     }
 
-    private void extractTarGz(Path tarball, Path destDir) throws IOException, InterruptedException {
+    void extractTarGz(Path tarball, Path destDir) throws IOException, InterruptedException {
         // macOS ships BSD tar which handles .tar.gz natively via -z
         ProcessBuilder pb = new ProcessBuilder(
                 "/usr/bin/tar", "-xzf",
@@ -346,7 +359,7 @@ public class SingBoxInstaller {
         }
     }
 
-    private Path findBinaryInDir(Path dir) throws IOException {
+    Path findBinaryInDir(Path dir) throws IOException {
         try (var stream = Files.walk(dir)) {
             return stream
                     .filter(Files::isRegularFile)
@@ -357,7 +370,7 @@ public class SingBoxInstaller {
         }
     }
 
-    private void makeExecutable(Path binary) throws IOException {
+    void makeExecutable(Path binary) throws IOException {
         File f = binary.toFile();
         if (!f.setExecutable(true, false)) {
             throw new IOException("Failed to set executable bit on " + binary);
@@ -385,7 +398,7 @@ public class SingBoxInstaller {
         }
     }
 
-    private void deleteRecursive(Path dir) {
+    void deleteRecursive(Path dir) {
         try (var stream = Files.walk(dir)) {
             stream.sorted((a, b) -> b.getNameCount() - a.getNameCount())
                     .forEach(p -> {
@@ -402,6 +415,16 @@ public class SingBoxInstaller {
 
     public Path getInstallDir() {
         return installDir;
+    }
+
+    /**
+     * The cached binary this app manages (download target of {@link #install}
+     * and the classpath-extraction target). In-app core updates operate only
+     * on this path so the sudoers rule and a live SingBoxEngine, both bound
+     * to it, stay valid across updates.
+     */
+    public Path managedBinaryPath() {
+        return installDir.resolve(BINARY_NAME);
     }
 
     /** Brew command the user can run to install sing-box manually. */

@@ -4,22 +4,38 @@ import com.vlessclient.app.AppVersion;
 import com.vlessclient.app.I18n;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.AppSettings;
+import com.vlessclient.model.ConnectionState;
 import com.vlessclient.model.ProxyMode;
+import com.vlessclient.model.RoutingConfig;
+import com.vlessclient.model.ServerConfig;
 import com.vlessclient.service.ConfigStore;
+import com.vlessclient.service.CoreUpdateService;
 import com.vlessclient.service.LoginItemService;
+import com.vlessclient.service.RoutingService;
+import com.vlessclient.service.SingBoxConfigGenerator;
+import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.ThemeManager;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
 import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.ProxySelector;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Controller for the Settings view.
@@ -68,10 +84,26 @@ public class SettingsViewController {
     @FXML private TextField tunInterfaceNameField;
     @FXML private TextField tunIpv4Field;
 
+    @FXML private Label coreUpdateStatusLabel;
+    @FXML private ProgressBar coreUpdateProgress;
+    @FXML private Button checkCoreUpdateButton;
+    @FXML private Button installCoreUpdateButton;
+    @FXML private Button rollbackCoreButton;
+
     private ConfigStore configStore;
     private ThemeManager themeManager;
     private LoginItemService loginItemService;
     private boolean suppressLaunchAtLoginListener;
+
+    private CoreUpdateService coreUpdateService;
+    private CoreUpdateService.CoreUpdate pendingCoreUpdate;
+    /** Blocks re-entry into install/rollback while one is running. */
+    private boolean coreOperationInFlight;
+    /** Set when Update was clicked on a persisted version with no URL yet. */
+    private boolean installAfterCheck;
+
+    /** Re-check for a new core at most once a day when Settings is opened. */
+    private static final long CORE_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000;
 
     @FXML
     public void initialize() {
@@ -320,6 +352,307 @@ public class SettingsViewController {
 
         String singboxVersion = detectSingBoxVersion();
         singboxVersionValue.setText(singboxVersion);
+
+        initCoreUpdateSection();
+    }
+
+    // ===== in-app sing-box core update =====
+
+    private void initCoreUpdateSection() {
+        try {
+            coreUpdateService = ServiceLocator.get(CoreUpdateService.class);
+        } catch (IllegalArgumentException e) {
+            log.debug("CoreUpdateService not available");
+            hideCoreUpdateSection();
+            return;
+        }
+
+        String activePath = ServiceLocator.getSingBoxPath();
+        boolean managed = activePath != null
+                && coreUpdateService.managesBinary(Path.of(activePath));
+        if (!managed) {
+            // Binary comes from Homebrew/$PATH/.app bundle — replacing the
+            // managed cache would not change what actually runs.
+            checkCoreUpdateButton.setDisable(true);
+            coreUpdateStatusLabel.setText(activePath == null
+                    ? I18n.get("settings.version.unknown")
+                    : I18n.get("settings.core.external"));
+            return;
+        }
+
+        checkCoreUpdateButton.setOnAction(e -> runCoreCheck(false));
+        installCoreUpdateButton.setOnAction(e -> runCoreInstall());
+        rollbackCoreButton.setOnAction(e -> runCoreRollback());
+        installCoreUpdateButton.setTooltip(
+                new javafx.scene.control.Tooltip(I18n.get("settings.core.disconnect.first")));
+        rollbackCoreButton.setTooltip(
+                new javafx.scene.control.Tooltip(I18n.get("settings.core.disconnect.first")));
+
+        // The binary can only be swapped while sing-box is stopped. The
+        // rollback button is also refreshed here so an automatic trial
+        // rollback (which ends in an ERROR transition) is reflected.
+        SingBoxEngine engine = findEngine();
+        if (engine != null) {
+            engine.connectionStateProperty().addListener((obs, o, n) -> {
+                updateCoreButtonsEnabled();
+                refreshRollbackButton();
+            });
+        }
+        updateCoreButtonsEnabled();
+        refreshRollbackButton();
+
+        String available = coreUpdateService.availableVersion();
+        if (available != null) {
+            showCoreUpdateAvailable(new CoreUpdateService.CoreUpdate(available, null, null));
+        }
+
+        // Quiet periodic check so the user learns about new releases without
+        // pressing the button.
+        if (System.currentTimeMillis() - coreUpdateService.lastCheckEpochMs()
+                > CORE_CHECK_INTERVAL_MS) {
+            runCoreCheck(true);
+        }
+    }
+
+    private void hideCoreUpdateSection() {
+        coreUpdateStatusLabel.setVisible(false);
+        coreUpdateStatusLabel.setManaged(false);
+        checkCoreUpdateButton.setVisible(false);
+        checkCoreUpdateButton.setManaged(false);
+    }
+
+    private SingBoxEngine findEngine() {
+        try {
+            return ServiceLocator.get(SingBoxEngine.class);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private boolean engineIdle() {
+        SingBoxEngine engine = findEngine();
+        if (engine == null) {
+            return true;
+        }
+        ConnectionState state = engine.connectionStateProperty().get();
+        return !engine.isRunning()
+                && (state == ConnectionState.DISCONNECTED || state == ConnectionState.ERROR);
+    }
+
+    private void updateCoreButtonsEnabled() {
+        boolean locked = !engineIdle() || coreOperationInFlight;
+        installCoreUpdateButton.setDisable(locked);
+        rollbackCoreButton.setDisable(locked);
+    }
+
+    private void refreshRollbackButton() {
+        boolean canRollback = coreUpdateService.canRollback();
+        rollbackCoreButton.setVisible(canRollback);
+        rollbackCoreButton.setManaged(canRollback);
+        if (canRollback) {
+            rollbackCoreButton.setText(
+                    I18n.get("settings.core.rollback", coreUpdateService.previousVersion()));
+        }
+    }
+
+    /**
+     * While connected, the GitHub API is reached through sing-box's own local
+     * HTTP inbound — works on networks where GitHub is blocked and keeps the
+     * check off the local wire. Disconnected checks go direct.
+     */
+    private ProxySelector coreCheckProxySelector() {
+        SingBoxEngine engine = findEngine();
+        if (engine != null
+                && engine.connectionStateProperty().get() == ConnectionState.CONNECTED) {
+            int httpPort = configStore.getSettings().getHttpPort();
+            return ProxySelector.of(new InetSocketAddress("127.0.0.1", httpPort));
+        }
+        return ProxySelector.getDefault();
+    }
+
+    private void runCoreCheck(boolean quiet) {
+        checkCoreUpdateButton.setDisable(true);
+        if (!quiet) {
+            coreUpdateStatusLabel.setText(I18n.get("settings.core.checking"));
+        }
+        ProxySelector proxySelector = coreCheckProxySelector();
+        Thread t = new Thread(() -> {
+            try {
+                Optional<CoreUpdateService.CoreUpdate> update =
+                        coreUpdateService.checkForUpdate(proxySelector);
+                Platform.runLater(() -> {
+                    checkCoreUpdateButton.setDisable(false);
+                    if (update.isPresent()) {
+                        showCoreUpdateAvailable(update.get());
+                        if (installAfterCheck) {
+                            installAfterCheck = false;
+                            runCoreInstall();
+                        }
+                    } else {
+                        installAfterCheck = false;
+                        pendingCoreUpdate = null;
+                        installCoreUpdateButton.setVisible(false);
+                        installCoreUpdateButton.setManaged(false);
+                        if (!quiet) {
+                            coreUpdateStatusLabel.setText(I18n.get("settings.core.uptodate"));
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                log.warn("Core update check failed: {}", e.getMessage());
+                Platform.runLater(() -> {
+                    installAfterCheck = false;
+                    checkCoreUpdateButton.setDisable(false);
+                    if (!quiet) {
+                        coreUpdateStatusLabel.setText(
+                                I18n.get("settings.core.error", e.getMessage()));
+                    }
+                });
+            }
+        }, "core-update-check");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void showCoreUpdateAvailable(CoreUpdateService.CoreUpdate update) {
+        pendingCoreUpdate = update;
+        coreUpdateStatusLabel.setText(I18n.get("settings.core.available", update.version()));
+        installCoreUpdateButton.setText(I18n.get("settings.core.update", update.version()));
+        installCoreUpdateButton.setVisible(true);
+        installCoreUpdateButton.setManaged(true);
+        updateCoreButtonsEnabled();
+    }
+
+    private void runCoreInstall() {
+        CoreUpdateService.CoreUpdate update = pendingCoreUpdate;
+        if (update == null || !engineIdle() || coreOperationInFlight) {
+            return;
+        }
+        // The stored availableVersion has no URL/digest — resolve a full
+        // update descriptor first; the install continues automatically once
+        // the check returns.
+        if (update.downloadUrl() == null) {
+            installAfterCheck = true;
+            runCoreCheck(false);
+            return;
+        }
+
+        coreOperationInFlight = true;
+        installCoreUpdateButton.setDisable(true);
+        checkCoreUpdateButton.setDisable(true);
+        rollbackCoreButton.setDisable(true);
+        coreUpdateProgress.setVisible(true);
+        coreUpdateProgress.setManaged(true);
+        coreUpdateProgress.setProgress(0);
+        coreUpdateStatusLabel.setText(I18n.get("settings.core.updating"));
+
+        List<String> validationConfigs = buildValidationConfigs();
+        Thread t = new Thread(() -> {
+            try {
+                CoreUpdateService.StagedCore staged = coreUpdateService.stage(
+                        update,
+                        p -> Platform.runLater(() -> coreUpdateProgress.setProgress(
+                                p < 0 ? ProgressBar.INDETERMINATE_PROGRESS : p)),
+                        validationConfigs);
+                coreUpdateService.promote(staged);
+                Platform.runLater(() -> {
+                    finishCoreOperation();
+                    pendingCoreUpdate = null;
+                    installCoreUpdateButton.setVisible(false);
+                    installCoreUpdateButton.setManaged(false);
+                    coreUpdateStatusLabel.setText(
+                            I18n.get("settings.core.updated", update.version()));
+                    refreshRollbackButton();
+                    refreshSingBoxVersionAsync();
+                });
+            } catch (Exception e) {
+                log.error("Core update failed", e);
+                Platform.runLater(() -> {
+                    finishCoreOperation();
+                    coreUpdateStatusLabel.setText(
+                            I18n.get("settings.core.error", e.getMessage()));
+                });
+            }
+        }, "core-update-install");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void runCoreRollback() {
+        if (!engineIdle() || coreOperationInFlight || !coreUpdateService.canRollback()) {
+            return;
+        }
+        coreOperationInFlight = true;
+        updateCoreButtonsEnabled();
+        String target = coreUpdateService.previousVersion();
+        Thread t = new Thread(() -> {
+            try {
+                coreUpdateService.rollback();
+                Platform.runLater(() -> {
+                    finishCoreOperation();
+                    coreUpdateStatusLabel.setText(I18n.get("settings.core.rolledback", target));
+                    refreshRollbackButton();
+                    refreshSingBoxVersionAsync();
+                });
+            } catch (Exception e) {
+                log.error("Core rollback failed", e);
+                Platform.runLater(() -> {
+                    finishCoreOperation();
+                    coreUpdateStatusLabel.setText(
+                            I18n.get("settings.core.error", e.getMessage()));
+                });
+            }
+        }, "core-update-rollback");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void finishCoreOperation() {
+        coreOperationInFlight = false;
+        coreUpdateProgress.setVisible(false);
+        coreUpdateProgress.setManaged(false);
+        checkCoreUpdateButton.setDisable(false);
+        updateCoreButtonsEnabled();
+    }
+
+    /**
+     * Configs the new binary must accept before it replaces the current one —
+     * the exact output the generator produces for the active server with the
+     * current settings, i.e. what the next Connect will run.
+     */
+    private List<String> buildValidationConfigs() {
+        List<String> configs = new ArrayList<>();
+        try {
+            ServerConfig activeServer = configStore.getServers().stream()
+                    .filter(ServerConfig::isActive)
+                    .findFirst()
+                    .orElse(null);
+            if (activeServer == null) {
+                return configs;
+            }
+            SingBoxConfigGenerator generator =
+                    ServiceLocator.get(SingBoxConfigGenerator.class);
+            RoutingConfig routingConfig = null;
+            try {
+                routingConfig = ServiceLocator.get(RoutingService.class).getConfig();
+            } catch (IllegalArgumentException e) {
+                log.debug("RoutingService not available for validation config");
+            }
+            configs.add(generator.generate(
+                    activeServer, configStore.getSettings(), routingConfig));
+        } catch (Exception e) {
+            log.warn("Could not build validation config: {}", e.getMessage());
+        }
+        return configs;
+    }
+
+    private void refreshSingBoxVersionAsync() {
+        Thread t = new Thread(() -> {
+            String version = detectSingBoxVersion();
+            Platform.runLater(() -> singboxVersionValue.setText(version));
+        }, "singbox-version-refresh");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void bindLabels() {
@@ -344,6 +677,7 @@ public class SettingsViewController {
         aboutLabel.textProperty().bind(I18n.binding("settings.about"));
         appVersionLabel.textProperty().bind(I18n.binding("settings.app.version"));
         singboxVersionLabel.textProperty().bind(I18n.binding("settings.singbox.version"));
+        checkCoreUpdateButton.textProperty().bind(I18n.binding("settings.core.check"));
         advancedLabel.textProperty().bind(I18n.binding("settings.advanced"));
         proxyDnsLabel.textProperty().bind(I18n.binding("settings.proxy.dns"));
         directDnsLabel.textProperty().bind(I18n.binding("settings.direct.dns"));
