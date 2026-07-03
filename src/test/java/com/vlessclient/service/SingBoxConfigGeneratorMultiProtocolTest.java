@@ -29,6 +29,12 @@ class SingBoxConfigGeneratorMultiProtocolTest {
         return mapper.readTree(json).get("outbounds").get(0);
     }
 
+    /** WireGuard lives under top-level {@code endpoints}, not {@code outbounds}. */
+    private JsonNode wireguardEndpoint(ServerConfig server) throws Exception {
+        String json = generator.generate(server, defaultSettings);
+        return mapper.readTree(json).get("endpoints").get(0);
+    }
+
     // -- VMess tests --
 
     @Test
@@ -268,9 +274,13 @@ class SingBoxConfigGeneratorMultiProtocolTest {
     }
 
     // -- WireGuard tests --
+    //
+    // WireGuard is generated as a sing-box 1.11+ endpoint (the legacy
+    // wireguard outbound was removed in 1.13): top-level endpoints[] entry,
+    // peer parameters nested under peers[0].
 
     @Test
-    void wireguard_generatesCorrectOutbound() throws Exception {
+    void wireguard_generatesCorrectEndpoint() throws Exception {
         ServerConfig server = new ServerConfig();
         server.setProtocol(Protocol.WIREGUARD);
         server.setAddress("wg.example.com");
@@ -280,27 +290,59 @@ class SingBoxConfigGeneratorMultiProtocolTest {
         server.setFlow("10.0.0.2/32");
         server.getTls().setServerName("1,2,3");
 
-        JsonNode proxy = proxyOutbound(server);
+        JsonNode endpoint = wireguardEndpoint(server);
 
-        assertThat(proxy.get("type").asText()).isEqualTo("wireguard");
-        assertThat(proxy.get("tag").asText()).isEqualTo("proxy");
-        assertThat(proxy.get("server").asText()).isEqualTo("wg.example.com");
-        assertThat(proxy.get("server_port").asInt()).isEqualTo(51820);
-        assertThat(proxy.get("private_key").asText()).isEqualTo("wg-private-key-base64");
-        assertThat(proxy.get("peer_public_key").asText()).isEqualTo("wg-peer-public-key-base64");
+        assertThat(endpoint.get("type").asText()).isEqualTo("wireguard");
+        assertThat(endpoint.get("tag").asText()).isEqualTo("proxy");
+        assertThat(endpoint.get("private_key").asText()).isEqualTo("wg-private-key-base64");
 
-        JsonNode localAddress = proxy.get("local_address");
-        assertThat(localAddress).isNotNull();
-        assertThat(localAddress.isArray()).isTrue();
-        assertThat(localAddress.get(0).asText()).isEqualTo("10.0.0.2/32");
+        JsonNode address = endpoint.get("address");
+        assertThat(address).isNotNull();
+        assertThat(address.isArray()).isTrue();
+        assertThat(address.get(0).asText()).isEqualTo("10.0.0.2/32");
 
-        JsonNode reserved = proxy.get("reserved");
+        JsonNode peers = endpoint.get("peers");
+        assertThat(peers).isNotNull();
+        assertThat(peers.isArray()).isTrue();
+        assertThat(peers.size()).isEqualTo(1);
+
+        JsonNode peer = peers.get(0);
+        assertThat(peer.get("address").asText()).isEqualTo("wg.example.com");
+        assertThat(peer.get("port").asInt()).isEqualTo(51820);
+        assertThat(peer.get("public_key").asText()).isEqualTo("wg-peer-public-key-base64");
+
+        JsonNode allowedIps = peer.get("allowed_ips");
+        assertThat(allowedIps).isNotNull();
+        assertThat(allowedIps.isArray()).isTrue();
+        assertThat(allowedIps.get(0).asText()).isEqualTo("0.0.0.0/0");
+        assertThat(allowedIps.get(1).asText()).isEqualTo("::/0");
+
+        JsonNode reserved = peer.get("reserved");
         assertThat(reserved).isNotNull();
         assertThat(reserved.isArray()).isTrue();
         assertThat(reserved.size()).isEqualTo(3);
         assertThat(reserved.get(0).asInt()).isEqualTo(1);
         assertThat(reserved.get(1).asInt()).isEqualTo(2);
         assertThat(reserved.get(2).asInt()).isEqualTo(3);
+    }
+
+    @Test
+    void wireguard_keepsProxyOutOfOutbounds_andRoutesFinalToEndpoint() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setProtocol(Protocol.WIREGUARD);
+        server.setAddress("wg.example.com");
+        server.setPort(51820);
+        server.setUuid("wg-private-key");
+
+        JsonNode root = mapper.readTree(generator.generate(server, defaultSettings));
+
+        // No wireguard outbound; "direct" is the only outbound left. Without
+        // an explicit final the first outbound would become the default and
+        // all traffic would bypass the tunnel.
+        JsonNode outbounds = root.get("outbounds");
+        assertThat(outbounds.size()).isEqualTo(1);
+        assertThat(outbounds.get(0).get("tag").asText()).isEqualTo("direct");
+        assertThat(root.get("route").get("final").asText()).isEqualTo("proxy");
     }
 
     @Test
@@ -313,13 +355,15 @@ class SingBoxConfigGeneratorMultiProtocolTest {
         server.setEncryption("none");
         server.getTls().setServerName(null);
 
-        JsonNode proxy = proxyOutbound(server);
+        JsonNode endpoint = wireguardEndpoint(server);
 
-        assertThat(proxy.get("type").asText()).isEqualTo("wireguard");
-        assertThat(proxy.get("private_key").asText()).isEqualTo("wg-private-key");
-        assertThat(proxy.has("peer_public_key")).isFalse();
-        assertThat(proxy.has("local_address")).isFalse();
-        assertThat(proxy.has("reserved")).isFalse();
+        assertThat(endpoint.get("type").asText()).isEqualTo("wireguard");
+        assertThat(endpoint.get("private_key").asText()).isEqualTo("wg-private-key");
+        assertThat(endpoint.has("address")).isFalse();
+
+        JsonNode peer = endpoint.get("peers").get(0);
+        assertThat(peer.has("public_key")).isFalse();
+        assertThat(peer.has("reserved")).isFalse();
     }
 
     @Test
@@ -332,16 +376,46 @@ class SingBoxConfigGeneratorMultiProtocolTest {
         // Mix of valid and invalid integers — invalid values must be skipped gracefully
         server.getTls().setServerName("1,abc,2,,3,xyz");
 
-        JsonNode proxy = proxyOutbound(server);
+        JsonNode endpoint = wireguardEndpoint(server);
 
-        assertThat(proxy.get("type").asText()).isEqualTo("wireguard");
-        JsonNode reserved = proxy.get("reserved");
+        assertThat(endpoint.get("type").asText()).isEqualTo("wireguard");
+        JsonNode reserved = endpoint.get("peers").get(0).get("reserved");
         assertThat(reserved).isNotNull();
         assertThat(reserved.isArray()).isTrue();
         assertThat(reserved.size()).isEqualTo(3);
         assertThat(reserved.get(0).asInt()).isEqualTo(1);
         assertThat(reserved.get(1).asInt()).isEqualTo(2);
         assertThat(reserved.get(2).asInt()).isEqualTo(3);
+    }
+
+    @Test
+    void wireguard_wrongReservedCount_omitsReservedField() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setProtocol(Protocol.WIREGUARD);
+        server.setAddress("wg.example.com");
+        server.setPort(51820);
+        server.setUuid("wg-private-key");
+        // sing-box requires exactly 3 reserved bytes — 2 values must be dropped
+        server.getTls().setServerName("1,2");
+
+        JsonNode endpoint = wireguardEndpoint(server);
+
+        assertThat(endpoint.get("peers").get(0).has("reserved")).isFalse();
+    }
+
+    @Test
+    void wireguard_outOfRangeReservedByte_omitsReservedField() throws Exception {
+        ServerConfig server = new ServerConfig();
+        server.setProtocol(Protocol.WIREGUARD);
+        server.setAddress("wg.example.com");
+        server.setPort(51820);
+        server.setUuid("wg-private-key");
+        // 300 is not a uint8: it is skipped, leaving 2 values — also dropped
+        server.getTls().setServerName("300,1,2");
+
+        JsonNode endpoint = wireguardEndpoint(server);
+
+        assertThat(endpoint.get("peers").get(0).has("reserved")).isFalse();
     }
 
     @Test
@@ -353,14 +427,14 @@ class SingBoxConfigGeneratorMultiProtocolTest {
         server.setUuid("wg-private-key");
         server.getTls().setServerName("abc,def,ghi");
 
-        JsonNode proxy = proxyOutbound(server);
+        JsonNode endpoint = wireguardEndpoint(server);
 
-        assertThat(proxy.get("type").asText()).isEqualTo("wireguard");
-        assertThat(proxy.has("reserved")).isFalse();
+        assertThat(endpoint.get("type").asText()).isEqualTo("wireguard");
+        assertThat(endpoint.get("peers").get(0).has("reserved")).isFalse();
     }
 
     @Test
-    void wireguard_blankFlow_omitsLocalAddress() throws Exception {
+    void wireguard_blankFlow_omitsAddress() throws Exception {
         ServerConfig server = new ServerConfig();
         server.setProtocol(Protocol.WIREGUARD);
         server.setAddress("wg.example.com");
@@ -368,9 +442,9 @@ class SingBoxConfigGeneratorMultiProtocolTest {
         server.setUuid("wg-private-key");
         server.setFlow("   ");
 
-        JsonNode proxy = proxyOutbound(server);
+        JsonNode endpoint = wireguardEndpoint(server);
 
-        assertThat(proxy.has("local_address")).isFalse();
+        assertThat(endpoint.has("address")).isFalse();
     }
 
     @Test
@@ -381,8 +455,8 @@ class SingBoxConfigGeneratorMultiProtocolTest {
         server.setPort(51820);
         server.setUuid("wg-private-key");
 
-        JsonNode proxy = proxyOutbound(server);
+        JsonNode endpoint = wireguardEndpoint(server);
 
-        assertThat(proxy.has("tls")).isFalse();
+        assertThat(endpoint.has("tls")).isFalse();
     }
 }
