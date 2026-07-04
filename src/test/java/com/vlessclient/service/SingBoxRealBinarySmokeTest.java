@@ -427,6 +427,53 @@ class SingBoxRealBinarySmokeTest {
         }
     }
 
+    /**
+     * Linux probe: with {@code set_system_proxy} enabled (the app default in
+     * SYSTEM_PROXY mode), sing-box must still start on a box without a GNOME
+     * session — the CI runner has no desktop, which is exactly the
+     * environment of KDE/headless users. If the core hard-failed here, the
+     * default would break Connect for every non-GNOME Linux user and the
+     * generator would need a desktop gate.
+     */
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void setSystemProxyStartsWithoutGnome() throws Exception {
+        int clashPort = freePort();
+        AppSettings settings = new AppSettings();
+        settings.setProxyMode(ProxyMode.SYSTEM_PROXY);
+        // Leave systemProxyAutoConfig at its default (true): the probe exists
+        // to pin how the core behaves when it cannot apply that setting.
+        settings.setSocksPort(freePort());
+        settings.setHttpPort(freePort());
+        settings.setClashApiPort(clashPort);
+
+        String config = generator.generate(serverFor(Protocol.VLESS), settings);
+        Path configFile = Files.createTempFile("smoke-gnomeless-", ".json");
+        Files.writeString(configFile, config);
+        Path logFile = Files.createTempFile("smoke-gnomeless-", ".log");
+
+        Process proc = new ProcessBuilder(
+                binary.toString(), "run", "-c", configFile.toString())
+                .redirectErrorStream(true)
+                .redirectOutput(logFile.toFile())
+                .start();
+        try {
+            try {
+                awaitPort(clashPort, proc);
+            } catch (AssertionError e) {
+                throw new AssertionError(e.getMessage()
+                        + "\n--- sing-box output ---\n" + Files.readString(logFile), e);
+            }
+            assertThat(proc.isAlive()).isTrue();
+        } finally {
+            proc.destroy();
+            if (!proc.waitFor(5, TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+            }
+            Files.deleteIfExists(configFile);
+        }
+    }
+
     /** Waits until the port accepts connections; fails fast if the process dies. */
     private static void awaitPort(int port, Process proc) throws Exception {
         long deadline = System.currentTimeMillis() + 15_000;
