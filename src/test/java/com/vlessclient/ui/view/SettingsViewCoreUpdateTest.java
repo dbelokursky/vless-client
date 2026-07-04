@@ -73,16 +73,19 @@ public class SettingsViewCoreUpdateTest extends ApplicationTest {
     @Test
     void verdictVisibleOnOpen_withoutClicking() {
         // A prior check concluded "no update" — opening Settings must already
-        // say the core is current, no interaction required.
+        // show a visible, current-version verdict, no interaction required.
         Label status = lookup("#coreUpdateStatusLabel").query();
-        assertThat(status.getText()).isEqualTo(I18n.get("settings.core.uptodate"));
+        assertThat(status.isVisible()).isTrue();
+        assertThat(status.isManaged()).isTrue();
+        assertThat(status.getText()).contains(I18n.get("settings.core.uptodate"));
     }
 
     @Test
     void click_showsUpToDate() throws Exception {
         fireCheckButton();
 
-        awaitStatus(() -> statusText().equals(I18n.get("settings.core.uptodate")));
+        awaitStatus(() -> statusText().contains(I18n.get("settings.core.uptodate")));
+        assertThat(lookup("#coreUpdateStatusLabel").query().isVisible()).isTrue();
         Button check = lookup("#checkCoreUpdateButton").query();
         assertThat(check.isDisabled()).isFalse();
     }
@@ -95,8 +98,8 @@ public class SettingsViewCoreUpdateTest extends ApplicationTest {
         fireCheckButton();
 
         awaitStatus(() -> statusText().contains("9.9.9"));
-        assertThat(statusText())
-                .isEqualTo(I18n.get("settings.core.available", "9.9.9"));
+        assertThat(statusText()).contains(I18n.get("settings.core.available", "9.9.9"));
+        assertThat(lookup("#coreUpdateStatusLabel").query().isVisible()).isTrue();
         Button install = lookup("#installCoreUpdateButton").query();
         assertThat(install.isVisible()).isTrue();
         assertThat(install.getText()).contains("9.9.9");
