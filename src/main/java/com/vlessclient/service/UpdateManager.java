@@ -122,13 +122,13 @@ public class UpdateManager {
             String tagName = root.path("tag_name").asText("");
             String version = stripVersionPrefix(tagName);
 
-            String dmgUrl = findDmgAssetUrl(root.path("assets"));
+            String installerUrl = findInstallerAssetUrl(root.path("assets"));
 
             if (isNewerVersion(version, AppVersion.VERSION)) {
                 log.info("Update available: {} -> {}", AppVersion.VERSION, version);
                 Platform.runLater(() -> {
                     latestVersion.set(version);
-                    downloadUrl.set(dmgUrl);
+                    downloadUrl.set(installerUrl);
                     updateAvailable.set(true);
                 });
             } else {
@@ -140,7 +140,8 @@ public class UpdateManager {
     }
 
     /**
-     * Downloads the .dmg file from the given URL to ~/Downloads/.
+     * Downloads the installer (DMG/MSI) from the given URL to the user's
+     * Downloads directory.
      *
      * @return the saved file path, or {@code null} if the download failed
      */
@@ -167,7 +168,7 @@ public class UpdateManager {
             }
 
             String fileName = extractFileName(url);
-            Path downloadsDir = Path.of(System.getProperty("user.home"), "Downloads");
+            Path downloadsDir = com.vlessclient.platform.PlatformPaths.current().downloadsDir();
             Path target = downloadsDir.resolve(fileName);
 
             try (InputStream in = response.body()) {
@@ -247,13 +248,19 @@ public class UpdateManager {
         }
     }
 
-    private static String findDmgAssetUrl(JsonNode assets) {
+    /** The installer format this platform consumes (DMG on macOS, MSI on Windows). */
+    static String installerExtension() {
+        return com.vlessclient.platform.Platform.current().isWindows() ? ".msi" : ".dmg";
+    }
+
+    static String findInstallerAssetUrl(JsonNode assets) {
         if (assets == null || !assets.isArray()) {
             return "";
         }
+        String extension = installerExtension();
         for (JsonNode asset : assets) {
             String name = asset.path("name").asText("");
-            if (name.endsWith(".dmg")) {
+            if (name.endsWith(extension)) {
                 return asset.path("browser_download_url").asText("");
             }
         }
@@ -266,6 +273,6 @@ public class UpdateManager {
         if (lastSlash >= 0 && lastSlash < path.length() - 1) {
             return path.substring(lastSlash + 1);
         }
-        return "VLESS-Client-update.dmg";
+        return "VLESS-Client-update" + installerExtension();
     }
 }

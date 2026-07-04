@@ -128,8 +128,28 @@ class WindowsAutostartTest {
     }
 
     @Test
-    void launchCommandLine_quotesArgumentsAndNamesLauncher() {
-        String line = WindowsAutostart.launchCommandLine();
+    void launchCommandLine_underJpackage_registersTheNativeLauncher() {
+        String line = WindowsAutostart.launchCommandLine(
+                java.util.Optional.of("C:\\Users\\u\\AppData\\Local\\VLESS Client\\VLESS Client.exe"));
+
+        // The installed exe itself, quoted (path has spaces) — no java command.
+        assertThat(line).isEqualTo("\"C:\\Users\\u\\AppData\\Local\\VLESS Client\\VLESS Client.exe\"");
+    }
+
+    @Test
+    void launchCommandLine_devJavaRun_fallsBackToJavawInvocation() {
+        String line = WindowsAutostart.launchCommandLine(
+                java.util.Optional.of("C:\\jdk\\bin\\java.exe"));
+
+        assertThat(line).contains("com.vlessclient.app.Launcher");
+        assertThat(line).contains("-cp");
+        // javaw, not java: no console window at every login.
+        assertThat(line).doesNotContain("java.exe");
+    }
+
+    @Test
+    void launchCommandLine_unknownProcessCommand_fallsBackToJvmInvocation() {
+        String line = WindowsAutostart.launchCommandLine(java.util.Optional.empty());
 
         assertThat(line).contains("com.vlessclient.app.Launcher");
         assertThat(line).contains("-cp");

@@ -42,39 +42,42 @@ class UpdateManagerTest {
         assertThat(UpdateManager.isNewerVersion(candidate, current)).isTrue();
     }
 
-    // -- parseReleaseJson tests using TestableUpdateManager --
+    // -- installer asset selection --
 
     @Test
-    void processReleaseResponse_extractsVersionAndDmgUrl() {
+    void findInstallerAssetUrl_picksThisPlatformsInstaller() throws Exception {
+        // A release carrying both installers: each platform must pick its own.
         String json = """
                 {
-                  "tag_name": "v0.2.0",
                   "assets": [
                     {
-                      "name": "VLESS-Client-0.2.0.dmg",
-                      "browser_download_url": "https://github.com/dbelokursky/vless-client/releases/download/v0.2.0/VLESS-Client-0.2.0.dmg"
+                      "name": "checksums.txt",
+                      "browser_download_url": "https://github.com/x/releases/checksums.txt"
                     },
                     {
-                      "name": "checksums.txt",
-                      "browser_download_url": "https://github.com/dbelokursky/vless-client/releases/download/v0.2.0/checksums.txt"
+                      "name": "VLESS-Client-0.2.0.dmg",
+                      "browser_download_url": "https://github.com/x/releases/VLESS-Client-0.2.0.dmg"
+                    },
+                    {
+                      "name": "VLESS Client-0.2.0.msi",
+                      "browser_download_url": "https://github.com/x/releases/VLESS-Client-0.2.0.msi"
                     }
                   ]
                 }
                 """;
+        var assets = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(json).path("assets");
 
-        TestableUpdateManager manager = new TestableUpdateManager(json);
-        manager.checkForUpdates();
+        String url = UpdateManager.findInstallerAssetUrl(assets);
 
-        assertThat(manager.getParsedVersion()).isEqualTo("0.2.0");
-        assertThat(manager.getParsedDmgUrl())
-                .isEqualTo("https://github.com/dbelokursky/vless-client/releases/download/v0.2.0/VLESS-Client-0.2.0.dmg");
+        assertThat(url).endsWith(UpdateManager.installerExtension());
+        assertThat(url).startsWith("https://github.com/x/releases/");
     }
 
     @Test
-    void processReleaseResponse_noDmgAsset_returnsEmptyUrl() {
+    void findInstallerAssetUrl_noInstallerAsset_returnsEmpty() throws Exception {
         String json = """
                 {
-                  "tag_name": "v0.2.0",
                   "assets": [
                     {
                       "name": "source.tar.gz",
@@ -83,65 +86,16 @@ class UpdateManagerTest {
                   ]
                 }
                 """;
+        var assets = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(json).path("assets");
 
-        TestableUpdateManager manager = new TestableUpdateManager(json);
-        manager.checkForUpdates();
-
-        assertThat(manager.getParsedVersion()).isEqualTo("0.2.0");
-        assertThat(manager.getParsedDmgUrl()).isEmpty();
+        assertThat(UpdateManager.findInstallerAssetUrl(assets)).isEmpty();
     }
 
-    /**
-     * Subclass that overrides HTTP fetching to return canned JSON,
-     * and captures parsed results without requiring JavaFX Platform.
-     */
-    private static class TestableUpdateManager extends UpdateManager {
-
-        private final String cannedJson;
-        private String parsedVersion;
-        private String parsedDmgUrl;
-
-        TestableUpdateManager(String cannedJson) {
-            this.cannedJson = cannedJson;
-        }
-
-        @Override
-        public void checkForUpdates() {
-            processRelease(cannedJson);
-        }
-
-        /**
-         * Parses JSON and captures results directly (no JavaFX thread needed).
-         */
-        private void processRelease(String json) {
-            try {
-                var objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                var root = objectMapper.readTree(json);
-                String tagName = root.path("tag_name").asText("");
-                parsedVersion = stripVersionPrefix(tagName);
-
-                var assets = root.path("assets");
-                parsedDmgUrl = "";
-                if (assets.isArray()) {
-                    for (var asset : assets) {
-                        String name = asset.path("name").asText("");
-                        if (name.endsWith(".dmg")) {
-                            parsedDmgUrl = asset.path("browser_download_url").asText("");
-                            break;
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to parse test JSON", e);
-            }
-        }
-
-        String getParsedVersion() {
-            return parsedVersion;
-        }
-
-        String getParsedDmgUrl() {
-            return parsedDmgUrl;
-        }
+    @Test
+    void installerExtension_matchesHostPlatform() {
+        String expected = com.vlessclient.platform.Platform.current().isWindows()
+                ? ".msi" : ".dmg";
+        assertThat(UpdateManager.installerExtension()).isEqualTo(expected);
     }
 }

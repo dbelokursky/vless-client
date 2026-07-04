@@ -52,9 +52,11 @@ public class SingBoxInstaller {
     public static final String PINNED_VERSION;
 
     /**
-     * SHA-256 checksums of the release tarballs, keyed by architecture
-     * (arm64/amd64), from the same properties resource. Verified after the
-     * runtime fallback download to protect against corruption or tampering.
+     * SHA-256 checksums of the host OS's release archives, keyed by
+     * architecture (arm64/amd64), from the same properties resource. Verified
+     * after the runtime fallback download to protect against corruption or
+     * tampering. amd64 is always pinned; arm64 only where we ship it
+     * (currently darwin).
      */
     private static final Map<String, String> EXPECTED_SHA256;
 
@@ -70,19 +72,28 @@ public class SingBoxInstaller {
             throw new IllegalStateException("Could not read singbox.properties", e);
         }
         String version = props.getProperty("singbox.version", "").trim();
-        String arm64 = props.getProperty("singbox.sha256.darwin-arm64", "").trim();
-        String amd64 = props.getProperty("singbox.sha256.darwin-amd64", "").trim();
-        if (version.isEmpty() || arm64.length() != 64 || amd64.length() != 64) {
+        String osKey = com.vlessclient.platform.CorePlatform.current().osKey();
+        Map<String, String> checksums = new java.util.HashMap<>();
+        for (String arch : new String[]{"arm64", "amd64"}) {
+            String sha = props.getProperty("singbox.sha256." + osKey + "-" + arch, "").trim();
+            if (sha.length() == 64) {
+                checksums.put(arch, sha);
+            }
+        }
+        if (version.isEmpty() || !checksums.containsKey("amd64")) {
             throw new IllegalStateException(
                     "singbox.properties is incomplete: version='" + version
-                            + "', sha256 lengths " + arm64.length() + "/" + amd64.length());
+                            + "', pinned archs for " + osKey + ": " + checksums.keySet());
         }
         PINNED_VERSION = version;
-        EXPECTED_SHA256 = Map.of("arm64", arm64, "amd64", amd64);
+        EXPECTED_SHA256 = Map.copyOf(checksums);
     }
 
     private static final String DOWNLOAD_URL_TEMPLATE =
-            "https://github.com/SagerNet/sing-box/releases/download/v%s/sing-box-%s-darwin-%s.tar.gz";
+            "https://github.com/SagerNet/sing-box/releases/download/v%s/sing-box-%s-"
+                    + com.vlessclient.platform.CorePlatform.current().osKey()
+                    + "-%s."
+                    + com.vlessclient.platform.CorePlatform.current().archiveExtension();
 
     private final com.vlessclient.platform.CorePlatform corePlatform =
             com.vlessclient.platform.CorePlatform.current();
