@@ -8,8 +8,8 @@
     Output file path (e.g. target/jvm-args.txt).
 
 .NOTES
-    The macOS Dock and Apple application-name options don't exist on Windows —
-    and an unknown -Xdock:... option makes the JVM refuse to start — so only the
+    The macOS Dock and Apple application-name options don't exist on Windows --
+    and an unknown -Xdock:... option makes the JVM refuse to start -- so only the
     shared log-level option carries over.
 #>
 [CmdletBinding()]

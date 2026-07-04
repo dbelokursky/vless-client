@@ -11,7 +11,7 @@
     sing-box version (e.g. 1.13.14), passed by Maven from singbox.properties.
 
 .NOTES
-    The version and the SHA-256 checksum both come from singbox.properties — the
+    The version and the SHA-256 checksum both come from singbox.properties -- the
     single source of truth also read by pom.xml and SingBoxInstaller. The
     -Version argument is cross-checked against the file to catch a stale Maven
     property cache.
@@ -50,7 +50,7 @@ function Get-Prop([string]$Key) {
 $propsVersion = Get-Prop 'singbox.version'
 if ($propsVersion -ne $Version) {
     throw ("[bundle-singbox] version mismatch: Maven passed '$Version' but " +
-        "$propsFile says '$propsVersion'. Run 'mvn clean' — the Maven property cache is stale.")
+        "$propsFile says '$propsVersion'. Run 'mvn clean' -- the Maven property cache is stale.")
 }
 
 $arch = 'amd64'
