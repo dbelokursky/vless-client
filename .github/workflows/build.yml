@@ -4,6 +4,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+# Superseded PR pushes cancel their older runs; merge builds on main always
+# run to completion so every merge yields its own DMG artifact.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   build:
     runs-on: macos-latest
@@ -18,3 +23,18 @@ jobs:
       # generated config shape, and a live run probing clash_api + the http
       # inbound. Catches generator/core schema drift before merge.
       - run: mvn clean verify -Psmoke
+      # Every merge to main also produces an installable DMG (workflow
+      # artifact, 14 days) so any main commit can be tried without cutting
+      # a release. The push trigger above is main-only, so checking the
+      # event name is enough.
+      - name: Package DMG
+        if: github.event_name == 'push'
+        run: scripts/package-dmg.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "1.0.${{ github.run_number }}"
+      - name: Upload DMG artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vless-client-${{ github.sha }}
+          path: dist/*.dmg
+          retention-days: 14
+          if-no-files-found: error

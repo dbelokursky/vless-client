@@ -20,35 +20,11 @@ jobs:
         # real-binary smoke suite (version match, `sing-box check` on every
         # config shape, live run with clash_api + http-inbound probes).
         run: mvn test -Psmoke -Dtest=SingBoxRealBinarySmokeTest
-      - name: Stage artifacts
-        # sing-box is already baked into the shaded JAR by
-        # scripts/bundle-singbox.sh during `mvn package` — no separate
-        # download needed. Copy just the shaded jar (not the
-        # `original-*.jar` the shade plugin leaves alongside it).
-        run: |
-          mkdir -p staging
-          cp target/vless-client-0.1.0-SNAPSHOT.jar staging/
       - name: Create DMG with jpackage
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          # macOS CFBundleVersion rejects a zero major ("The first number in
-          # an app-version cannot be zero or negative"). For 0.x.y tags we
-          # still want to ship, so we normalise the CFBundle version to 1.x.y
-          # while keeping the real version on the tag and release name.
-          MAC_VERSION=$(echo "$VERSION" | sed 's/^0\./1./')
-          jpackage \
-            --type dmg \
-            --name "VLESS Client" \
-            --app-version "${MAC_VERSION}" \
-            --input staging \
-            --main-jar vless-client-0.1.0-SNAPSHOT.jar \
-            --main-class com.vlessclient.app.Launcher \
-            --icon src/main/resources/icons/app-icon.icns \
-            --dest dist \
-            --mac-package-name "VLESSClient" \
-            --java-options "--enable-preview" \
-            --java-options "-Dapp.version=${VERSION}" \
-            --verbose
+        # Staging + jpackage live in scripts/package-dmg.sh, shared with the
+        # per-merge build in build.yml. sing-box is already baked into the
+        # shaded JAR by scripts/bundle-singbox.sh during `mvn package`.
+        run: scripts/package-dmg.sh "${GITHUB_REF_NAME#v}"
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*.dmg
