@@ -427,6 +427,102 @@ class SingBoxRealBinarySmokeTest {
         }
     }
 
+    /**
+     * Linux, host without the GNOME proxy schema (the CI runner — same
+     * environment as KDE/headless users): the capability gate must keep
+     * {@code set_system_proxy} out of the generated config, and the core
+     * must start normally with just the local listeners.
+     */
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void gnomelessHost_generatorOmitsFlagAndCoreStarts() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeFalse(
+                com.vlessclient.platform.SystemProxySupport.current().canAutoConfigure(),
+                "host has the GNOME proxy schema — gnomeless contract not testable here");
+
+        int clashPort = freePort();
+        AppSettings settings = new AppSettings();
+        settings.setProxyMode(ProxyMode.SYSTEM_PROXY);
+        // systemProxyAutoConfig stays at its default (true): the host gate,
+        // not the user setting, is what must strip the flag here.
+        settings.setSocksPort(freePort());
+        settings.setHttpPort(freePort());
+        settings.setClashApiPort(clashPort);
+
+        String config = generator.generate(serverFor(Protocol.VLESS), settings);
+        assertThat(config).doesNotContain("set_system_proxy");
+
+        Path configFile = Files.createTempFile("smoke-gnomeless-", ".json");
+        Files.writeString(configFile, config);
+        Path logFile = Files.createTempFile("smoke-gnomeless-", ".log");
+
+        Process proc = new ProcessBuilder(
+                binary.toString(), "run", "-c", configFile.toString())
+                .redirectErrorStream(true)
+                .redirectOutput(logFile.toFile())
+                .start();
+        try {
+            try {
+                awaitPort(clashPort, proc);
+            } catch (AssertionError e) {
+                throw new AssertionError(e.getMessage()
+                        + "\n--- sing-box output ---\n" + Files.readString(logFile), e);
+            }
+            assertThat(proc.isAlive()).isTrue();
+        } finally {
+            proc.destroy();
+            if (!proc.waitFor(5, TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+            }
+            Files.deleteIfExists(configFile);
+        }
+    }
+
+    /**
+     * Pins the upstream behavior the capability gate exists for: on a host
+     * without the GNOME schema, a config that forces {@code set_system_proxy}
+     * makes sing-box exit fatally at startup. If a future core bump makes
+     * this degrade gracefully instead, this test fails — signalling the gate
+     * (and this pin) can be retired.
+     */
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void gnomelessHost_forcedFlagStillKillsTheCore() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeFalse(
+                com.vlessclient.platform.SystemProxySupport.current().canAutoConfigure(),
+                "host has the GNOME proxy schema — gnomeless contract not testable here");
+
+        AppSettings settings = new AppSettings();
+        settings.setProxyMode(ProxyMode.SYSTEM_PROXY);
+        settings.setSocksPort(freePort());
+        settings.setHttpPort(freePort());
+        settings.setClashApiPort(freePort());
+
+        SingBoxConfigGenerator forced = new SingBoxConfigGenerator(() -> true);
+        String config = forced.generate(serverFor(Protocol.VLESS), settings);
+        assertThat(config).contains("set_system_proxy");
+
+        Path configFile = Files.createTempFile("smoke-gnomeless-forced-", ".json");
+        Files.writeString(configFile, config);
+        Path logFile = Files.createTempFile("smoke-gnomeless-forced-", ".log");
+
+        Process proc = new ProcessBuilder(
+                binary.toString(), "run", "-c", configFile.toString())
+                .redirectErrorStream(true)
+                .redirectOutput(logFile.toFile())
+                .start();
+        try {
+            assertThat(proc.waitFor(15, TimeUnit.SECONDS))
+                    .as("core should exit fatally, not keep running")
+                    .isTrue();
+            assertThat(proc.exitValue()).isNotZero();
+            assertThat(Files.readString(logFile)).contains("set system proxy");
+        } finally {
+            proc.destroyForcibly();
+            Files.deleteIfExists(configFile);
+        }
+    }
+
     /** Waits until the port accepts connections; fails fast if the process dies. */
     private static void awaitPort(int port, Process proc) throws Exception {
         long deadline = System.currentTimeMillis() + 15_000;

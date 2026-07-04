@@ -99,6 +99,66 @@ class SystemProxyGuardTest {
     }
 
     @Nested
+    class LinuxGuard {
+
+        private static FakeRunner gnome(String mode, String host, String port) {
+            return new FakeRunner(cmd -> {
+                if (cmd.contains("get") && cmd.contains("mode")) {
+                    return ok(mode);
+                }
+                if (cmd.contains("get") && cmd.contains("host")) {
+                    return ok(host);
+                }
+                if (cmd.contains("get") && cmd.contains("port")) {
+                    return ok(port);
+                }
+                return ok("");
+            });
+        }
+
+        @Test
+        void disablesProxyWhenItPointsAtOurInbound() {
+            FakeRunner gs = gnome("'manual'", "'127.0.0.1'", "1081");
+
+            new LinuxSystemProxyGuard(gs).clearIfPointsAt("127.0.0.1", 1081);
+
+            List<String> last = gs.calls.getLast();
+            assertThat(last).containsSequence("gsettings", "set",
+                    "org.gnome.system.proxy", "mode", "none");
+        }
+
+        @Test
+        void leavesForeignProxyAlone() {
+            FakeRunner gs = gnome("'manual'", "'proxy.corp.example'", "8080");
+
+            new LinuxSystemProxyGuard(gs).clearIfPointsAt("127.0.0.1", 1081);
+
+            assertThat(gs.calls).noneMatch(cmd -> cmd.contains("set"));
+        }
+
+        @Test
+        void doesNothingWhenModeIsNone() {
+            FakeRunner gs = gnome("'none'", "''", "0");
+
+            new LinuxSystemProxyGuard(gs).clearIfPointsAt("127.0.0.1", 1081);
+
+            // Only the mode query ran; host/port never read, no write.
+            assertThat(gs.calls).hasSize(1);
+        }
+
+        @Test
+        void neverThrowsWhenGsettingsMissing() {
+            CommandRunner failing = cmd -> {
+                throw new IOException("gsettings not found");
+            };
+
+            assertThatCode(() ->
+                    new LinuxSystemProxyGuard(failing).clearIfPointsAt("127.0.0.1", 1081))
+                    .doesNotThrowAnyException();
+        }
+    }
+
+    @Nested
     class MacGuard {
 
         private static final String SERVICES = """

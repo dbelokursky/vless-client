@@ -28,8 +28,11 @@ public interface SystemProxyGuard {
      * @return the guard for the host platform
      */
     static SystemProxyGuard current() {
-        return Platform.current().isWindows()
-                ? new WindowsSystemProxyGuard()
-                : new MacSystemProxyGuard();
+        return switch (Platform.current()) {
+            case WINDOWS -> new WindowsSystemProxyGuard();
+            case LINUX -> new LinuxSystemProxyGuard();
+            // OTHER keeps the mac fallback: unix-like defaults beat crashing.
+            case MAC, OTHER -> new MacSystemProxyGuard();
+        };
     }
 }
