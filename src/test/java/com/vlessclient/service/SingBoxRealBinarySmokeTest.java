@@ -145,6 +145,10 @@ class SingBoxRealBinarySmokeTest {
 
         AppSettings settings = new AppSettings();
         settings.setProxyMode(ProxyMode.SYSTEM_PROXY);
+        // The live run must never rewire the host's real proxy settings
+        // (developer machines, CI runners). The set_system_proxy shape is
+        // still config-checked by checkAcceptsEveryProtocolInBothModes.
+        settings.setSystemProxyAutoConfig(false);
         settings.setSocksPort(socksPort);
         settings.setHttpPort(httpPort);
         settings.setClashApiPort(clashPort);

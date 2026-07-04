@@ -1,7 +1,10 @@
 package com.vlessclient.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vlessclient.model.ConnectionState;
 import com.vlessclient.model.ProxyMode;
+import com.vlessclient.platform.SystemProxyGuard;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
@@ -42,6 +45,20 @@ public class SingBoxEngine {
     private Path stopSignalFile;
     private LogReader logReader;
     private ProxyMode activeProxyMode;
+
+    /**
+     * The local endpoint sing-box registered as the OS proxy
+     * ({@code set_system_proxy}), or null when the active config doesn't use
+     * it. After the process dies, {@link SystemProxyGuard} checks this
+     * endpoint and clears a stale OS proxy entry the core couldn't restore
+     * (Windows kills are always hard; crashes skip cleanup on any OS).
+     */
+    private volatile SystemProxyTarget systemProxyTarget;
+    private SystemProxyGuard systemProxyGuard = SystemProxyGuard.current();
+
+    /** Listen endpoint of the inbound that carries {@code set_system_proxy}. */
+    record SystemProxyTarget(String host, int port) {
+    }
 
     /**
      * Set before tearing the process down so the process monitor can tell a
@@ -105,6 +122,7 @@ public class SingBoxEngine {
                 ".json"
         );
         Files.writeString(tempConfigFile, configJson);
+        systemProxyTarget = extractSystemProxyTarget(configJson);
 
         if (proxyMode == ProxyMode.TUN) {
             startWithPrivileges();
@@ -438,10 +456,52 @@ public class SingBoxEngine {
                 Thread.currentThread().interrupt();
             } finally {
                 cleanupConfigFile();
+                // The core is definitely dead here — every exit path (stop,
+                // hard kill, crash) funnels through this monitor.
+                restoreSystemProxyIfNeeded();
             }
         }, "singbox-process-monitor");
         monitor.setDaemon(true);
         monitor.start();
+    }
+
+    /**
+     * Clears an OS proxy entry still pointing at the dead core's inbound.
+     * No-op when the config didn't use {@code set_system_proxy} or when
+     * sing-box already restored the previous state on a graceful exit.
+     */
+    private void restoreSystemProxyIfNeeded() {
+        SystemProxyTarget target = systemProxyTarget;
+        if (target == null) {
+            return;
+        }
+        systemProxyTarget = null;
+        systemProxyGuard.clearIfPointsAt(target.host(), target.port());
+    }
+
+    /**
+     * Finds the listen endpoint of the first inbound carrying
+     * {@code set_system_proxy: true}, or null when the config has none.
+     */
+    static SystemProxyTarget extractSystemProxyTarget(String configJson) {
+        try {
+            JsonNode inbounds = new ObjectMapper().readTree(configJson).path("inbounds");
+            for (JsonNode inbound : inbounds) {
+                if (inbound.path("set_system_proxy").asBoolean(false)) {
+                    return new SystemProxyTarget(
+                            inbound.path("listen").asText("127.0.0.1"),
+                            inbound.path("listen_port").asInt());
+                }
+            }
+        } catch (IOException e) {
+            log.debug("Could not parse config for set_system_proxy", e);
+        }
+        return null;
+    }
+
+    /** Test seam: replaces the OS proxy guard. */
+    void setSystemProxyGuard(SystemProxyGuard guard) {
+        this.systemProxyGuard = guard;
     }
 
     /**
@@ -482,6 +542,9 @@ public class SingBoxEngine {
             stopSignalFile = null;
         }
         cleanupConfigFile();
+        // The JVM is going down: the daemon process monitor may never get to
+        // run its own restore, so clear a stale OS proxy entry synchronously.
+        restoreSystemProxyIfNeeded();
     }
 
     /**

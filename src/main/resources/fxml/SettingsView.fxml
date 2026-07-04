@@ -79,6 +79,9 @@
                 <Label fx:id="proxyModeLabel" text="Proxy Mode" styleClass="form-label" prefWidth="120"/>
                 <ComboBox fx:id="proxyModeCombo" styleClass="form-field" prefWidth="200"/>
             </HBox>
+
+            <CheckBox fx:id="systemProxyAutoConfigCheck" text="Set system proxy automatically"
+                      styleClass="form-checkbox"/>
         </VBox>
 
         <!-- Health Check Section -->
