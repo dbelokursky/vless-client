@@ -91,13 +91,46 @@ public final class WindowsAutostart implements Autostart {
     }
 
     /**
-     * Builds the command line stored in the Run value: the reconstructed JVM
-     * invocation with each argument quoted so paths containing spaces survive.
+     * Builds the command line stored in the Run value.
+     *
+     * <p>Under jpackage the process command is the installed native launcher
+     * ({@code VLESS Client.exe}) — registering it directly survives app
+     * updates and starts without a console. Only a dev run (started by
+     * {@code java.exe}) falls back to the reconstructed JVM invocation, with
+     * {@code javaw} substituted so no console window flashes at login.</p>
      *
      * @return the launch command as a single command-line string
      */
     static String launchCommandLine() {
-        return quote(JvmLaunchCommand.current());
+        return launchCommandLine(ProcessHandle.current().info().command());
+    }
+
+    /** Test seam: same as {@link #launchCommandLine()} with an explicit process command. */
+    static String launchCommandLine(java.util.Optional<String> processCommand) {
+        if (processCommand.isPresent() && !isJavaExecutable(processCommand.get())) {
+            return quote(List.of(processCommand.get()));
+        }
+        List<String> command = new ArrayList<>(JvmLaunchCommand.current());
+        command.set(0, toJavaw(command.get(0)));
+        return quote(command);
+    }
+
+    private static boolean isJavaExecutable(String command) {
+        String name = command.replace('\\', '/');
+        name = name.substring(name.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+        return name.equals("java") || name.equals("java.exe")
+                || name.equals("javaw") || name.equals("javaw.exe");
+    }
+
+    /** {@code .../bin/java[.exe]} to {@code .../bin/javaw[.exe]}: no login console. */
+    private static String toJavaw(String javaPath) {
+        if (javaPath.endsWith("java.exe")) {
+            return javaPath.substring(0, javaPath.length() - "java.exe".length()) + "javaw.exe";
+        }
+        if (javaPath.endsWith("java")) {
+            return javaPath + "w";
+        }
+        return javaPath;
     }
 
     private static String quote(List<String> argv) {

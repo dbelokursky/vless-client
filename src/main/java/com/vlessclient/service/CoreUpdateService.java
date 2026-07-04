@@ -310,7 +310,8 @@ public class CoreUpdateService {
         }
 
         String arch = installer.detectArch();
-        String assetSuffix = "-darwin-" + arch + ".tar.gz";
+        com.vlessclient.platform.CorePlatform core =
+                com.vlessclient.platform.CorePlatform.current();
 
         CoreUpdate best = null;
         int[] bestVersion = cur;
@@ -329,7 +330,7 @@ public class CoreUpdateService {
             if (v == null || v[0] != cur[0] || v[1] != cur[1] || compare(v, bestVersion) <= 0) {
                 continue;
             }
-            String assetName = "sing-box-" + version + assetSuffix;
+            String assetName = core.assetName(version, arch);
             for (JsonNode asset : release.path("assets")) {
                 if (!assetName.equals(asset.path("name").asText())) {
                     continue;
@@ -385,7 +386,8 @@ public class CoreUpdateService {
     public StagedCore stage(CoreUpdate update, DoubleConsumer progress,
                             List<String> validationConfigs)
             throws IOException, InterruptedException {
-        Path tarball = Files.createTempFile("sing-box-update-", ".tar.gz");
+        Path tarball = Files.createTempFile("sing-box-update-",
+                "." + com.vlessclient.platform.CorePlatform.current().archiveExtension());
         Path extractDir = null;
         try {
             log.info("Downloading sing-box {} from {}", update.version(), update.downloadUrl());

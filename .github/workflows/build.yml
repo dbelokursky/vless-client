@@ -44,33 +44,6 @@ jobs:
           path: dist/*.dmg
           retention-days: 14
           if-no-files-found: error
-      # Rolling "dev-latest" prerelease: always holds the DMG of the newest
-      # merge at a stable URL on the Releases page (downloadable without a
-      # GitHub login, never expires). Delete+recreate replaces the previous
-      # merge's asset; the tag is force-moved so the release's source link
-      # points at the commit that was actually built. Real releases stay
-      # untouched — a prerelease is never marked "Latest".
-      - name: Update rolling dev release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG=dev-latest
-          git tag -f "$TAG"
-          git push --force origin "$TAG"
-          {
-            echo "Автосборка последнего мержа в main."
-            echo
-            echo "- Коммит: ${GITHUB_SHA}"
-            echo "- Ран: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "- Проверки: mvn clean verify -Psmoke (полные тесты + smoke на реальном sing-box)"
-          } > release-notes.md
-          gh release delete "$TAG" --yes || true
-          gh release create "$TAG" dist/*.dmg \
-            --prerelease \
-            --title "Dev build ${GITHUB_SHA:0:7}" \
-            --notes-file release-notes.md
-
   # Proves the platform abstraction actually builds and runs on Windows: the
   # PowerShell bundler fetches sing-box.exe, the OS-portable test subset runs
   # (Unix-only suites skip themselves via @EnabledOnOs), and -Psmoke drives
@@ -100,3 +73,44 @@ jobs:
           path: dist/*.msi
           retention-days: 14
           if-no-files-found: error
+
+  # Rolling "dev-latest" prerelease: always holds BOTH installers (DMG + MSI)
+  # of the newest merge at a stable URL on the Releases page (downloadable
+  # without a GitHub login, never expires). Runs after both platform builds so
+  # the release is never half-populated. Delete+recreate replaces the previous
+  # merge's assets; the tag is force-moved so the release's source link points
+  # at the commit that was actually built. Real releases stay untouched — a
+  # prerelease is never marked "Latest".
+  dev-release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, test-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: vless-client-*
+          merge-multiple: true
+          path: dist
+      - name: Update rolling dev release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dist/
+          TAG=dev-latest
+          git tag -f "$TAG"
+          git push --force origin "$TAG"
+          {
+            echo "Автосборка последнего мержа в main (macOS DMG + Windows MSI)."
+            echo
+            echo "- Коммит: ${GITHUB_SHA}"
+            echo "- Ран: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Проверки: mvn clean verify -Psmoke на macOS и Windows (полные тесты + smoke на реальном sing-box)"
+          } > release-notes.md
+          gh release delete "$TAG" --yes || true
+          gh release create "$TAG" dist/*.dmg dist/*.msi \
+            --prerelease \
+            --title "Dev build ${GITHUB_SHA:0:7}" \
+            --notes-file release-notes.md
