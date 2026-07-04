@@ -191,6 +191,22 @@
                         -->
                         <vless.singbox.skipBundled>true</vless.singbox.skipBundled>
                         <vless.singbox.installDir>${project.build.directory}/test-singbox-install</vless.singbox.installDir>
+                        <!--
+                            Headless JavaFX for the whole suite. The UI tests
+                            always set these per-class, but service tests that
+                            call Platform.startup (LogReaderTest,
+                            SingBoxEngineTest) relied on the real glass
+                            toolkit — which works on the mac/windows runners
+                            but hangs on display-less Linux waiting for X.
+                            Monocle behaves identically everywhere.
+                        -->
+                        <glass.platform>Monocle</glass.platform>
+                        <monocle.platform>Headless</monocle.platform>
+                        <prism.order>sw</prism.order>
+                        <prism.text>t2k</prism.text>
+                        <testfx.robot>glass</testfx.robot>
+                        <testfx.headless>true</testfx.headless>
+                        <java.awt.headless>true</java.awt.headless>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
