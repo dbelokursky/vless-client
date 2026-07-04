@@ -181,29 +181,34 @@
                 <ProgressBar fx:id="coreUpdateProgress" visible="false" managed="false"
                              maxWidth="Infinity" prefHeight="14"/>
 
-                <!-- App row -->
-                <HBox fx:id="appUpdateRow" alignment="CENTER_LEFT" spacing="8">
-                    <Circle fx:id="appUpdateDot" radius="5" styleClass="status-circle-disconnected"/>
-                    <Label fx:id="appUpdateNameLabel" text="App" styleClass="service-name"
-                           minWidth="70"/>
+                <!-- App sub-block: name + action on top, status below -->
+                <VBox fx:id="appUpdateRow" styleClass="update-item" spacing="3">
+                    <HBox alignment="CENTER_LEFT" spacing="8">
+                        <Circle fx:id="appUpdateDot" radius="5"
+                                styleClass="status-circle-disconnected"/>
+                        <Label fx:id="appUpdateNameLabel" text="App" styleClass="service-name"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="downloadAppButton" text="Download" visible="false"
+                                managed="false"/>
+                    </HBox>
                     <Label fx:id="appUpdateDetail" text="" styleClass="core-status"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Button fx:id="downloadAppButton" text="Download" visible="false"
-                            managed="false"/>
-                </HBox>
+                </VBox>
 
-                <!-- sing-box core row -->
-                <HBox fx:id="coreUpdateRow" alignment="CENTER_LEFT" spacing="8">
-                    <Circle fx:id="coreUpdateDot" radius="5" styleClass="status-circle-disconnected"/>
-                    <Label fx:id="coreUpdateNameLabel" text="sing-box" styleClass="service-name"
-                           minWidth="70"/>
+                <!-- sing-box core sub-block -->
+                <VBox fx:id="coreUpdateRow" styleClass="update-item" spacing="3">
+                    <HBox alignment="CENTER_LEFT" spacing="8">
+                        <Circle fx:id="coreUpdateDot" radius="5"
+                                styleClass="status-circle-disconnected"/>
+                        <Label fx:id="coreUpdateNameLabel" text="sing-box"
+                               styleClass="service-name"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="installCoreUpdateButton" text="Update" visible="false"
+                                managed="false"/>
+                        <Button fx:id="rollbackCoreButton" text="Roll back" visible="false"
+                                managed="false"/>
+                    </HBox>
                     <Label fx:id="coreUpdateStatusLabel" text="" styleClass="core-status"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Button fx:id="installCoreUpdateButton" text="Update" visible="false"
-                            managed="false"/>
-                    <Button fx:id="rollbackCoreButton" text="Roll back" visible="false"
-                            managed="false"/>
-                </HBox>
+                </VBox>
             </VBox>
         </VBox>
 

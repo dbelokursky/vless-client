@@ -931,3 +931,17 @@
     -fx-border-width: 1 0 0 0;
     -fx-padding: 12 0 0 0;
 }
+
+/* Each update component (App / sing-box) is a soft sub-block: name + action
+   on top, status below. */
+.update-item {
+    -fx-background-color: -c-surface-sunken;
+    -fx-background-radius: 8;
+    -fx-padding: 10 12;
+}
+
+/* Status line indented under the item name (past the dot). Defined after
+   .core-status so its left padding wins. */
+.update-item-detail {
+    -fx-padding: 0 0 0 17;
+}
