@@ -14,23 +14,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class WindowsAutostartTest {
 
     /** Records every reg.exe invocation and replies with a programmed result. */
-    private static final class FakeReg implements WindowsAutostart.CommandRunner {
+    private static final class FakeReg implements CommandRunner {
         final List<List<String>> calls = new ArrayList<>();
-        private final Function<List<String>, WindowsAutostart.Result> responder;
+        private final Function<List<String>, CommandRunner.Result> responder;
 
-        FakeReg(Function<List<String>, WindowsAutostart.Result> responder) {
+        FakeReg(Function<List<String>, CommandRunner.Result> responder) {
             this.responder = responder;
         }
 
         @Override
-        public WindowsAutostart.Result run(List<String> command) {
+        public CommandRunner.Result run(List<String> command) {
             calls.add(List.copyOf(command));
             return responder.apply(command);
         }
     }
 
-    private static WindowsAutostart.Result ok() {
-        return new WindowsAutostart.Result(0, "");
+    private static CommandRunner.Result ok() {
+        return new CommandRunner.Result(0, "");
     }
 
     @Test
@@ -43,7 +43,7 @@ class WindowsAutostartTest {
 
     @Test
     void isEnabled_falseWhenRegQueryFails() {
-        FakeReg reg = new FakeReg(cmd -> new WindowsAutostart.Result(1,
+        FakeReg reg = new FakeReg(cmd -> new CommandRunner.Result(1,
                 "ERROR: The system was unable to find the specified registry key or value."));
         assertThat(new WindowsAutostart(reg).isEnabled()).isFalse();
     }
@@ -52,7 +52,7 @@ class WindowsAutostartTest {
     void isEnabled_falseWhenRegExecutableMissing() {
         // When reg.exe cannot even be launched the IOException is swallowed and
         // autostart reports disabled rather than propagating.
-        WindowsAutostart.CommandRunner throwing = cmd -> {
+        CommandRunner throwing = cmd -> {
             throw new IOException("reg not found");
         };
         assertThat(new WindowsAutostart(throwing).isEnabled()).isFalse();
@@ -75,7 +75,7 @@ class WindowsAutostartTest {
 
     @Test
     void setEnabledTrue_throwsWhenRegAddFails() {
-        FakeReg reg = new FakeReg(cmd -> new WindowsAutostart.Result(1, "ERROR: Access is denied."));
+        FakeReg reg = new FakeReg(cmd -> new CommandRunner.Result(1, "ERROR: Access is denied."));
 
         assertThatThrownBy(() -> new WindowsAutostart(reg).setEnabled(true))
                 .isInstanceOf(IOException.class)
@@ -96,7 +96,7 @@ class WindowsAutostartTest {
 
     @Test
     void setEnabledFalse_missingValueIsNotAnError() {
-        FakeReg reg = new FakeReg(cmd -> new WindowsAutostart.Result(1,
+        FakeReg reg = new FakeReg(cmd -> new CommandRunner.Result(1,
                 "ERROR: The system was unable to find the specified registry key or value."));
 
         // A missing value means the goal (no autostart entry) is already met.
@@ -118,7 +118,7 @@ class WindowsAutostartTest {
 
     @Test
     void refresh_doesNothingWhenDisabled() {
-        FakeReg reg = new FakeReg(cmd -> new WindowsAutostart.Result(1, "not found"));
+        FakeReg reg = new FakeReg(cmd -> new CommandRunner.Result(1, "not found"));
 
         new WindowsAutostart(reg).refresh();
 

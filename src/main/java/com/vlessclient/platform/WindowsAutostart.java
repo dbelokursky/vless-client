@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Windows autostart via the per-user registry Run key
@@ -28,19 +27,10 @@ public final class WindowsAutostart implements Autostart {
             "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
     private static final String VALUE_NAME = "VlessClient";
 
-    /** Seam so the {@code reg.exe} calls can be exercised without a real registry. */
-    interface CommandRunner {
-        Result run(List<String> command) throws IOException;
-    }
-
-    /** Exit code and combined stdout/stderr of a {@code reg.exe} invocation. */
-    record Result(int exitCode, String output) {
-    }
-
     private final CommandRunner runner;
 
     public WindowsAutostart() {
-        this(WindowsAutostart::execReg);
+        this(CommandRunner.system());
     }
 
     WindowsAutostart(CommandRunner runner) {
@@ -79,7 +69,7 @@ public final class WindowsAutostart implements Autostart {
     }
 
     private void install() throws IOException {
-        Result result = runner.run(List.of(
+        CommandRunner.Result result = runner.run(List.of(
                 "reg", "add", RUN_KEY, "/v", VALUE_NAME,
                 "/t", "REG_SZ", "/d", launchCommandLine(), "/f"));
         if (result.exitCode() != 0) {
@@ -89,7 +79,7 @@ public final class WindowsAutostart implements Autostart {
     }
 
     private void uninstall() throws IOException {
-        Result result = runner.run(List.of(
+        CommandRunner.Result result = runner.run(List.of(
                 "reg", "delete", RUN_KEY, "/v", VALUE_NAME, "/f"));
         // A missing value ("unable to find") is a successful no-op; anything
         // else that fails is worth a warning but not fatal — the goal (no
@@ -120,22 +110,5 @@ public final class WindowsAutostart implements Autostart {
             }
         }
         return String.join(" ", quoted);
-    }
-
-    private static Result execReg(List<String> command) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        String output = new String(proc.getInputStream().readAllBytes());
-        try {
-            if (!proc.waitFor(30, TimeUnit.SECONDS)) {
-                proc.destroyForcibly();
-                throw new IOException("reg command timed out");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("reg command interrupted", e);
-        }
-        return new Result(proc.exitValue(), output);
     }
 }
