@@ -25,7 +25,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import javafx.scene.shape.Circle;
 import javafx.util.StringConverter;
 import org.slf4j.Logger;
@@ -94,9 +94,9 @@ public class SettingsViewController {
     @FXML private Button installCoreUpdateButton;
     @FXML private Button rollbackCoreButton;
     @FXML private Circle coreUpdateDot;
-    @FXML private HBox coreUpdateRow;
+    @FXML private VBox coreUpdateRow;
 
-    @FXML private HBox appUpdateRow;
+    @FXML private VBox appUpdateRow;
     @FXML private Circle appUpdateDot;
     @FXML private Label appUpdateDetail;
     @FXML private Button downloadAppButton;
@@ -646,7 +646,9 @@ public class SettingsViewController {
      */
     private void setUpdateRow(Label detail, Circle dot, String text, String modifier) {
         detail.setText(text == null ? "" : text);
-        detail.getStyleClass().setAll("core-status", modifier);
+        // update-item-detail indents the status under the item name; its
+        // padding wins over core-status because it's defined later in the CSS.
+        detail.getStyleClass().setAll("core-status", "update-item-detail", modifier);
         dot.getStyleClass().setAll(dotClassFor(modifier));
     }
 
