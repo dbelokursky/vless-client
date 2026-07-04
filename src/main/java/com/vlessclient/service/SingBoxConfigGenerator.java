@@ -128,7 +128,29 @@ public class SingBoxConfigGenerator {
         // route, which for a bare system resolver address does the right thing.
         servers.add(directDns);
 
+        // Local resolver (OS/mDNS). Used only for localhost and *.local so
+        // those names resolve on the LAN instead of being sent to the remote
+        // DoH server, which cannot answer link-local mDNS queries.
+        ObjectNode localDns = mapper.createObjectNode();
+        localDns.put("tag", "local-dns");
+        localDns.put("type", "local");
+        servers.add(localDns);
+
         dns.set("servers", servers);
+
+        // Resolve localhost / *.local via the local resolver; everything else
+        // falls through to dns.final (proxy DNS).
+        ArrayNode dnsRules = mapper.createArrayNode();
+        ObjectNode localRule = mapper.createObjectNode();
+        ArrayNode localDomains = mapper.createArrayNode();
+        localDomains.add("localhost");
+        localRule.set("domain", localDomains);
+        ArrayNode localSuffixes = mapper.createArrayNode();
+        localSuffixes.add(".local");
+        localRule.set("domain_suffix", localSuffixes);
+        localRule.put("server", "local-dns");
+        dnsRules.add(localRule);
+        dns.set("rules", dnsRules);
 
         // In sing-box 1.13 the dns.rules[].outbound match-all form and
         // the string address shortcut were removed. Use dns.final to route
@@ -188,6 +210,12 @@ public class SingBoxConfigGenerator {
         hijackDns.put("action", "hijack-dns");
         prepended.add(hijackDns);
 
+        // Local hostnames (localhost, *.local) direct, then private IPs direct.
+        // Added here only when buildRoute didn't already emit them (no-config
+        // path); the dedup checks keep the normal path from duplicating.
+        if (!hasLocalDomainDirectRule(rules)) {
+            prepended.add(buildLocalDomainDirectRule());
+        }
         if (!hasPrivateIpDirectRule(rules)) {
             prepended.add(buildPrivateIpDirectRule());
         }
@@ -230,6 +258,50 @@ public class SingBoxConfigGenerator {
         privateIp.put("action", "route");
         privateIp.put("outbound", "direct");
         return privateIp;
+    }
+
+    /**
+     * Sends {@code localhost} and any {@code *.local} (mDNS) host <em>by name</em>
+     * to the direct outbound. The private-IP rule only catches local traffic
+     * once it is already an IP; a bare hostname like {@code printer.local} or
+     * {@code localhost} reaches the proxy as a domain and would otherwise be
+     * tunnelled to the exit node, which cannot resolve link-local mDNS names —
+     * so the connection dead-ends. Matters most in system-proxy mode, where the
+     * app hands the hostname to the proxy instead of pre-resolving it.
+     */
+    private ObjectNode buildLocalDomainDirectRule() {
+        ObjectNode rule = mapper.createObjectNode();
+        ArrayNode domains = mapper.createArrayNode();
+        domains.add("localhost");
+        rule.set("domain", domains);
+        ArrayNode suffixes = mapper.createArrayNode();
+        suffixes.add(".local");
+        rule.set("domain_suffix", suffixes);
+        rule.put("action", "route");
+        rule.put("outbound", "direct");
+        return rule;
+    }
+
+    /**
+     * True if the rules already contain a {@code .local} domain-suffix rule,
+     * so {@link #ensureTunRouteEssentials} doesn't duplicate what
+     * {@link #buildRoute} may have emitted.
+     */
+    private boolean hasLocalDomainDirectRule(ArrayNode rules) {
+        if (rules == null) {
+            return false;
+        }
+        for (int i = 0; i < rules.size(); i++) {
+            JsonNode suffix = rules.get(i) != null ? rules.get(i).get("domain_suffix") : null;
+            if (suffix != null && suffix.isArray()) {
+                for (JsonNode s : suffix) {
+                    if (".local".equals(s.asText())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -693,6 +765,11 @@ public class SingBoxConfigGenerator {
         // breaks local services in any mode, and no realistic use case for
         // this client justifies the breakage.
         rules.insert(0, buildPrivateIpDirectRule());
+
+        // Local hostnames (localhost, *.local) also go direct, above the
+        // private-IP rule so a name that never becomes a local IP (the
+        // system-proxy case) still bypasses the tunnel.
+        rules.insert(0, buildLocalDomainDirectRule());
 
         // User bypass list is honored in every preset: matching hosts always
         // go direct regardless of route_all / bypass_domestic / custom.
