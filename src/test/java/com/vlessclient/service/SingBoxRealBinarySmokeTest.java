@@ -12,6 +12,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -285,6 +287,65 @@ class SingBoxRealBinarySmokeTest {
     private static int freePort() throws IOException {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
+        }
+    }
+
+    /**
+     * Windows TUN probe: sing-box must be able to create its TUN adapter on
+     * a Windows host (answers whether the driver stack — wintun.dll — is
+     * available next to the binary). Runs with {@code auto_route} disabled so
+     * the probe never touches the host's routing table: rerouting a CI
+     * runner's own traffic into the test TUN would sever the job.
+     *
+     * <p>Requires administrator rights, which GitHub's windows runners have;
+     * skipped when unprivileged. The clash_api port only opens after every
+     * inbound (including the TUN adapter) started, so reaching it proves the
+     * adapter came up.</p>
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void tunAdapterComesUpOnWindows() throws Exception {
+        int clashPort = freePort();
+        AppSettings settings = new AppSettings();
+        settings.setProxyMode(ProxyMode.TUN);
+        settings.setSocksPort(freePort());
+        settings.setHttpPort(freePort());
+        settings.setClashApiPort(clashPort);
+
+        com.fasterxml.jackson.databind.ObjectMapper mapper =
+                new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.node.ObjectNode config = (com.fasterxml.jackson.databind.node.ObjectNode)
+                mapper.readTree(generator.generate(serverFor(Protocol.VLESS), settings));
+        for (com.fasterxml.jackson.databind.JsonNode inbound : config.get("inbounds")) {
+            if ("tun".equals(inbound.path("type").asText())) {
+                ((com.fasterxml.jackson.databind.node.ObjectNode) inbound)
+                        .put("auto_route", false);
+            }
+        }
+
+        Path configFile = Files.createTempFile("smoke-tun-", ".json");
+        Files.writeString(configFile, mapper.writeValueAsString(config));
+        Path logFile = Files.createTempFile("smoke-tun-", ".log");
+
+        Process proc = new ProcessBuilder(
+                binary.toString(), "run", "-c", configFile.toString())
+                .redirectErrorStream(true)
+                .redirectOutput(logFile.toFile())
+                .start();
+        try {
+            try {
+                awaitPort(clashPort, proc);
+            } catch (AssertionError e) {
+                throw new AssertionError(e.getMessage()
+                        + "\n--- sing-box output ---\n" + Files.readString(logFile), e);
+            }
+            assertThat(proc.isAlive()).isTrue();
+        } finally {
+            proc.destroy();
+            if (!proc.waitFor(5, TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+            }
+            Files.deleteIfExists(configFile);
         }
     }
 

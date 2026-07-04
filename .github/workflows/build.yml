@@ -1,7 +1,8 @@
 name: Build
 on:
   push:
-    branches: [main]
+    # TODO(windows-tun): drop feat/windows-tun before merge (validation).
+    branches: [main, feat/windows-tun]
   pull_request:
     branches: [main]
   workflow_dispatch:
