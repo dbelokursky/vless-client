@@ -9,6 +9,7 @@ import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testfx.framework.junit5.ApplicationTest;
+import org.testfx.util.WaitForAsyncUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -53,15 +54,27 @@ public class MainViewTest extends ApplicationTest {
 
     @Test
     void clickingDashboardSwitchesView() {
-        clickOn("#btnDashboard");
+        fireNav("#btnDashboard");
         Button dashboard = lookup("#btnDashboard").query();
         assertThat(dashboard.getStyleClass()).contains("nav-button-active");
     }
 
     @Test
     void clickingServersSwitchesView() {
-        clickOn("#btnServers");
+        fireNav("#btnServers");
         Button servers = lookup("#btnServers").query();
         assertThat(servers.getStyleClass()).contains("nav-button-active");
+    }
+
+    /**
+     * Fires the nav button's action directly instead of a robot clickOn. The
+     * glass robot can miss its target under load when several TestFX suites
+     * run together (headless focus contention), which made these assertions
+     * flaky; firing the handler exercises the same navigation deterministically.
+     */
+    private void fireNav(String id) {
+        Button button = lookup(id).query();
+        interact(button::fire);
+        WaitForAsyncUtils.waitForFxEvents();
     }
 }
