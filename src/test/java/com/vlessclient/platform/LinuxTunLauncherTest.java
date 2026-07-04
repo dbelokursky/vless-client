@@ -58,6 +58,8 @@ class LinuxTunLauncherTest {
     }
 
     @Test
+    @org.junit.jupiter.api.condition.EnabledOnOs({org.junit.jupiter.api.condition.OS.MAC,
+            org.junit.jupiter.api.condition.OS.LINUX})
     void wrapperCommand_runsCoreAndWatchesStopFileAndParent() {
         String wrapper = LinuxTunLauncher.wrapperCommand(
                 Path.of("/opt/sing-box"), Path.of("/tmp/c.json"), Path.of("/tmp/stop"));
@@ -71,6 +73,8 @@ class LinuxTunLauncherTest {
     }
 
     @Test
+    @org.junit.jupiter.api.condition.EnabledOnOs({org.junit.jupiter.api.condition.OS.MAC,
+            org.junit.jupiter.api.condition.OS.LINUX})
     void wrapperCommand_shellQuotesPathsWithSpecials() {
         String wrapper = LinuxTunLauncher.wrapperCommand(
                 Path.of("/opt/a b/sing-box"), Path.of("/tmp/it's.json"), Path.of("/tmp/stop"));
