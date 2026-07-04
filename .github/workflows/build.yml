@@ -86,17 +86,33 @@ jobs:
           java-version: '25-ea'
           distribution: 'temurin'
       - run: mvn -B clean verify -Psmoke
+      # Mirror of the DMG/MSI flows: every merge to main also yields an
+      # installable .deb as a 14-day workflow artifact. Tagged releases get
+      # their .deb from release.yml via the same script.
+      - name: Package DEB
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mvn -B package -DskipTests
+          scripts/package-linux.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "0.1.0+dev${{ github.run_number }}"
+      - name: Upload DEB artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vless-client-linux-${{ github.sha }}
+          path: dist/*.deb
+          retention-days: 14
+          if-no-files-found: error
 
-  # Rolling "dev-latest" prerelease: always holds BOTH installers (DMG + MSI)
-  # of the newest merge at a stable URL on the Releases page (downloadable
-  # without a GitHub login, never expires). Runs after both platform builds so
-  # the release is never half-populated. Delete+recreate replaces the previous
-  # merge's assets; the tag is force-moved so the release's source link points
-  # at the commit that was actually built. Real releases stay untouched — a
-  # prerelease is never marked "Latest".
+  # Rolling "dev-latest" prerelease: always holds ALL THREE installers
+  # (DMG + MSI + DEB) of the newest merge at a stable URL on the Releases page
+  # (downloadable without a GitHub login, never expires). Runs after every
+  # platform build so the release is never half-populated. Delete+recreate
+  # replaces the previous merge's assets; the tag is force-moved so the
+  # release's source link points at the commit that was actually built. Real
+  # releases stay untouched — a prerelease is never marked "Latest".
   dev-release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, test-windows]
+    needs: [build, test-windows, test-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -116,14 +132,14 @@ jobs:
           git tag -f "$TAG"
           git push --force origin "$TAG"
           {
-            echo "Автосборка последнего мержа в main (macOS DMG + Windows MSI)."
+            echo "Автосборка последнего мержа в main (macOS DMG + Windows MSI + Linux DEB)."
             echo
             echo "- Коммит: ${GITHUB_SHA}"
             echo "- Ран: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "- Проверки: mvn clean verify -Psmoke на macOS и Windows (полные тесты + smoke на реальном sing-box)"
+            echo "- Проверки: mvn clean verify -Psmoke на macOS, Windows и Linux (полные тесты + smoke на реальном sing-box)"
           } > release-notes.md
           gh release delete "$TAG" --yes || true
-          gh release create "$TAG" dist/*.dmg dist/*.msi \
+          gh release create "$TAG" dist/*.dmg dist/*.msi dist/*.deb \
             --prerelease \
             --title "Dev build ${GITHUB_SHA:0:7}" \
             --notes-file release-notes.md
