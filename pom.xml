@@ -137,19 +137,6 @@
                 <version>3.5.0</version>
                 <executions>
                     <execution>
-                        <id>bundle-sing-box</id>
-                        <phase>generate-resources</phase>
-                        <goals><goal>exec</goal></goals>
-                        <configuration>
-                            <executable>bash</executable>
-                            <arguments>
-                                <argument>${project.basedir}/scripts/bundle-singbox.sh</argument>
-                                <argument>${project.build.directory}/classes/native</argument>
-                                <argument>${singbox.version}</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                    <execution>
                         <id>write-jvm-args</id>
                         <phase>generate-resources</phase>
                         <goals><goal>exec</goal></goals>
@@ -328,6 +315,79 @@
             <properties>
                 <surefire.excludedGroups/>
             </properties>
+        </profile>
+
+        <!-- Bundle the sing-box core for the build host's OS. Split by OS so a
+             build never ships the wrong platform's binary: macOS bundles the
+             darwin tar.gz via bash, Windows the amd64 zip via PowerShell. The
+             executions share the id 'bundle-sing-box' but only one profile is
+             ever active, so they don't collide. -->
+        <profile>
+            <id>bundle-core-macos</id>
+            <activation>
+                <os><family>mac</family></os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>bundle-sing-box</id>
+                                <phase>generate-resources</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/scripts/bundle-singbox.sh</argument>
+                                        <argument>${project.build.directory}/classes/native</argument>
+                                        <argument>${singbox.version}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>bundle-core-windows</id>
+            <activation>
+                <os><family>windows</family></os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>bundle-sing-box</id>
+                                <phase>generate-resources</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>powershell</executable>
+                                    <arguments>
+                                        <argument>-NoProfile</argument>
+                                        <argument>-ExecutionPolicy</argument>
+                                        <argument>Bypass</argument>
+                                        <argument>-File</argument>
+                                        <argument>${project.basedir}/scripts/bundle-singbox.ps1</argument>
+                                        <argument>-OutDir</argument>
+                                        <argument>${project.build.directory}/classes/native</argument>
+                                        <argument>-Version</argument>
+                                        <argument>${singbox.version}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 </project>
