@@ -1,9 +1,7 @@
 name: Build
 on:
   push:
-    # TODO(windows-package): drop feat/windows-package before merge — added to
-    # validate MSI packaging + Windows smoke on the branch.
-    branches: [main, feat/windows-package]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -90,14 +88,12 @@ jobs:
       # installable MSI as a 14-day workflow artifact. Tagged releases get
       # their MSI from release.yml via the same script.
       - name: Package MSI
-        # TODO(windows-package): restore the refs/heads/main gate before merge.
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           mvn -B package -DskipTests
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -Version "0.1.0-dev-$($env:GITHUB_SHA.Substring(0,7))" -MsiVersion "1.0.${{ github.run_number }}"
       - name: Upload MSI artifact
-        # TODO(windows-package): restore the refs/heads/main gate before merge.
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: vless-client-windows-${{ github.sha }}
