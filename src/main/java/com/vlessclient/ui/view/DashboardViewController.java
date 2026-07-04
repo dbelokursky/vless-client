@@ -1,5 +1,6 @@
 package com.vlessclient.ui.view;
 
+import com.vlessclient.app.I18n;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ConnectionState;
@@ -19,13 +20,18 @@ import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
+import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.GridPane;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
@@ -38,6 +44,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -622,7 +630,13 @@ public class DashboardViewController {
         }
         List<HealthCheckTarget> targets = settings.getHealthCheckTargets();
         if (targets == null || targets.isEmpty()) {
-            setHealthCardVisible(false);
+            // Keep the card (and its "+" button) visible: hiding it would
+            // leave no way to add a target back after removing the last one.
+            setHealthCardVisible(true);
+            if (serviceStatusList != null) {
+                serviceStatusList.getChildren().clear();
+            }
+            healthSummaryLabel.setText(I18n.get("health.no.targets"));
             return;
         }
         if (healthCheckInFlight) {
@@ -781,8 +795,8 @@ public class DashboardViewController {
         serviceStatusList.getChildren().clear();
         for (HealthCheckTarget t : targets) {
             String name = t.getName() != null && !t.getName().isBlank() ? t.getName() : t.getUrl();
-            serviceStatusList.getChildren().add(
-                    buildServiceRow(name, "status-circle-connecting", "Checking…", "service-pending"));
+            serviceStatusList.getChildren().add(buildServiceRow(name, t.getUrl(),
+                    "status-circle-connecting", "Checking…", "service-pending"));
         }
     }
 
@@ -801,7 +815,7 @@ public class DashboardViewController {
             String resultText = ok ? r.latencyMs() + " ms" : "Unreachable";
             String resultClass = ok ? "service-ok" : "service-fail";
             serviceStatusList.getChildren().add(
-                    buildServiceRow(r.name(), dotClass, resultText, resultClass));
+                    buildServiceRow(r.name(), r.url(), dotClass, resultText, resultClass));
         }
         healthSummaryLabel.setText(summarize(reachable, results.size()));
     }
@@ -816,7 +830,7 @@ public class DashboardViewController {
         return reachable + "/" + total + " reachable";
     }
 
-    private HBox buildServiceRow(String name, String dotStyleClass,
+    private HBox buildServiceRow(String name, String url, String dotStyleClass,
                                  String resultText, String resultStyleClass) {
         HBox row = new HBox(8);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -834,7 +848,146 @@ public class DashboardViewController {
         resultLabel.getStyleClass().setAll(resultStyleClass);
 
         row.getChildren().addAll(dot, nameLabel, spacer, resultLabel);
+
+        if (url != null && !url.isBlank()) {
+            Button remove = new Button("✕");
+            remove.getStyleClass().setAll("icon-button");
+            remove.setFocusTraversable(false);
+            remove.setTooltip(new Tooltip(I18n.get("health.target.remove")));
+            remove.setOnAction(e -> removeHealthTarget(url));
+            row.getChildren().add(remove);
+        }
         return row;
+    }
+
+    // ===== health-target list editing =====
+
+    @FXML
+    private void onAddTargetClicked() {
+        Dialog<HealthCheckTarget> dialog = new Dialog<>();
+        dialog.setTitle(I18n.get("health.target.add.title"));
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        TextField nameField = new TextField();
+        nameField.setPromptText(I18n.get("health.target.name"));
+        TextField urlField = new TextField();
+        urlField.setPromptText("https://example.com  ·  1.1.1.1  ·  1.1.1.1:53");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(8);
+        grid.setPadding(new Insets(12));
+        grid.add(new Label(I18n.get("health.target.name")), 0, 0);
+        grid.add(nameField, 1, 0);
+        grid.add(new Label(I18n.get("health.target.target")), 0, 1);
+        grid.add(urlField, 1, 1);
+        dialog.getDialogPane().setContent(grid);
+
+        var okButton = dialog.getDialogPane().lookupButton(ButtonType.OK);
+        okButton.setDisable(true);
+        urlField.textProperty().addListener((obs, o, n) ->
+                okButton.setDisable(normalizeTarget(n) == null));
+
+        dialog.setResultConverter(button -> {
+            if (button != ButtonType.OK) {
+                return null;
+            }
+            ParsedTarget parsed = normalizeTarget(urlField.getText());
+            if (parsed == null) {
+                return null;
+            }
+            String name = nameField.getText() != null && !nameField.getText().isBlank()
+                    ? nameField.getText().trim()
+                    : parsed.displayHost();
+            return new HealthCheckTarget(name, parsed.stored());
+        });
+
+        Platform.runLater(urlField::requestFocus);
+        dialog.showAndWait().ifPresent(this::addHealthTarget);
+    }
+
+    /** A validated target: {@code stored} is persisted, {@code displayHost} names it. */
+    private record ParsedTarget(String stored, String displayHost) {
+    }
+
+    /**
+     * Accepts either an absolute http(s) URL (probed over HTTP) or a bare
+     * IP / host, optionally with {@code :port} (probed by a TCP connect
+     * through the tunnel). Returns null for anything else.
+     */
+    private static ParsedTarget normalizeTarget(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            try {
+                URI uri = new URI(trimmed);
+                if (uri.getHost() == null || uri.getHost().isBlank()) {
+                    return null;
+                }
+                return new ParsedTarget(uri.toString(), uri.getHost());
+            } catch (URISyntaxException e) {
+                return null;
+            }
+        }
+        ServiceReachabilityChecker.HostPort hp =
+                ServiceReachabilityChecker.parseHostPort(trimmed);
+        return hp == null ? null : new ParsedTarget(trimmed, hp.host());
+    }
+
+    private void addHealthTarget(HealthCheckTarget target) {
+        AppSettings settings = findSettings();
+        if (settings == null) {
+            return;
+        }
+        // Silently ignore an exact-URL duplicate — probing the same URL
+        // twice adds noise, not information.
+        boolean duplicate = settings.getHealthCheckTargets().stream()
+                .anyMatch(t -> target.getUrl().equals(t.getUrl()));
+        if (!duplicate) {
+            settings.getHealthCheckTargets().add(target);
+            saveSettingsQuietly(settings);
+        }
+        restartReachabilityCheck();
+    }
+
+    private void removeHealthTarget(String url) {
+        AppSettings settings = findSettings();
+        if (settings == null) {
+            return;
+        }
+        settings.getHealthCheckTargets().removeIf(t -> url.equals(t.getUrl()));
+        saveSettingsQuietly(settings);
+        restartReachabilityCheck();
+    }
+
+    private AppSettings findSettings() {
+        try {
+            return ServiceLocator.get(AppSettings.class);
+        } catch (IllegalArgumentException e) {
+            log.warn("AppSettings not available for health-target editing");
+            return null;
+        }
+    }
+
+    private void saveSettingsQuietly(AppSettings settings) {
+        try {
+            ServiceLocator.get(ConfigStore.class).saveSettings(settings);
+        } catch (IllegalArgumentException e) {
+            log.warn("ConfigStore not available; health-target change not persisted");
+        }
+    }
+
+    /** Re-probes with the edited list, superseding any in-flight check. */
+    private void restartReachabilityCheck() {
+        if (singBoxEngine == null
+                || singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
+            return;
+        }
+        healthGeneration++;
+        healthCheckInFlight = false;
+        runReachabilityCheck();
     }
 
     private void showReconnectBanner(String text) {

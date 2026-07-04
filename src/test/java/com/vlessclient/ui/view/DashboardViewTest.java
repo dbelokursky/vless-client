@@ -71,6 +71,7 @@ public class DashboardViewTest extends ApplicationTest {
         assertThat(lookup("#healthCard").tryQuery()).isPresent();
         assertThat(lookup("#serviceStatusList").tryQuery()).isPresent();
         assertThat(lookup("#recheckButton").tryQuery()).isPresent();
+        assertThat(lookup("#addTargetButton").tryQuery()).isPresent();
         assertThat(lookup("#reconnectBanner").tryQuery()).isPresent();
         assertThat(lookup("#healthSummaryLabel").tryQuery()).isPresent();
     }
