@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vlessclient.model.ConnectionState;
 import com.vlessclient.model.ProxyMode;
 import com.vlessclient.platform.SystemProxyGuard;
+import com.vlessclient.platform.TunLauncher;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
@@ -55,6 +56,7 @@ public class SingBoxEngine {
      */
     private volatile SystemProxyTarget systemProxyTarget;
     private SystemProxyGuard systemProxyGuard = SystemProxyGuard.current();
+    private TunLauncher tunLauncher = TunLauncher.current();
 
     /** Listen endpoint of the inbound that carries {@code set_system_proxy}. */
     record SystemProxyTarget(String host, int port) {
@@ -93,9 +95,10 @@ public class SingBoxEngine {
      * with {@code run -c <config-path>}. Log output is captured in a background
      * thread and appended to the observable log lines list.</p>
      *
-     * <p>When proxy mode is TUN, sing-box is started with administrator privileges
-     * via macOS {@code osascript} privilege elevation, since creating a TUN device
-     * requires root access.</p>
+     * <p>When proxy mode is TUN, sing-box is started with elevated privileges
+     * through the platform {@link TunLauncher} (sudo/osascript on macOS, UAC
+     * on Windows), since creating a TUN device requires administrator
+     * rights.</p>
      *
      * @param configJson the sing-box configuration in JSON format
      * @param proxyMode  the proxy mode determining how sing-box is started
@@ -138,9 +141,10 @@ public class SingBoxEngine {
         );
         logReader.start();
 
-        // In TUN mode sing-box runs under osascript, which buffers stdout
-        // until the shell script exits. LogReader never sees the "started"
-        // line in real time, so the UI would otherwise be stuck on
+        // In TUN mode the launcher's wrapper may buffer or delay the core's
+        // stdout (osascript buffers until the script exits; the Windows
+        // outer script polls log files). LogReader may never see the
+        // "started" line in real time, so the UI would otherwise be stuck on
         // CONNECTING forever. Promote to CONNECTED after a short delay as
         // long as the process is still alive.
         if (proxyMode == ProxyMode.TUN) {
@@ -198,119 +202,17 @@ public class SingBoxEngine {
     }
 
     /**
-     * Starts sing-box with administrator privileges for TUN mode.
-     *
-     * <p>Two code paths:</p>
-     * <ol>
-     *   <li>Preferred: sudoers NOPASSWD is already installed (one-time
-     *       setup by {@link PrivilegeHelper}). The wrapper is spawned
-     *       directly as the current user and invokes
-     *       {@code sudo -n sing-box run -c ...}, so no password prompt
-     *       appears. Stop is signalled via the user-writable stop file.</li>
-     *   <li>Fallback: if NOPASSWD is not available (e.g. user declined the
-     *       one-time configure step), spawn the wrapper inside
-     *       {@code osascript ... with administrator privileges} as before.
-     *       A password prompt appears on every Connect.</li>
-     * </ol>
+     * Starts sing-box with the elevated privileges TUN mode needs, through
+     * the platform's {@link TunLauncher} (sudo-NOPASSWD/osascript on macOS,
+     * UAC elevation on Windows). The launcher hands back an unprivileged
+     * observer process — its stdout carries the core's logs and its lifetime
+     * mirrors the core's — plus the stop-signal file that asks the
+     * privileged side to shut sing-box down.
      */
     private void startWithPrivileges() throws IOException {
-        // Use /tmp so both root and the user can read/write the signal file.
-        stopSignalFile = Path.of("/tmp",
-                "vless-client-stop-" + System.nanoTime() + ".signal");
-        Files.deleteIfExists(stopSignalFile);
-
-        // Try to install the sudoers rule on first run (one password prompt,
-        // ever). If it's already installed this is a fast no-op.
-        if (!PrivilegeHelper.isConfigured(singBoxBinary)) {
-            try {
-                PrivilegeHelper.configure(singBoxBinary);
-            } catch (IOException e) {
-                log.warn("Could not install sudoers NOPASSWD rule, "
-                        + "falling back to osascript prompt: {}", e.getMessage());
-            }
-        }
-
-        if (PrivilegeHelper.isConfigured(singBoxBinary)) {
-            startViaSudoNoPassword();
-        } else {
-            startViaOsascriptPrompt();
-        }
-    }
-
-    /**
-     * Starts sing-box via {@code sudo -n} — no password prompt. Requires the
-     * sudoers NOPASSWD rule installed by {@link PrivilegeHelper#configure}.
-     * The wrapper itself runs as the current user; only the sing-box child
-     * process is root, which means we can still observe its output through
-     * the normal Process pipes and stop it by signalling the user-owned
-     * wrapper (who forwards SIGTERM to the root-owned sing-box via sudo).
-     */
-    private void startViaSudoNoPassword() throws IOException {
-        String singBoxCmd = shellQuote(singBoxBinary.toAbsolutePath().toString());
-        String configPath = shellQuote(tempConfigFile.toAbsolutePath().toString());
-        String stopPath = shellQuote(stopSignalFile.toAbsolutePath().toString());
-
-        // sudo forwards TERM/INT to its child (sing-box), so killing the
-        // user-owned sudo propagates to root-owned sing-box cleanly.
-        String shellCommand = String.format(
-                "sudo -n %s run -c %s & SBPID=$!; "
-                        + "trap 'kill $SBPID 2>/dev/null' EXIT; "
-                        + "while kill -0 $SBPID 2>/dev/null "
-                        + "&& [ ! -f %s ]; do sleep 0.3; done; "
-                        + "kill $SBPID 2>/dev/null; "
-                        + "wait $SBPID 2>/dev/null; "
-                        + "rm -f %s",
-                singBoxCmd, configPath, stopPath, stopPath);
-
-        ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", shellCommand);
-        pb.directory(singBoxBinary.getParent().toFile());
-        pb.redirectErrorStream(true);
-        process = pb.start();
-        log.info("Started sing-box via sudo -n (no password prompt)");
-    }
-
-    /**
-     * Legacy fallback: launch sing-box inside an osascript admin-privileges
-     * context. Prompts for a password on every Connect. Used only when
-     * NOPASSWD configuration is unavailable (e.g. the user cancelled the
-     * one-time install dialog).
-     */
-    private void startViaOsascriptPrompt() throws IOException {
-        long parentPid = ProcessHandle.current().pid();
-
-        String singBoxCmd = shellQuote(singBoxBinary.toAbsolutePath().toString());
-        String configPath = shellQuote(tempConfigFile.toAbsolutePath().toString());
-        String stopPath = shellQuote(stopSignalFile.toAbsolutePath().toString());
-
-        String shellCommand = String.format(
-                "%s run -c %s & SBPID=$!; "
-                        + "trap 'kill $SBPID 2>/dev/null' EXIT; "
-                        + "while kill -0 $SBPID 2>/dev/null "
-                        + "&& kill -0 %d 2>/dev/null "
-                        + "&& [ ! -f %s ]; do sleep 0.3; done; "
-                        + "kill $SBPID 2>/dev/null; "
-                        + "wait $SBPID 2>/dev/null; "
-                        + "rm -f %s",
-                singBoxCmd, configPath, parentPid, stopPath, stopPath);
-
-        ProcessBuilder pb = new ProcessBuilder(
-                "osascript",
-                "-e",
-                "do shell script \"" + shellCommand.replace("\\", "\\\\")
-                        .replace("\"", "\\\"") + "\" with administrator privileges"
-        );
-        pb.directory(singBoxBinary.getParent().toFile());
-        pb.redirectErrorStream(true);
-        process = pb.start();
-        log.info("Started sing-box via osascript (password prompt expected)");
-    }
-
-    /**
-     * Wraps {@code s} in single quotes, escaping any embedded single quotes.
-     * Safe for embedding into an {@code sh -c} command.
-     */
-    private static String shellQuote(String s) {
-        return "'" + s.replace("'", "'\\''") + "'";
+        TunLauncher.Launched launched = tunLauncher.launch(singBoxBinary, tempConfigFile);
+        process = launched.process();
+        stopSignalFile = launched.stopSignalFile();
     }
 
     /**
@@ -502,6 +404,11 @@ public class SingBoxEngine {
     /** Test seam: replaces the OS proxy guard. */
     void setSystemProxyGuard(SystemProxyGuard guard) {
         this.systemProxyGuard = guard;
+    }
+
+    /** Test seam: replaces the privileged TUN launcher. */
+    void setTunLauncher(TunLauncher launcher) {
+        this.tunLauncher = launcher;
     }
 
     /**

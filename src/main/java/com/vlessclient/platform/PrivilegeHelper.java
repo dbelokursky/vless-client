@@ -1,4 +1,4 @@
-package com.vlessclient.service;
+package com.vlessclient.platform;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
