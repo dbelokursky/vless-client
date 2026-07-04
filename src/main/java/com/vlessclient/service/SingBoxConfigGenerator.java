@@ -30,10 +30,17 @@ public class SingBoxConfigGenerator {
     private static final Logger log = LoggerFactory.getLogger(SingBoxConfigGenerator.class);
 
     private final ObjectMapper mapper;
+    private final com.vlessclient.platform.SystemProxySupport systemProxySupport;
 
     public SingBoxConfigGenerator() {
+        this(com.vlessclient.platform.SystemProxySupport.current());
+    }
+
+    /** Test seam: inject the host's system-proxy capability check. */
+    SingBoxConfigGenerator(com.vlessclient.platform.SystemProxySupport systemProxySupport) {
         this.mapper = new ObjectMapper();
         this.mapper.enable(SerializationFeature.INDENT_OUTPUT);
+        this.systemProxySupport = systemProxySupport;
     }
 
     public String generate(ServerConfig server, AppSettings settings) {
@@ -429,10 +436,14 @@ public class SingBoxConfigGenerator {
         // In SYSTEM_PROXY mode sing-box itself registers this inbound as the
         // OS proxy on start and restores the previous state on a graceful
         // stop — one cross-platform mechanism (networksetup on macOS, WinINET
-        // on Windows) instead of app-side platform code. SystemProxyGuard
-        // covers the non-graceful exits.
+        // on Windows, GNOME gsettings on Linux) instead of app-side platform
+        // code. SystemProxyGuard covers the non-graceful exits. Gated on host
+        // capability: without the GNOME schema sing-box FATALs at startup, so
+        // on such hosts the flag is omitted and the local listeners still
+        // serve manually-configured clients.
         if (settings.getProxyMode() == ProxyMode.SYSTEM_PROXY
-                && settings.isSystemProxyAutoConfig()) {
+                && settings.isSystemProxyAutoConfig()
+                && systemProxySupport.canAutoConfigure()) {
             http.put("set_system_proxy", true);
         }
         inbounds.add(http);

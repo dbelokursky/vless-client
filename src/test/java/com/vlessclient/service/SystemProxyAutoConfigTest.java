@@ -25,7 +25,9 @@ class SystemProxyAutoConfigTest {
 
     @BeforeEach
     void setUp() {
-        generator = new SingBoxConfigGenerator();
+        // Capability forced on: these tests pin the settings/mode matrix,
+        // not the host gate (covered separately below).
+        generator = new SingBoxConfigGenerator(() -> true);
         mapper = new ObjectMapper();
     }
 
@@ -72,6 +74,22 @@ class SystemProxyAutoConfigTest {
         JsonNode http = httpInbound(settings);
 
         assertThat(http.has("set_system_proxy")).isFalse();
+    }
+
+    @Test
+    void hostWithoutProxyStore_neverMarksTheInbound() throws Exception {
+        // The gnomeless-CI probe pinned why this gate exists: sing-box FATALs
+        // at startup when it cannot write the OS proxy store (e.g. Linux
+        // without the GNOME schema), so the generator must omit the flag.
+        SingBoxConfigGenerator gated = new SingBoxConfigGenerator(() -> false);
+        AppSettings settings = new AppSettings();
+        settings.setProxyMode(ProxyMode.SYSTEM_PROXY);
+        settings.setSystemProxyAutoConfig(true);
+
+        JsonNode config = mapper.readTree(gated.generate(server(), settings));
+        for (JsonNode inbound : config.get("inbounds")) {
+            assertThat(inbound.has("set_system_proxy")).isFalse();
+        }
     }
 
     @Test
