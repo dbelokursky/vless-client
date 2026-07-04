@@ -374,9 +374,9 @@ public class SettingsViewController {
             // Binary comes from Homebrew/$PATH/.app bundle — replacing the
             // managed cache would not change what actually runs.
             checkCoreUpdateButton.setDisable(true);
-            coreUpdateStatusLabel.setText(activePath == null
+            setCoreStatus(activePath == null
                     ? I18n.get("settings.version.unknown")
-                    : I18n.get("settings.core.external"));
+                    : I18n.get("settings.core.external"), "core-status-muted");
             return;
         }
 
@@ -407,7 +407,7 @@ public class SettingsViewController {
         if (available != null) {
             showCoreUpdateAvailable(new CoreUpdateService.CoreUpdate(available, null, null));
         } else if (coreUpdateService.lastCheckEpochMs() > 0) {
-            coreUpdateStatusLabel.setText(I18n.get("settings.core.uptodate"));
+            setCoreStatus(I18n.get("settings.core.uptodate"), "core-status-ok");
         }
 
         // Periodic re-check so the verdict stays fresh without pressing the
@@ -482,7 +482,7 @@ public class SettingsViewController {
      */
     private void runCoreCheck(boolean quiet) {
         checkCoreUpdateButton.setDisable(true);
-        coreUpdateStatusLabel.setText(I18n.get("settings.core.checking"));
+        setCoreStatus(I18n.get("settings.core.checking"), "core-status-muted");
         ProxySelector proxySelector = coreCheckProxySelector();
         Thread t = new Thread(() -> {
             try {
@@ -501,7 +501,7 @@ public class SettingsViewController {
                         pendingCoreUpdate = null;
                         installCoreUpdateButton.setVisible(false);
                         installCoreUpdateButton.setManaged(false);
-                        coreUpdateStatusLabel.setText(I18n.get("settings.core.uptodate"));
+                        setCoreStatus(I18n.get("settings.core.uptodate"), "core-status-ok");
                     }
                 });
             } catch (Exception e) {
@@ -509,8 +509,8 @@ public class SettingsViewController {
                 Platform.runLater(() -> {
                     installAfterCheck = false;
                     checkCoreUpdateButton.setDisable(false);
-                    coreUpdateStatusLabel.setText(quiet ? ""
-                            : I18n.get("settings.core.error", e.getMessage()));
+                    setCoreStatus(quiet ? "" : I18n.get("settings.core.error", e.getMessage()),
+                            "core-status-error");
                 });
             }
         }, "core-update-check");
@@ -518,9 +518,29 @@ public class SettingsViewController {
         t.start();
     }
 
+    /**
+     * Sets the dedicated core-update status line: text, colour (via a modifier
+     * style class), and a leading glyph matching the state. Blank text hides
+     * the line so it never leaves an empty row behind.
+     */
+    private void setCoreStatus(String text, String modifier) {
+        boolean show = text != null && !text.isBlank();
+        String glyph = switch (modifier) {
+            case "core-status-ok" -> "✓  ";
+            case "core-status-available" -> "↑  ";
+            case "core-status-error" -> "⚠  ";
+            default -> "";
+        };
+        coreUpdateStatusLabel.setText(show ? glyph + text : "");
+        coreUpdateStatusLabel.getStyleClass().setAll("core-status", modifier);
+        coreUpdateStatusLabel.setVisible(show);
+        coreUpdateStatusLabel.setManaged(show);
+    }
+
     private void showCoreUpdateAvailable(CoreUpdateService.CoreUpdate update) {
         pendingCoreUpdate = update;
-        coreUpdateStatusLabel.setText(I18n.get("settings.core.available", update.version()));
+        setCoreStatus(I18n.get("settings.core.available", update.version()),
+                "core-status-available");
         installCoreUpdateButton.setText(I18n.get("settings.core.update", update.version()));
         installCoreUpdateButton.setVisible(true);
         installCoreUpdateButton.setManaged(true);
@@ -548,7 +568,7 @@ public class SettingsViewController {
         coreUpdateProgress.setVisible(true);
         coreUpdateProgress.setManaged(true);
         coreUpdateProgress.setProgress(0);
-        coreUpdateStatusLabel.setText(I18n.get("settings.core.updating"));
+        setCoreStatus(I18n.get("settings.core.updating"), "core-status-muted");
 
         List<String> validationConfigs = buildValidationConfigs();
         Thread t = new Thread(() -> {
@@ -564,8 +584,8 @@ public class SettingsViewController {
                     pendingCoreUpdate = null;
                     installCoreUpdateButton.setVisible(false);
                     installCoreUpdateButton.setManaged(false);
-                    coreUpdateStatusLabel.setText(
-                            I18n.get("settings.core.updated", update.version()));
+                    setCoreStatus(I18n.get("settings.core.updated", update.version()),
+                            "core-status-ok");
                     refreshRollbackButton();
                     refreshSingBoxVersionAsync();
                 });
@@ -573,8 +593,8 @@ public class SettingsViewController {
                 log.error("Core update failed", e);
                 Platform.runLater(() -> {
                     finishCoreOperation();
-                    coreUpdateStatusLabel.setText(
-                            I18n.get("settings.core.error", e.getMessage()));
+                    setCoreStatus(I18n.get("settings.core.error", e.getMessage()),
+                            "core-status-error");
                 });
             }
         }, "core-update-install");
@@ -594,7 +614,7 @@ public class SettingsViewController {
                 coreUpdateService.rollback();
                 Platform.runLater(() -> {
                     finishCoreOperation();
-                    coreUpdateStatusLabel.setText(I18n.get("settings.core.rolledback", target));
+                    setCoreStatus(I18n.get("settings.core.rolledback", target), "core-status-ok");
                     refreshRollbackButton();
                     refreshSingBoxVersionAsync();
                 });
@@ -602,8 +622,8 @@ public class SettingsViewController {
                 log.error("Core rollback failed", e);
                 Platform.runLater(() -> {
                     finishCoreOperation();
-                    coreUpdateStatusLabel.setText(
-                            I18n.get("settings.core.error", e.getMessage()));
+                    setCoreStatus(I18n.get("settings.core.error", e.getMessage()),
+                            "core-status-error");
                 });
             }
         }, "core-update-rollback");
