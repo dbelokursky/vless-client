@@ -12,6 +12,10 @@ concurrency:
 jobs:
   build:
     runs-on: macos-latest
+    permissions:
+      # Merge builds force-move the dev-latest tag and recreate its
+      # prerelease; PR runs never reach those steps.
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -30,6 +34,7 @@ jobs:
       - name: Package DMG
         if: github.event_name == 'push'
         run: scripts/package-dmg.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "1.0.${{ github.run_number }}"
+      # Per-merge history: each merge keeps its own DMG for 14 days.
       - name: Upload DMG artifact
         if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
@@ -38,3 +43,29 @@ jobs:
           path: dist/*.dmg
           retention-days: 14
           if-no-files-found: error
+      # Rolling "dev-latest" prerelease: always holds the DMG of the newest
+      # merge at a stable URL on the Releases page (downloadable without a
+      # GitHub login, never expires). Delete+recreate replaces the previous
+      # merge's asset; the tag is force-moved so the release's source link
+      # points at the commit that was actually built. Real releases stay
+      # untouched — a prerelease is never marked "Latest".
+      - name: Update rolling dev release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=dev-latest
+          git tag -f "$TAG"
+          git push --force origin "$TAG"
+          {
+            echo "Автосборка последнего мержа в main."
+            echo
+            echo "- Коммит: ${GITHUB_SHA}"
+            echo "- Ран: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Проверки: mvn clean verify -Psmoke (полные тесты + smoke на реальном sing-box)"
+          } > release-notes.md
+          gh release delete "$TAG" --yes || true
+          gh release create "$TAG" dist/*.dmg \
+            --prerelease \
+            --title "Dev build ${GITHUB_SHA:0:7}" \
+            --notes-file release-notes.md
