@@ -1,4 +1,4 @@
-package com.vlessclient.service;
+package com.vlessclient.platform;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -10,7 +10,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class LoginItemServiceTest {
+class MacAutostartTest {
 
     private static final String PLIST_NAME = "com.vlessclient.client.plist";
 
@@ -19,12 +19,12 @@ class LoginItemServiceTest {
 
     @Test
     void isEnabled_falseWhenPlistAbsent() {
-        assertThat(new LoginItemService(tempDir).isEnabled()).isFalse();
+        assertThat(new MacAutostart(tempDir).isEnabled()).isFalse();
     }
 
     @Test
     void setEnabledTrue_writesPlistAndReportsEnabled() throws IOException {
-        LoginItemService service = new LoginItemService(tempDir);
+        MacAutostart service = new MacAutostart(tempDir);
 
         service.setEnabled(true);
 
@@ -38,7 +38,7 @@ class LoginItemServiceTest {
 
     @Test
     void setEnabledFalse_removesPlist() throws IOException {
-        LoginItemService service = new LoginItemService(tempDir);
+        MacAutostart service = new MacAutostart(tempDir);
         service.setEnabled(true);
         assertThat(service.isEnabled()).isTrue();
 
@@ -50,7 +50,7 @@ class LoginItemServiceTest {
 
     @Test
     void setEnabledFalse_whenAlreadyDisabledIsNoOp() throws IOException {
-        LoginItemService service = new LoginItemService(tempDir);
+        MacAutostart service = new MacAutostart(tempDir);
 
         service.setEnabled(false);
 
@@ -60,7 +60,7 @@ class LoginItemServiceTest {
     @Test
     void setEnabledTrue_createsLaunchAgentsDirWhenMissing() throws IOException {
         Path missingDir = tempDir.resolve("Library").resolve("LaunchAgents");
-        LoginItemService service = new LoginItemService(missingDir);
+        MacAutostart service = new MacAutostart(missingDir);
 
         service.setEnabled(true);
 
@@ -69,7 +69,7 @@ class LoginItemServiceTest {
 
     @Test
     void refresh_rewritesPlistWhenEnabled() throws IOException {
-        LoginItemService service = new LoginItemService(tempDir);
+        MacAutostart service = new MacAutostart(tempDir);
         service.setEnabled(true);
         Path plist = tempDir.resolve(PLIST_NAME);
         Files.writeString(plist, "stale");
@@ -81,7 +81,7 @@ class LoginItemServiceTest {
 
     @Test
     void refresh_doesNothingWhenDisabled() {
-        LoginItemService service = new LoginItemService(tempDir);
+        MacAutostart service = new MacAutostart(tempDir);
 
         service.refresh();
 
@@ -90,7 +90,7 @@ class LoginItemServiceTest {
 
     @Test
     void buildLaunchCommand_reconstructsJavaInvocation() {
-        List<String> command = LoginItemService.buildLaunchCommand();
+        List<String> command = JvmLaunchCommand.current();
 
         assertThat(command).isNotEmpty();
         assertThat(command.getFirst()).endsWith("java");
@@ -100,7 +100,7 @@ class LoginItemServiceTest {
 
     @Test
     void buildPlist_escapesXmlSpecialCharacters() {
-        String plist = LoginItemService.buildPlist(List.of("/opt/a & b/<x>"));
+        String plist = MacAutostart.buildPlist(List.of("/opt/a & b/<x>"));
 
         assertThat(plist).contains("/opt/a &amp; b/&lt;x&gt;");
     }

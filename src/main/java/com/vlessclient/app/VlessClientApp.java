@@ -3,7 +3,7 @@ package com.vlessclient.app;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.CoreUpdateService;
-import com.vlessclient.service.LoginItemService;
+import com.vlessclient.platform.Autostart;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.SingBoxInstaller;
@@ -57,9 +57,9 @@ public class VlessClientApp extends Application {
      */
     private void refreshLoginItem() {
         try {
-            ServiceLocator.get(LoginItemService.class).refresh();
+            ServiceLocator.get(Autostart.class).refresh();
         } catch (IllegalArgumentException e) {
-            log.debug("LoginItemService not available");
+            log.debug("Autostart not available");
         }
     }
 

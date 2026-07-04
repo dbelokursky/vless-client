@@ -10,7 +10,7 @@ import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.CoreUpdateService;
-import com.vlessclient.service.LoginItemService;
+import com.vlessclient.platform.Autostart;
 import com.vlessclient.service.RoutingService;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
@@ -103,7 +103,7 @@ public class SettingsViewController {
 
     private ConfigStore configStore;
     private ThemeManager themeManager;
-    private LoginItemService loginItemService;
+    private Autostart autostart;
     private boolean suppressLaunchAtLoginListener;
 
     private CoreUpdateService coreUpdateService;
@@ -135,9 +135,9 @@ public class SettingsViewController {
         }
 
         try {
-            loginItemService = ServiceLocator.get(LoginItemService.class);
+            autostart = ServiceLocator.get(Autostart.class);
         } catch (IllegalArgumentException e) {
-            log.warn("LoginItemService not available");
+            log.warn("Autostart not available");
         }
 
         AppSettings settings = configStore.getSettings();
@@ -315,17 +315,17 @@ public class SettingsViewController {
      * checkbox reverts so it never claims a state that did not take effect.
      */
     private void initLaunchAtLogin() {
-        if (loginItemService == null) {
+        if (autostart == null) {
             launchAtLoginCheck.setDisable(true);
             return;
         }
-        launchAtLoginCheck.setSelected(loginItemService.isEnabled());
+        launchAtLoginCheck.setSelected(autostart.isEnabled());
         launchAtLoginCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
             if (suppressLaunchAtLoginListener) {
                 return;
             }
             try {
-                loginItemService.setEnabled(newVal);
+                autostart.setEnabled(newVal);
             } catch (IOException e) {
                 log.error("Failed to {} launch at login", newVal ? "enable" : "disable", e);
                 suppressLaunchAtLoginListener = true;
