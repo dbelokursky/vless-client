@@ -1,11 +1,12 @@
 name: Build
 on:
   push:
-    branches: [main]
+    # TODO(windows-ci): drop feat/windows-ci before merge — added so the
+    # Windows job can be validated on the branch (workflow_dispatch only fires
+    # from the default branch).
+    branches: [main, feat/windows-ci]
   pull_request:
     branches: [main]
-  # Manual trigger so the matrix (incl. the Windows job) can be validated on a
-  # feature branch before it reaches main. DMG/release steps stay push-gated.
   workflow_dispatch:
 # Superseded PR pushes cancel their older runs; merge builds on main always
 # run to completion so every merge yields its own DMG artifact.
@@ -35,11 +36,11 @@ jobs:
       # a release. The push trigger above is main-only, so checking the
       # event name is enough.
       - name: Package DMG
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: scripts/package-dmg.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "1.0.${{ github.run_number }}"
       # Per-merge history: each merge keeps its own DMG for 14 days.
       - name: Upload DMG artifact
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: vless-client-${{ github.sha }}
@@ -53,7 +54,7 @@ jobs:
       # points at the commit that was actually built. Real releases stay
       # untouched — a prerelease is never marked "Latest".
       - name: Update rolling dev release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
