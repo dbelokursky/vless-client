@@ -400,7 +400,7 @@ public class CoreUpdateService {
             log.info("SHA-256 verified against GitHub API digest: {}", actual);
 
             extractDir = Files.createTempDirectory("sing-box-update-");
-            installer.extractTarGz(tarball, extractDir);
+            installer.extractArchive(tarball, extractDir);
             Path binary = installer.findBinaryInDir(extractDir);
             installer.makeExecutable(binary);
 
