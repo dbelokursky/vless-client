@@ -16,5 +16,6 @@ cat > "${OUT}" <<'ARGFILE'
 -Xdock:name="VLESS Client"
 -Dapple.awt.application.name="VLESS Client"
 -Dcom.apple.mrj.application.apple.menu.about.name="VLESS Client"
+-Dvless.log.level=DEBUG
 ARGFILE
 echo "[write-jvm-args] wrote ${OUT}"
