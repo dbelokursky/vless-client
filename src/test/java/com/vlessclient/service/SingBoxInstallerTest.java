@@ -199,7 +199,8 @@ class SingBoxInstallerTest {
             // exit 0.
             Files.writeString(binary,
                     "#!/bin/sh\n"
-                            + "echo 'sing-box version 1.13.8-test'\n"
+                            + "echo 'sing-box version "
+                            + SingBoxInstaller.PINNED_VERSION + "-test'\n"
                             + "exit 0\n");
             binary.toFile().setExecutable(true);
 

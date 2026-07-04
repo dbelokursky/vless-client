@@ -13,4 +13,8 @@ jobs:
         with:
           java-version: '25-ea'
           distribution: 'temurin'
-      - run: mvn clean verify
+      # -Psmoke additionally runs SingBoxRealBinarySmokeTest against the
+      # real bundled sing-box: version match, `sing-box check` over every
+      # generated config shape, and a live run probing clash_api + the http
+      # inbound. Catches generator/core schema drift before merge.
+      - run: mvn clean verify -Psmoke

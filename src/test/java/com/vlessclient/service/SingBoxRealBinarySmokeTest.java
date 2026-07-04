@@ -1,0 +1,305 @@
+package com.vlessclient.service;
+
+import com.vlessclient.model.AppSettings;
+import com.vlessclient.model.Protocol;
+import com.vlessclient.model.ProxyMode;
+import com.vlessclient.model.RoutingConfig;
+import com.vlessclient.model.RoutingRule;
+import com.vlessclient.model.ServerConfig;
+import com.sun.net.httpserver.HttpServer;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.ProxySelector;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+/**
+ * Smoke tests that execute the REAL sing-box binary bundled by
+ * scripts/bundle-singbox.sh against the config generator's actual output.
+ * This is the gate that catches config-schema drift between the generator
+ * and the pinned core (the class of bug where WireGuard configs fatally
+ * failed on 1.13) before anything ships.
+ *
+ * <p>Excluded from the default test run; enabled with {@code -Psmoke}
+ * (CI runs it in build.yml on every push and in release.yml before
+ * packaging the DMG).</p>
+ */
+@Tag("smoke")
+class SingBoxRealBinarySmokeTest {
+
+    private static final String WG_PRIVATE_KEY = "xunATixZ9R2SMbEghGvNz1fen77h9i5gNCPfxxgxtWk=";
+    private static final String WG_PEER_PUBLIC_KEY = "2Gl1nZ7pohiktxNLQq7rb1ZwdPN2BBaHpwA2M6dMJXM=";
+    private static final String TEST_UUID = "b1c2d3e4-f5a6-7890-abcd-ef1234567890";
+
+    private static Path binary;
+    private static final SingBoxConfigGenerator generator = new SingBoxConfigGenerator();
+
+    @BeforeAll
+    static void locateBundledBinary() {
+        String osArch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+        String arch = osArch.contains("aarch64") || osArch.contains("arm64")
+                ? "arm64" : "amd64";
+        binary = Path.of("target", "classes", "native", "darwin-" + arch, "sing-box")
+                .toAbsolutePath();
+        assumeTrue(Files.isExecutable(binary),
+                "bundled sing-box not found at " + binary
+                        + " — run the generate-resources phase first");
+    }
+
+    @Test
+    void bundledBinaryVersionMatchesPin() throws Exception {
+        ProcessResult result = run(binary, "version");
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.output().lines().findFirst().orElse(""))
+                .isEqualTo("sing-box version " + SingBoxInstaller.PINNED_VERSION);
+    }
+
+    @Test
+    void checkAcceptsEveryProtocolInBothModes() throws Exception {
+        for (Protocol protocol : Protocol.values()) {
+            for (ProxyMode mode : ProxyMode.values()) {
+                AppSettings settings = new AppSettings();
+                settings.setProxyMode(mode);
+                String config = generator.generate(serverFor(protocol), settings);
+
+                assertCheckPasses(config, protocol + "/" + mode);
+            }
+        }
+    }
+
+    @Test
+    void checkAcceptsRoutingConfigs() throws Exception {
+        // Custom rules + user bypass list.
+        RoutingConfig custom = new RoutingConfig();
+        custom.setPreset("custom");
+        custom.setBypassList(List.of("*.local", "192.168.0.0/16", "example.com"));
+        RoutingRule rule = new RoutingRule(RoutingRule.RuleType.DOMAIN_SUFFIX,
+                "corp.example.com", RoutingRule.RuleAction.DIRECT);
+        custom.setRules(List.of(rule));
+
+        // Country-bypass preset — emits remote rule_set references (verified:
+        // `sing-box check` does not download them, so this is CI-safe).
+        RoutingConfig domestic = new RoutingConfig();
+        domestic.setPreset("bypass_domestic");
+        domestic.setBypassCountry("ru");
+
+        for (RoutingConfig routing : List.of(custom, domestic)) {
+            for (ProxyMode mode : ProxyMode.values()) {
+                AppSettings settings = new AppSettings();
+                settings.setProxyMode(mode);
+                String config = generator.generate(
+                        serverFor(Protocol.VLESS), settings, routing);
+
+                assertCheckPasses(config, routing.getPreset() + "/" + mode);
+            }
+        }
+    }
+
+    /**
+     * Boots the real binary with a generated SYSTEM_PROXY config on ephemeral
+     * ports and exercises the two runtime contracts {@code sing-box check}
+     * cannot see: the clash_api /traffic stream (TrafficMonitor) and proxying
+     * through the http inbound (ServiceReachabilityChecker). The proxied
+     * request goes to a local target server; the bypass rule routes it
+     * through the direct outbound, so no external network is needed.
+     */
+    @Test
+    void realRunServesClashApiAndHttpInbound() throws Exception {
+        int socksPort = freePort();
+        int httpPort = freePort();
+        int clashPort = freePort();
+
+        HttpServer target = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        target.createContext("/ok", exchange -> {
+            byte[] body = "smoke".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(body);
+            }
+        });
+        target.start();
+
+        AppSettings settings = new AppSettings();
+        settings.setProxyMode(ProxyMode.SYSTEM_PROXY);
+        settings.setSocksPort(socksPort);
+        settings.setHttpPort(httpPort);
+        settings.setClashApiPort(clashPort);
+
+        RoutingConfig routing = new RoutingConfig();
+        routing.setPreset("route_all");
+        routing.setBypassList(List.of("127.0.0.1/32"));
+
+        String config = generator.generate(serverFor(Protocol.VLESS), settings, routing);
+        Path configFile = Files.createTempFile("smoke-run-", ".json");
+        Files.writeString(configFile, config);
+
+        Process proc = new ProcessBuilder(
+                binary.toString(), "run", "-c", configFile.toString())
+                .redirectErrorStream(true)
+                .redirectOutput(Files.createTempFile("smoke-run-", ".log").toFile())
+                .start();
+        try {
+            awaitPort(clashPort, proc);
+
+            HttpClient direct = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(5))
+                    .build();
+
+            // clash_api contract: /traffic streams NDJSON with up/down.
+            HttpResponse<java.io.InputStream> traffic = direct.send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create("http://127.0.0.1:" + clashPort + "/traffic"))
+                            .timeout(Duration.ofSeconds(10))
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofInputStream());
+            assertThat(traffic.statusCode()).isEqualTo(200);
+            try (var reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(traffic.body()))) {
+                String firstLine = reader.readLine();
+                assertThat(firstLine).contains("\"up\"").contains("\"down\"");
+            }
+
+            // http-inbound contract: proxy a request to the local target.
+            HttpClient proxied = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(5))
+                    .proxy(ProxySelector.of(new InetSocketAddress("127.0.0.1", httpPort)))
+                    .build();
+            HttpResponse<String> response = proxied.send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create("http://127.0.0.1:"
+                                    + target.getAddress().getPort() + "/ok"))
+                            .timeout(Duration.ofSeconds(10))
+                            .GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("smoke");
+        } finally {
+            proc.destroy();
+            if (!proc.waitFor(5, TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+            }
+            target.stop(0);
+            Files.deleteIfExists(configFile);
+        }
+    }
+
+    // ===== helpers =====
+
+    private static ServerConfig serverFor(Protocol protocol) {
+        ServerConfig server = new ServerConfig();
+        server.setProtocol(protocol);
+        server.setAddress("203.0.113.10");
+        server.setPort(443);
+        switch (protocol) {
+            case VLESS, VMESS -> {
+                server.setUuid(TEST_UUID);
+                server.getTls().setEnabled(true);
+                server.getTls().setServerName("example.com");
+            }
+            case TROJAN, HYSTERIA2 -> {
+                server.setUuid("smoke-password");
+                server.getTls().setEnabled(true);
+                server.getTls().setServerName("example.com");
+                server.getTls().setAllowInsecure(true);
+            }
+            case SHADOWSOCKS -> {
+                server.setUuid("smoke-password");
+                server.setEncryption("aes-256-gcm");
+            }
+            case WIREGUARD -> {
+                server.setPort(51820);
+                server.setUuid(WG_PRIVATE_KEY);
+                server.setEncryption(WG_PEER_PUBLIC_KEY);
+                server.setFlow("10.0.0.2/32");
+                server.getTls().setServerName("1,2,3");
+            }
+        }
+        return server;
+    }
+
+    private void assertCheckPasses(String config, String label) throws Exception {
+        Path configFile = Files.createTempFile("smoke-check-", ".json");
+        try {
+            Files.writeString(configFile, config);
+            ProcessResult result = run(binary, "check", "-c", configFile.toString());
+            assertThat(result.exitCode())
+                    .withFailMessage("sing-box check failed for %s:%n%s%n--- config ---%n%s",
+                            label, result.output(), config)
+                    .isZero();
+        } finally {
+            Files.deleteIfExists(configFile);
+        }
+    }
+
+    private record ProcessResult(int exitCode, String output) {
+    }
+
+    private static ProcessResult run(Path binary, String... args) throws Exception {
+        Path out = Files.createTempFile("smoke-out-", ".log");
+        try {
+            String[] cmd = new String[args.length + 1];
+            cmd[0] = binary.toString();
+            System.arraycopy(args, 0, cmd, 1, args.length);
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.redirectErrorStream(true);
+            pb.redirectOutput(out.toFile());
+            Process proc = pb.start();
+            if (!proc.waitFor(30, TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+                throw new IOException("sing-box " + String.join(" ", args) + " timed out");
+            }
+            return new ProcessResult(proc.exitValue(), Files.readString(out));
+        } finally {
+            Files.deleteIfExists(out);
+        }
+    }
+
+    private static int freePort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+    }
+
+    /** Waits until the port accepts connections; fails fast if the process dies. */
+    private static void awaitPort(int port, Process proc) throws Exception {
+        long deadline = System.currentTimeMillis() + 15_000;
+        while (System.currentTimeMillis() < deadline) {
+            if (!proc.isAlive()) {
+                throw new AssertionError("sing-box exited early with code " + proc.exitValue());
+            }
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress("127.0.0.1", port), 500);
+                return;
+            } catch (IOException retry) {
+                Thread.sleep(200);
+            }
+        }
+        throw new AssertionError("clash_api port " + port + " did not open within 15s");
+    }
+
+    @AfterAll
+    static void noop() {
+        // binary is shared, nothing to clean
+    }
+}

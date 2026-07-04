@@ -20,7 +20,12 @@
         <junit.version>5.12.2</junit.version>
         <jackson.version>2.18.3</jackson.version>
         <main.class>com.vlessclient.app.Launcher</main.class>
-        <singbox.version>1.13.8</singbox.version>
+        <!-- singbox.version is read from src/main/resources/singbox.properties
+             by the properties-maven-plugin (initialize phase) — the single
+             source of truth shared with bundle-singbox.sh and SingBoxInstaller. -->
+        <!-- Smoke tests (@Tag "smoke") run the real bundled binary; excluded
+             by default, enabled with -Psmoke. -->
+        <surefire.excludedGroups>smoke</surefire.excludedGroups>
     </properties>
 
     <dependencies>
@@ -95,6 +100,30 @@
 
     <build>
         <plugins>
+            <!--
+                Loads singbox.version + checksums from singbox.properties so
+                the pom, the bundling script, and the Java runtime all read
+                the same pinned release. Runs at initialize, before the
+                generate-resources executions that consume ${singbox.version}.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>properties-maven-plugin</artifactId>
+                <version>1.2.1</version>
+                <executions>
+                    <execution>
+                        <id>read-singbox-properties</id>
+                        <phase>initialize</phase>
+                        <goals><goal>read-project-properties</goal></goals>
+                        <configuration>
+                            <files>
+                                <file>${project.basedir}/src/main/resources/singbox.properties</file>
+                            </files>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!--
                 Downloads and bundles the sing-box binary for both macOS
                 architectures into target/classes/native/darwin-{arch}/sing-box.
@@ -182,6 +211,7 @@
                 <version>3.5.3</version>
                 <configuration>
                     <argLine>--enable-preview</argLine>
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
                     <systemPropertyVariables>
                         <!--
                             Prevent tests from writing the bundled sing-box
@@ -289,4 +319,15 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Runs the smoke suite (real bundled sing-box binary) in addition
+             to the regular tests: mvn clean verify -Psmoke -->
+        <profile>
+            <id>smoke</id>
+            <properties>
+                <surefire.excludedGroups/>
+            </properties>
+        </profile>
+    </profiles>
 </project>

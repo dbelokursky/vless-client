@@ -44,21 +44,42 @@ public class SingBoxInstaller {
 
     private static final Logger log = LoggerFactory.getLogger(SingBoxInstaller.class);
 
-    /** Pinned sing-box version. Bump this to upgrade the bundled binary. */
-    public static final String PINNED_VERSION = "1.13.8";
+    /**
+     * Pinned sing-box version, loaded from the singbox.properties classpath
+     * resource — the single source of truth shared with pom.xml and
+     * scripts/bundle-singbox.sh. Bump with scripts/bump-singbox.sh.
+     */
+    public static final String PINNED_VERSION;
 
     /**
-     * SHA-256 checksums of the release tarballs, keyed by architecture.
-     * These are computed once per release and verified after download to
-     * protect against corruption or MITM tampering.
-     *
-     * <p>When bumping {@link #PINNED_VERSION}, recompute by downloading both
-     * tarballs and running {@code shasum -a 256}.</p>
+     * SHA-256 checksums of the release tarballs, keyed by architecture
+     * (arm64/amd64), from the same properties resource. Verified after the
+     * runtime fallback download to protect against corruption or tampering.
      */
-    private static final Map<String, String> EXPECTED_SHA256 = Map.of(
-            "arm64", "e9e4c72a4a64c19d515b800b7191c50367522c8169654c569677b15873e08249",
-            "amd64", "0db6aca503dcdd5a816e668669e79231f991cdbbd13fcbf6dd4f9bcb8a1c3b0e"
-    );
+    private static final Map<String, String> EXPECTED_SHA256;
+
+    static {
+        java.util.Properties props = new java.util.Properties();
+        try (InputStream in = SingBoxInstaller.class.getResourceAsStream("/singbox.properties")) {
+            if (in == null) {
+                throw new IllegalStateException(
+                        "singbox.properties is missing from the classpath");
+            }
+            props.load(in);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not read singbox.properties", e);
+        }
+        String version = props.getProperty("singbox.version", "").trim();
+        String arm64 = props.getProperty("singbox.sha256.darwin-arm64", "").trim();
+        String amd64 = props.getProperty("singbox.sha256.darwin-amd64", "").trim();
+        if (version.isEmpty() || arm64.length() != 64 || amd64.length() != 64) {
+            throw new IllegalStateException(
+                    "singbox.properties is incomplete: version='" + version
+                            + "', sha256 lengths " + arm64.length() + "/" + amd64.length());
+        }
+        PINNED_VERSION = version;
+        EXPECTED_SHA256 = Map.of("arm64", arm64, "amd64", amd64);
+    }
 
     private static final String DOWNLOAD_URL_TEMPLATE =
             "https://github.com/SagerNet/sing-box/releases/download/v%s/sing-box-%s-darwin-%s.tar.gz";
