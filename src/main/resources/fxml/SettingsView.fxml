@@ -164,13 +164,14 @@
                        prefWidth="120"/>
                 <Label fx:id="singboxVersionValue" text="Unknown" styleClass="stats-value"
                        style="-fx-font-size: 13px;"/>
-                <!-- Inline verdict next to the version: "up to date" /
-                     "update available: X" / "checking…" / error -->
-                <Label fx:id="coreUpdateStatusLabel" text="" wrapText="true"
-                       style="-fx-font-size: 12px; -fx-opacity: 0.75;"/>
             </HBox>
 
-            <!-- In-app sing-box core update / rollback -->
+            <!-- In-app sing-box core update / rollback.
+                 The verdict gets its own full-width line (colour-coded via a
+                 modifier style class) so it can never be clipped or squeezed
+                 the way an inline label in the version row could. -->
+            <Label fx:id="coreUpdateStatusLabel" text="" styleClass="core-status"
+                   wrapText="true" maxWidth="Infinity" visible="false" managed="false"/>
             <ProgressBar fx:id="coreUpdateProgress" visible="false" managed="false"
                          maxWidth="Infinity" prefHeight="14"/>
             <HBox spacing="8" alignment="CENTER_LEFT">
