@@ -67,7 +67,7 @@
                 <Label text="Mode" styleClass="stats-title"/>
                 <ComboBox fx:id="proxyModeCombo" prefWidth="130" styleClass="mode-combo"/>
                 <Button fx:id="connectButton" text="Connect" styleClass="connect-button"
-                        onAction="#onConnectClicked" prefWidth="170" prefHeight="44"/>
+                        onAction="#onConnectClicked" minWidth="170" prefWidth="170" prefHeight="44"/>
             </HBox>
             <Label fx:id="proxyModeWarning" text="" styleClass="hint-label"
                    wrapText="true" maxWidth="320" visible="false" managed="false"/>

@@ -11,19 +11,51 @@
 
 .root {
     -fx-background-color: #1e1e1e;
+
+    /* ===== Design tokens (dark) =====
+       Same token names as light.css so every flattened rule is identical in
+       structure across themes; only these values differ. */
+    -c-page:            #181819;
+    -c-surface:         #26262a;
+    -c-surface-sunken:  #202024;
+    -c-border:          #323236;
+    -c-border-strong:   #40404a;
+
+    -c-text:            #e8e8ea;
+    -c-text-secondary:  #a0a4aa;
+    -c-text-muted:      #7b8087;
+
+    -c-accent:          #2e7d32;  /* button fill */
+    -c-accent-hover:    #43a047;
+    -c-accent-press:    #1b5e20;
+    -c-accent-fg:       #81c784;  /* green text / icon on a surface */
+    -c-accent-strong-fg:#a5d6a7;  /* stronger green text (connected title) */
+    -c-accent-tint:     #1b3a1e;
+    -c-on-accent:       #ffffff;
+
+    -c-danger:          #c62828;  /* button fill */
+    -c-danger-hover:    #d32f2f;
+    -c-danger-fg:       #ef5350;  /* red text / icon on a surface */
+    -c-danger-tint:     #3e1a1a;
+
+    -c-warn:            #ffb74d;
+    -c-warn-tint:       #3a2c1a;
+
+    -c-info:            #64b5f6;
+    -c-info-tint:       #1a3350;
 }
 
 /* ===== Sidebar ===== */
 .sidebar {
-    -fx-background-color: linear-gradient(to bottom, #252528 0%, #1f1f22 100%);
-    -fx-border-color: #333336;
+    -fx-background-color: -c-surface-sunken;
+    -fx-border-color: -c-border;
     -fx-border-width: 0 1 0 0;
 }
 
 .sidebar-title {
     -fx-font-size: 15px;
     -fx-font-weight: bold;
-    -fx-text-fill: #e0e0e0;
+    -fx-text-fill: -c-text;
     -fx-padding: 4 8 0 8;
 }
 
@@ -32,14 +64,14 @@
 }
 
 .sidebar-separator .line {
-    -fx-border-color: #3a3a3a;
+    -fx-border-color: -c-border;
     -fx-border-width: 0 0 1 0;
 }
 
 /* ===== Navigation Buttons ===== */
 .nav-button {
     -fx-background-color: transparent;
-    -fx-text-fill: #a0a4aa;
+    -fx-text-fill: -c-text-secondary;
     -fx-font-size: 13px;
     -fx-padding: 12 16 12 20;
     -fx-cursor: hand;
@@ -52,38 +84,38 @@
 }
 
 .nav-button:hover {
-    -fx-background-color: rgba(102, 187, 106, 0.08);
-    -fx-text-fill: #c8e6c9;
+    -fx-background-color: -c-accent-tint;
+    -fx-text-fill: -c-accent-strong-fg;
 }
 
 .nav-button:pressed {
-    -fx-background-color: rgba(102, 187, 106, 0.16);
+    -fx-background-color: -c-accent-tint;
 }
 
 .nav-button-active {
-    -fx-background-color: linear-gradient(to right, rgba(102, 187, 106, 0.18), rgba(102, 187, 106, 0.04));
-    -fx-text-fill: #81c784;
+    -fx-background-color: -c-accent-tint;
+    -fx-text-fill: -c-accent-strong-fg;
     -fx-font-weight: bold;
-    -fx-border-color: #66bb6a transparent transparent transparent;
+    -fx-border-color: -c-accent-fg transparent transparent transparent;
     -fx-border-width: 0 0 0 3;
 }
 
 .nav-button-active:hover {
-    -fx-background-color: linear-gradient(to right, rgba(102, 187, 106, 0.24), rgba(102, 187, 106, 0.08));
-    -fx-text-fill: #a5d6a7;
+    -fx-background-color: -c-accent-tint;
+    -fx-text-fill: -c-accent-strong-fg;
 }
 
 /* SVG icon glyph inside nav buttons — inherits the button's colour. */
 .nav-button .nav-icon-glyph {
-    -fx-fill: #8b9099;
+    -fx-fill: -c-text-secondary;
 }
 
 .nav-button:hover .nav-icon-glyph {
-    -fx-fill: #c8e6c9;
+    -fx-fill: -c-accent-strong-fg;
 }
 
 .nav-button-active .nav-icon-glyph {
-    -fx-fill: #81c784;
+    -fx-fill: -c-accent-fg;
 }
 
 .nav-button:disabled {
@@ -97,21 +129,23 @@
 
 /* ===== Content Area ===== */
 .content-area {
-    -fx-background-color: #181819;
+    -fx-background-color: -c-page;
 }
 
-/* ===== Cards ===== */
+/* ===== Cards =====
+   One flat surface, one soft shadow level. Depth comes from the hairline
+   border, not from gradients or heavy drop shadows. */
 .card {
-    -fx-background-color: #26262a;
-    -fx-background-radius: 14;
-    -fx-border-color: #323236;
-    -fx-border-radius: 14;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 16, 0, 0, 4);
+    -fx-background-color: -c-surface;
+    -fx-background-radius: 12;
+    -fx-border-color: -c-border;
+    -fx-border-radius: 12;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.28), 4, 0, 0, 1);
 }
 
 .hero-card {
-    -fx-background-color: linear-gradient(to bottom, #2a2a2e 0%, #232327 100%);
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 22, 0, 0, 5);
+    -fx-background-color: -c-surface;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.32), 6, 0, 0, 2);
 }
 
 .status-bar {
@@ -120,13 +154,13 @@
 
 .status-halo-sm {
     -fx-background-radius: 22;
-    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #35353a 0%, #2a2a2d 100%);
+    -fx-background-color: -c-surface-sunken;
 }
 
 .section-header {
     -fx-font-size: 11px;
     -fx-font-weight: bold;
-    -fx-text-fill: #7b8087;
+    -fx-text-fill: -c-text-muted;
     -fx-text-transform: uppercase;
     -fx-letter-spacing: 0.6;
     -fx-padding: 2 0 0 2;
@@ -154,51 +188,53 @@
 }
 
 .upload-card {
-    -fx-border-color: transparent;
-    -fx-background-color: linear-gradient(to bottom right, #26262a 40%, #3a2c20 100%);
+    -fx-border-color: -c-border;
+    -fx-background-color: -c-surface;
 }
 
 .download-card {
-    -fx-border-color: transparent;
-    -fx-background-color: linear-gradient(to bottom right, #26262a 40%, #1e2d40 100%);
+    -fx-border-color: -c-border;
+    -fx-background-color: -c-surface;
 }
 
-/* ===== Dashboard Status ===== */
+/* ===== Dashboard Status =====
+   Solid tint discs instead of radial gradients — the colour reads the same
+   but stays flat against the card. */
 .status-halo {
     -fx-background-radius: 36;
-    -fx-background-color: #2d2d31;
+    -fx-background-color: -c-surface-sunken;
 }
 
 .status-halo-disconnected {
-    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #3a3a3e 0%, #2a2a2d 100%);
+    -fx-background-color: -c-surface-sunken;
 }
 
 .status-halo-connected {
-    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #2e4a30 0%, #223324 100%);
+    -fx-background-color: -c-accent-tint;
 }
 
 .status-halo-connecting {
-    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #4a3520 0%, #332614 100%);
+    -fx-background-color: -c-warn-tint;
 }
 
 .status-halo-error {
-    -fx-background-color: radial-gradient(center 50% 50%, radius 60%, #4a2020 0%, #331414 100%);
+    -fx-background-color: -c-danger-tint;
 }
 
 .status-title {
     -fx-font-size: 20px;
     -fx-font-weight: bold;
-    -fx-text-fill: #f5f5f5;
+    -fx-text-fill: -c-text;
 }
 
-.status-title-connected   { -fx-text-fill: #81c784; }
-.status-title-connecting  { -fx-text-fill: #ffb74d; }
-.status-title-error       { -fx-text-fill: #ef9a9a; }
-.status-title-disconnected { -fx-text-fill: #e0e0e0; }
+.status-title-connected   { -fx-text-fill: -c-accent-strong-fg; }
+.status-title-connecting  { -fx-text-fill: -c-warn; }
+.status-title-error       { -fx-text-fill: -c-danger-fg; }
+.status-title-disconnected { -fx-text-fill: -c-text-secondary; }
 
 .status-subtitle {
     -fx-font-size: 13px;
-    -fx-text-fill: #9e9e9e;
+    -fx-text-fill: -c-text-secondary;
 }
 
 .status-subtitle-error {
@@ -218,68 +254,56 @@
     -fx-text-fill: #9e9e9e;
 }
 
-/* ===== Connect/Disconnect Button ===== */
+/* ===== Connect/Disconnect Button =====
+   Flat solid fill (no gradient), one subtle shadow. Width is pinned in the
+   FXML (prefWidth) so Connect and Disconnect render at the same size. */
 .connect-button {
-    -fx-background-color: linear-gradient(to bottom, #43a047, #2e7d32);
-    -fx-text-fill: white;
+    -fx-background-color: -c-accent;
+    -fx-text-fill: -c-on-accent;
     -fx-font-size: 15px;
     -fx-font-weight: bold;
     -fx-background-radius: 12;
     -fx-cursor: hand;
     -fx-padding: 12 32;
-    -fx-effect: dropshadow(gaussian, rgba(76, 175, 80, 0.4), 14, 0, 0, 3);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.30), 6, 0, 0, 1);
 }
 
 .connect-button:hover {
-    -fx-background-color: linear-gradient(to bottom, #4caf50, #388e3c);
-    -fx-effect: dropshadow(gaussian, rgba(76, 175, 80, 0.55), 18, 0, 0, 4);
+    -fx-background-color: -c-accent-hover;
 }
 
 .connect-button:pressed {
-    -fx-background-color: linear-gradient(to bottom, #2e7d32, #1b5e20);
-    -fx-effect: dropshadow(gaussian, rgba(76, 175, 80, 0.25), 6, 0, 0, 1);
+    -fx-background-color: -c-accent-press;
 }
 
 .disconnect-button {
-    -fx-background-color: linear-gradient(to bottom, #ef5350, #c62828);
-    -fx-text-fill: white;
+    -fx-background-color: -c-danger;
+    -fx-text-fill: -c-on-accent;
     -fx-font-size: 15px;
     -fx-font-weight: bold;
     -fx-background-radius: 12;
     -fx-cursor: hand;
     -fx-padding: 12 32;
-    -fx-effect: dropshadow(gaussian, rgba(239, 83, 80, 0.4), 14, 0, 0, 3);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.30), 6, 0, 0, 1);
 }
 
 .disconnect-button:hover {
-    -fx-background-color: linear-gradient(to bottom, #f44336, #d32f2f);
-    -fx-effect: dropshadow(gaussian, rgba(239, 83, 80, 0.55), 18, 0, 0, 4);
+    -fx-background-color: -c-danger-hover;
 }
 
 .disconnect-button:pressed {
-    -fx-background-color: linear-gradient(to bottom, #c62828, #b71c1c);
-    -fx-effect: dropshadow(gaussian, rgba(239, 83, 80, 0.25), 6, 0, 0, 1);
+    -fx-background-color: #b71c1c;
 }
 
 /* ===== Stats ===== */
 .stats-icon {
     -fx-font-size: 18px;
-    -fx-text-fill: #9e9e9e;
-}
-
-.stats-icon-upload {
-    -fx-font-size: 16px;
-    -fx-text-fill: #ffb74d;
-}
-
-.stats-icon-download {
-    -fx-font-size: 16px;
-    -fx-text-fill: #64b5f6;
+    -fx-text-fill: -c-text-secondary;
 }
 
 .stats-title {
     -fx-font-size: 11px;
-    -fx-text-fill: #8b8f96;
+    -fx-text-fill: -c-text-muted;
     -fx-font-weight: bold;
     -fx-text-transform: uppercase;
     -fx-letter-spacing: 0.5;
@@ -288,27 +312,21 @@
 .stats-value {
     -fx-font-size: 18px;
     -fx-font-weight: bold;
-    -fx-text-fill: #e8e8ea;
-}
-
-.speed-value {
-    -fx-font-size: 26px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #f5f5f5;
-    -fx-font-family: "SF Pro Display", "Helvetica Neue", "System";
+    -fx-text-fill: -c-text;
 }
 
 /* ===== View Title ===== */
 .view-title {
     -fx-font-size: 22px;
     -fx-font-weight: bold;
-    -fx-text-fill: #e0e0e0;
+    -fx-text-fill: -c-text;
 }
 
-/* ===== Primary & Secondary Buttons ===== */
+/* ===== Primary & Secondary Buttons =====
+   Secondary is a bordered surface button in the flat scheme. */
 .primary-button {
-    -fx-background-color: #2e7d32;
-    -fx-text-fill: white;
+    -fx-background-color: -c-accent;
+    -fx-text-fill: -c-on-accent;
     -fx-font-size: 13px;
     -fx-font-weight: bold;
     -fx-background-radius: 8;
@@ -317,33 +335,36 @@
 }
 
 .primary-button:hover {
-    -fx-background-color: #388e3c;
+    -fx-background-color: -c-accent-hover;
 }
 
 .primary-button:pressed {
-    -fx-background-color: #1b5e20;
+    -fx-background-color: -c-accent-press;
 }
 
 .secondary-button {
-    -fx-background-color: #424242;
-    -fx-text-fill: #e0e0e0;
+    -fx-background-color: -c-surface;
+    -fx-text-fill: -c-text;
     -fx-font-size: 13px;
     -fx-background-radius: 8;
+    -fx-border-color: -c-border-strong;
+    -fx-border-radius: 8;
     -fx-padding: 8 20;
     -fx-cursor: hand;
 }
 
 .secondary-button:hover {
-    -fx-background-color: #555555;
+    -fx-background-color: -c-surface-sunken;
+    -fx-border-color: -c-text-muted;
 }
 
 .secondary-button:pressed {
-    -fx-background-color: #333333;
+    -fx-background-color: -c-surface-sunken;
 }
 
 .small-button {
-    -fx-background-color: #3a3a3a;
-    -fx-text-fill: #cccccc;
+    -fx-background-color: -c-surface-sunken;
+    -fx-text-fill: -c-text-secondary;
     -fx-font-size: 11px;
     -fx-background-radius: 6;
     -fx-padding: 4 12;
@@ -351,32 +372,33 @@
 }
 
 .small-button:hover {
-    -fx-background-color: #4a4a4a;
+    -fx-background-color: -c-border;
 }
 
 /* Compact square button holding a single icon (toolbar actions). */
 .icon-button {
-    -fx-background-color: #3a3a3a;
+    -fx-background-color: -c-surface-sunken;
     -fx-background-radius: 6;
     -fx-padding: 5 8;
     -fx-cursor: hand;
 }
 
 .icon-button:hover {
-    -fx-background-color: #4a4a4a;
+    -fx-background-color: -c-border;
 }
 
 .icon-button .nav-icon-glyph {
-    -fx-fill: #cccccc;
+    -fx-fill: -c-text-secondary;
 }
 
 .icon-button:hover .nav-icon-glyph {
-    -fx-fill: #ffffff;
+    -fx-fill: -c-text;
 }
 
 .danger-button {
-    -fx-background-color: #3e1a1a;
-    -fx-text-fill: #ef5350;
+    -fx-background-color: -c-danger-tint;
+    -fx-text-fill: -c-danger-fg;
+    -fx-border-color: transparent;
 }
 
 .danger-button:hover {
@@ -470,13 +492,13 @@
 /* ===== Text inputs (TextField / TextArea + editable ComboBox editor) ===== */
 .text-field,
 .text-area {
-    -fx-text-fill: #e0e0e0;
-    -fx-prompt-text-fill: #666666;
-    -fx-highlight-fill: #2e5d33;
-    -fx-highlight-text-fill: #ffffff;
-    -fx-background-color: #2a2a2a;
+    -fx-text-fill: -c-text;
+    -fx-prompt-text-fill: -c-text-muted;
+    -fx-highlight-fill: -c-accent-tint;
+    -fx-highlight-text-fill: -c-accent-strong-fg;
+    -fx-background-color: -c-surface-sunken;
     -fx-background-radius: 6;
-    -fx-border-color: #3a3a3a;
+    -fx-border-color: -c-border;
     -fx-border-radius: 6;
 }
 
@@ -485,15 +507,15 @@
 }
 
 .text-area .content {
-    -fx-background-color: #2a2a2a;
+    -fx-background-color: -c-surface-sunken;
     -fx-background-radius: 6;
     -fx-padding: 8 10;
 }
 
 .text-field:focused,
 .text-area:focused {
-    -fx-border-color: #66bb6a;
-    -fx-background-color: #2d2d2d;
+    -fx-border-color: -c-accent-fg;
+    -fx-background-color: -c-surface;
 }
 
 .text-area:focused .content {
@@ -652,38 +674,38 @@
 
 /* ===== ComboBox Styling ===== */
 .combo-box {
-    -fx-background-color: #2a2a2a;
-    -fx-border-color: #3a3a3a;
+    -fx-background-color: -c-surface-sunken;
+    -fx-border-color: -c-border;
     -fx-border-radius: 6;
     -fx-background-radius: 6;
 }
 
 .combo-box:focused {
-    -fx-border-color: #66bb6a;
+    -fx-border-color: -c-accent-fg;
 }
 
 .combo-box .list-cell {
     -fx-font-size: 13px;
-    -fx-text-fill: #e0e0e0;
+    -fx-text-fill: -c-text;
     -fx-background-color: transparent;
 }
 
 .combo-box-popup .list-view {
-    -fx-background-color: #2a2a2a;
-    -fx-border-color: #3a3a3a;
+    -fx-background-color: -c-surface;
+    -fx-border-color: -c-border;
     -fx-border-radius: 6;
     -fx-background-radius: 6;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 8, 0, 0, 2);
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 8, 0, 0, 2);
 }
 
 .combo-box-popup .list-cell {
     -fx-padding: 6 12;
-    -fx-background-color: #2a2a2a;
-    -fx-text-fill: #e0e0e0;
+    -fx-background-color: -c-surface;
+    -fx-text-fill: -c-text;
 }
 
 .combo-box-popup .list-cell:filled:hover {
-    -fx-background-color: #1b3a1e;
+    -fx-background-color: -c-accent-tint;
 }
 
 /* ===== Separator ===== */
@@ -697,25 +719,23 @@
 }
 
 .status-circle-connected {
-    -fx-fill: #66bb6a;
-    -fx-effect: dropshadow(gaussian, rgba(102,187,106,0.5), 12, 0.3, 0, 0);
+    -fx-fill: -c-accent-fg;
 }
 
 .status-circle-connecting {
     -fx-fill: #ffa726;
-    -fx-effect: dropshadow(gaussian, rgba(255,167,38,0.4), 10, 0.2, 0, 0);
 }
 
 .status-circle-error {
-    -fx-fill: #ef5350;
-    -fx-effect: dropshadow(gaussian, rgba(239,83,80,0.4), 10, 0.2, 0, 0);
+    -fx-fill: -c-danger-fg;
 }
 
 /* ===== Speed Value (large) ===== */
 .speed-value {
     -fx-font-size: 28px;
     -fx-font-weight: bold;
-    -fx-text-fill: #e0e0e0;
+    -fx-text-fill: -c-text;
+    -fx-font-family: "SF Pro Display", "Helvetica Neue", "System";
 }
 
 /* ===== Stats Card Small ===== */
@@ -726,45 +746,45 @@
 /* ===== Upload/Download Icons ===== */
 .stats-icon-upload {
     -fx-font-size: 18px;
-    -fx-text-fill: #66bb6a;
+    -fx-text-fill: -c-warn;
 }
 
 .stats-icon-download {
     -fx-font-size: 18px;
-    -fx-text-fill: #42a5f5;
+    -fx-text-fill: -c-info;
 }
 
 /* ===== Latency Result ===== */
 .latency-result {
     -fx-font-size: 12px;
-    -fx-text-fill: #999999;
+    -fx-text-fill: -c-text-secondary;
 }
 
 /* ===== Service availability ===== */
 .service-name {
     -fx-font-size: 13px;
-    -fx-text-fill: #e0e0e0;
+    -fx-text-fill: -c-text;
 }
 
 .service-ok {
     -fx-font-size: 12px;
     -fx-font-weight: bold;
-    -fx-text-fill: #66bb6a;
+    -fx-text-fill: -c-accent-fg;
 }
 
 .service-fail {
     -fx-font-size: 12px;
     -fx-font-weight: bold;
-    -fx-text-fill: #ef5350;
+    -fx-text-fill: -c-danger-fg;
 }
 
 .service-pending {
     -fx-font-size: 12px;
-    -fx-text-fill: #999999;
+    -fx-text-fill: -c-text-secondary;
 }
 
 .reconnect-banner {
-    -fx-background-color: #3a2c1a;
+    -fx-background-color: -c-warn-tint;
     -fx-border-color: #6d4c2f;
     -fx-border-width: 1;
     -fx-background-radius: 8;
@@ -773,7 +793,7 @@
 
 .reconnect-banner-label {
     -fx-font-size: 12px;
-    -fx-text-fill: #ffb74d;
+    -fx-text-fill: -c-warn;
 }
 
 /* ===== Logs View ===== */
