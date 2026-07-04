@@ -44,7 +44,8 @@ cd vless-client
 mvn clean javafx:run
 ```
 
-При первой сборке Maven автоматически скачает `sing-box 1.13.8` для обеих
+При первой сборке Maven автоматически скачает `sing-box` (версия пиннится в
+[singbox.properties](src/main/resources/singbox.properties)) для обеих
 архитектур (arm64 + amd64) в `target/classes/native/darwin-{arch}/` с проверкой
 SHA-256. Эти бинари бандлятся в jar и извлекаются при первом запуске.
 
@@ -208,20 +209,30 @@ java --source 25 scripts/GenerateAppIcon.java
 
 ### Обновление sing-box
 
-1. Подними `PINNED_VERSION` в
-   [SingBoxInstaller.java](src/main/java/com/vlessclient/service/SingBoxInstaller.java)
-2. Скачай новые tarballs и посчитай SHA-256:
-   ```bash
-   for arch in arm64 amd64; do
-     curl -sL -o /tmp/sb-$arch.tgz \
-       "https://github.com/SagerNet/sing-box/releases/download/v<VER>/sing-box-<VER>-darwin-$arch.tar.gz"
-     shasum -a 256 /tmp/sb-$arch.tgz
-   done
-   ```
-3. Обнови `EXPECTED_SHA256` в `SingBoxInstaller.java` и константы в
-   [scripts/bundle-singbox.sh](scripts/bundle-singbox.sh).
-4. Обнови `<singbox.version>` в `pom.xml`.
-5. Почисти кэш: `rm -rf ~/.cache/vless-client-build/`
+Версия и SHA-256 живут в одном файле —
+[singbox.properties](src/main/resources/singbox.properties). Его читают
+pom.xml (properties-maven-plugin), [scripts/bundle-singbox.sh](scripts/bundle-singbox.sh)
+и SingBoxInstaller, так что разъехаться они не могут. Бамп — одна команда:
+
+```bash
+scripts/bump-singbox.sh 1.13.14   # качает tarballs, сверяет SHA-256 с digest из GitHub API, обновляет properties
+mvn clean verify -Psmoke          # полные тесты + smoke на реальном бинарнике
+```
+
+Smoke-профиль (`-Psmoke`,
+[SingBoxRealBinarySmokeTest](src/test/java/com/vlessclient/service/SingBoxRealBinarySmokeTest.java))
+прогоняет реальный бинарник: точное совпадение версии с пином,
+`sing-box check` для всех протоколов × режимов × роутинг-пресетов и живой
+`run` с проверкой clash_api и http-inbound. CI гоняет его на каждом PR и
+перед сборкой DMG.
+
+Минорные обновления sing-box (1.13 → 1.14) ломают схему конфига — сначала
+мигрируй [SingBoxConfigGenerator.java](src/main/java/com/vlessclient/service/SingBoxConfigGenerator.java)
+по [миграционному гайду](https://sing-box.sagernet.org/migration/), потом бампай.
+
+Пользователи получают патчи ядра и без релиза приложения — через
+Settings → About → «Проверить обновления» (обновления в пределах минорной
+ветки, с валидацией `sing-box check` и откатом).
 
 ### Структура
 

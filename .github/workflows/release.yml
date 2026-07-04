@@ -15,6 +15,11 @@ jobs:
           distribution: 'temurin'
       - name: Build fat JAR
         run: mvn clean package -DskipTests
+      - name: Smoke-test the bundled sing-box
+        # The DMG must never ship a core the generator can't drive: run the
+        # real-binary smoke suite (version match, `sing-box check` on every
+        # config shape, live run with clash_api + http-inbound probes).
+        run: mvn test -Psmoke -Dtest=SingBoxRealBinarySmokeTest
       - name: Stage artifacts
         # sing-box is already baked into the shaded JAR by
         # scripts/bundle-singbox.sh during `mvn package` — no separate

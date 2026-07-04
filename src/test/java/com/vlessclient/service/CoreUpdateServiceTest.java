@@ -31,8 +31,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class CoreUpdateServiceTest {
 
-    private static final String CURRENT_VERSION = "1.13.8";
-    private static final String NEW_VERSION = "1.13.14";
+    // Versions are derived from the real pin so the tests keep meaning
+    // "one patch newer than the pin" etc. across sing-box bumps instead of
+    // breaking whenever the pin catches up with a hardcoded literal.
+    private static final int[] PIN = parsePin();
+    private static final String CURRENT_VERSION = SingBoxInstaller.PINNED_VERSION;
+    private static final String MID_VERSION = ver(PIN[0], PIN[1], PIN[2] + 1);
+    private static final String NEW_VERSION = ver(PIN[0], PIN[1], PIN[2] + 2);
+    private static final String NEWER_MINOR = ver(PIN[0], PIN[1] + 1, 0);
+    private static final String OLDER_MINOR = ver(PIN[0], PIN[1] - 1, 9);
+
+    private static int[] parsePin() {
+        String[] parts = SingBoxInstaller.PINNED_VERSION.split("\\.");
+        return new int[]{Integer.parseInt(parts[0]),
+                Integer.parseInt(parts[1]), Integer.parseInt(parts[2])};
+    }
+
+    private static String ver(int major, int minor, int patch) {
+        return major + "." + minor + "." + patch;
+    }
 
     @TempDir Path tempDir;
 
@@ -104,11 +121,11 @@ class CoreUpdateServiceTest {
 
     @Test
     void check_ignoresOtherMinorsAndPrereleases() throws Exception {
-        // Only a newer minor (1.14.0) and a prerelease are on offer — neither
-        // may be picked, because the config generator targets 1.13 only.
+        // Only a newer minor and a prerelease are on offer — neither may be
+        // picked: the config generator targets the pinned minor only.
         servedReleasesJson = "["
-                + releaseEntry("1.14.0", sha256(servedTarball), false)
-                + "," + releaseEntry("1.13.99", sha256(servedTarball), true)
+                + releaseEntry(NEWER_MINOR, sha256(servedTarball), false)
+                + "," + releaseEntry(ver(PIN[0], PIN[1], 99), sha256(servedTarball), true)
                 + "]";
 
         Optional<CoreUpdateService.CoreUpdate> update =
@@ -131,8 +148,8 @@ class CoreUpdateServiceTest {
     @Test
     void check_ignoresOlderAndEqualVersions() throws Exception {
         servedReleasesJson = "["
-                + releaseEntry("1.13.8", sha256(servedTarball), false)
-                + "," + releaseEntry("1.13.2", sha256(servedTarball), false)
+                + releaseEntry(CURRENT_VERSION, sha256(servedTarball), false)
+                + "," + releaseEntry(ver(PIN[0], PIN[1], 0), sha256(servedTarball), false)
                 + "]";
 
         assertThat(service.checkForUpdate(ProxySelector.getDefault())).isEmpty();
@@ -322,8 +339,9 @@ class CoreUpdateServiceTest {
     void reconcile_removesCacheFromDifferentMinor() throws Exception {
         // The app pin moved to a new minor (generator migrated) — an old
         // in-app-updated cache must not shadow the app-shipped core.
-        writeManagedBinary(fakeBinaryScript("1.12.9", 0));
-        writeStateFile("{\"installedVersion\":\"1.12.9\",\"previousVersion\":\"1.12.5\"}");
+        writeManagedBinary(fakeBinaryScript(OLDER_MINOR, 0));
+        writeStateFile("{\"installedVersion\":\"" + OLDER_MINOR + "\","
+                + "\"previousVersion\":\"" + ver(PIN[0], PIN[1] - 1, 5) + "\"}");
 
         newService().reconcileWithPinnedVersion();
 
@@ -334,8 +352,12 @@ class CoreUpdateServiceTest {
 
     @Test
     void reconcile_removesCacheOlderThanPinnedPatch() throws Exception {
-        writeManagedBinary(fakeBinaryScript("1.13.2", 0));
-        writeStateFile("{\"installedVersion\":\"1.13.2\"}");
+        // Meaningful only while the pin's patch is above zero — with a x.y.0
+        // pin there is no older patch in the same minor.
+        org.junit.jupiter.api.Assumptions.assumeTrue(PIN[2] > 0);
+        String olderPatch = ver(PIN[0], PIN[1], 0);
+        writeManagedBinary(fakeBinaryScript(olderPatch, 0));
+        writeStateFile("{\"installedVersion\":\"" + olderPatch + "\"}");
 
         newService().reconcileWithPinnedVersion();
 
@@ -422,11 +444,12 @@ class CoreUpdateServiceTest {
 
     private String releasesJson(String digest) {
         return "["
-                // A prerelease and a foreign minor that must both be skipped.
-                + releaseEntry("1.14.0", digest, false)
-                + "," + releaseEntry("1.13.99-rc.1", digest, true)
+                // A prerelease and a foreign minor that must both be skipped,
+                // plus a lower in-line update to prove the highest one wins.
+                + releaseEntry(NEWER_MINOR, digest, false)
+                + "," + releaseEntry(ver(PIN[0], PIN[1], 99) + "-rc.1", digest, true)
                 + "," + releaseEntry(NEW_VERSION, digest, false)
-                + "," + releaseEntry("1.13.10", digest, false)
+                + "," + releaseEntry(MID_VERSION, digest, false)
                 + "]";
     }
 

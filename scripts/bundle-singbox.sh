@@ -6,37 +6,61 @@
 #
 # Arguments:
 #   $1 — output directory (e.g. target/classes/native)
-#   $2 — sing-box version (e.g. 1.13.8)
+#   $2 — sing-box version (e.g. 1.13.8), passed by Maven from
+#        src/main/resources/singbox.properties
+#
+# The version and the SHA-256 checksums both come from singbox.properties —
+# the single source of truth also read by pom.xml and SingBoxInstaller. The
+# $2 argument is cross-checked against the file to catch a stale Maven
+# property cache.
 #
 # Reuses a ~/.cache/vless-client-build/sing-box-<version> directory so repeated
-# builds don't re-download. SHA-256 checksums are verified against known-good
-# values.
+# builds don't re-download. A .singbox-version stamp next to each bundled
+# binary makes incremental builds re-bundle after a version bump instead of
+# silently keeping the old binary.
 #
 set -euo pipefail
 
 OUT_DIR="${1:?usage: $0 <out_dir> <version>}"
 VERSION="${2:?usage: $0 <out_dir> <version>}"
 
+PROPS_FILE="$(cd "$(dirname "$0")/.." && pwd)/src/main/resources/singbox.properties"
+if [[ ! -f "${PROPS_FILE}" ]]; then
+    echo "[bundle-singbox] missing ${PROPS_FILE}" >&2
+    exit 1
+fi
+
+# Bash-3.2-safe .properties lookup: last value wins, whitespace trimmed.
+prop() {
+    grep -E "^[[:space:]]*$1[[:space:]]*=" "${PROPS_FILE}" \
+        | tail -n 1 \
+        | cut -d= -f2- \
+        | tr -d '[:space:]'
+}
+
+PROPS_VERSION="$(prop singbox.version)"
+if [[ "${PROPS_VERSION}" != "${VERSION}" ]]; then
+    echo "[bundle-singbox] version mismatch: Maven passed '${VERSION}' but" >&2
+    echo "  ${PROPS_FILE} says '${PROPS_VERSION}'." >&2
+    echo "  Run 'mvn clean' — the Maven property cache is stale." >&2
+    exit 1
+fi
+
+expected_sha_for() {
+    prop "singbox.sha256.darwin-$1"
+}
+
 CACHE_DIR="${HOME}/.cache/vless-client-build/sing-box-${VERSION}"
 mkdir -p "${CACHE_DIR}" "${OUT_DIR}"
-
-# Known-good checksums. Keep in sync with SingBoxInstaller.EXPECTED_SHA256.
-# Using a case statement instead of an associative array for compatibility
-# with the default /bin/bash 3.2 shipped on macOS.
-expected_sha_for() {
-    case "$1" in
-        arm64) echo "e9e4c72a4a64c19d515b800b7191c50367522c8169654c569677b15873e08249" ;;
-        amd64) echo "0db6aca503dcdd5a816e668669e79231f991cdbbd13fcbf6dd4f9bcb8a1c3b0e" ;;
-        *) echo ""; return 1 ;;
-    esac
-}
 
 for arch in arm64 amd64; do
     target_dir="${OUT_DIR}/darwin-${arch}"
     target_binary="${target_dir}/sing-box"
+    stamp_file="${target_dir}/.singbox-version"
 
-    if [[ -x "${target_binary}" ]]; then
-        echo "[bundle-singbox] already present: ${target_binary}"
+    if [[ -x "${target_binary}" && -f "${stamp_file}" ]] \
+            && [[ "$(cat "${stamp_file}")" == "${VERSION}" ]]; then
+        echo "[bundle-singbox] already present: ${target_binary} (${VERSION})"
         continue
     fi
 
@@ -49,6 +73,10 @@ for arch in arm64 amd64; do
     fi
 
     expected=$(expected_sha_for "${arch}")
+    if [[ -z "${expected}" ]]; then
+        echo "[bundle-singbox] no singbox.sha256.darwin-${arch} in ${PROPS_FILE}" >&2
+        exit 1
+    fi
     actual=$(shasum -a 256 "${tarball}" | awk '{print $1}')
     if [[ "${actual}" != "${expected}" ]]; then
         echo "[bundle-singbox] SHA-256 mismatch for ${arch}:" >&2
@@ -59,9 +87,11 @@ for arch in arm64 amd64; do
     fi
 
     mkdir -p "${target_dir}"
+    rm -f "${target_binary}" "${stamp_file}"
     tar -xzf "${tarball}" -C "${target_dir}" \
         --strip-components=1 \
         "sing-box-${VERSION}-darwin-${arch}/sing-box"
     chmod +x "${target_binary}"
-    echo "[bundle-singbox] bundled ${target_binary}"
+    printf '%s' "${VERSION}" > "${stamp_file}"
+    echo "[bundle-singbox] bundled ${target_binary} (${VERSION})"
 done
