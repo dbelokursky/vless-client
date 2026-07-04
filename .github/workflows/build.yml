@@ -1,10 +1,7 @@
 name: Build
 on:
   push:
-    # TODO(windows-ci): drop feat/windows-ci before merge — added so the
-    # Windows job can be validated on the branch (workflow_dispatch only fires
-    # from the default branch).
-    branches: [main, feat/windows-ci]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
