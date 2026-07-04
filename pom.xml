@@ -125,31 +125,14 @@
             </plugin>
 
             <!--
-                Downloads and bundles the sing-box binary for both macOS
-                architectures into target/classes/native/darwin-{arch}/sing-box.
-                This makes the bundled JAR self-contained: SingBoxInstaller
-                extracts the matching binary from the classpath on first run,
-                so users don't need to install sing-box manually.
+                The generate-resources shell steps — bundle the sing-box binary
+                into target/classes/native/ (so the JAR is self-contained and
+                SingBoxInstaller extracts it on first run) and write the JVM
+                argfile — go through exec-maven-plugin, but the tooling differs
+                per OS (bash vs PowerShell). They live in the OS-activated
+                bundle-core-* profiles below so a build only ever runs its own
+                platform's scripts.
             -->
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>3.5.0</version>
-                <executions>
-                    <execution>
-                        <id>write-jvm-args</id>
-                        <phase>generate-resources</phase>
-                        <goals><goal>exec</goal></goals>
-                        <configuration>
-                            <executable>bash</executable>
-                            <arguments>
-                                <argument>${project.basedir}/scripts/write-jvm-args.sh</argument>
-                                <argument>${project.build.directory}/jvm-args.txt</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -347,6 +330,18 @@
                                     </arguments>
                                 </configuration>
                             </execution>
+                            <execution>
+                                <id>write-jvm-args</id>
+                                <phase>generate-resources</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/scripts/write-jvm-args.sh</argument>
+                                        <argument>${project.build.directory}/jvm-args.txt</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
                 </plugins>
@@ -381,6 +376,23 @@
                                         <argument>${project.build.directory}/classes/native</argument>
                                         <argument>-Version</argument>
                                         <argument>${singbox.version}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>write-jvm-args</id>
+                                <phase>generate-resources</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>powershell</executable>
+                                    <arguments>
+                                        <argument>-NoProfile</argument>
+                                        <argument>-ExecutionPolicy</argument>
+                                        <argument>Bypass</argument>
+                                        <argument>-File</argument>
+                                        <argument>${project.basedir}/scripts/write-jvm-args.ps1</argument>
+                                        <argument>-OutFile</argument>
+                                        <argument>${project.build.directory}/jvm-args.txt</argument>
                                     </arguments>
                                 </configuration>
                             </execution>

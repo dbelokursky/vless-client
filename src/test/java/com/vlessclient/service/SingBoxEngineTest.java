@@ -5,6 +5,8 @@ import com.vlessclient.model.ProxyMode;
 import javafx.application.Platform;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
@@ -18,6 +20,9 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+// Drives the engine with fake #!/bin/sh binaries and POSIX file permissions,
+// so it only runs where a Unix shell and POSIX attributes exist.
+@EnabledOnOs({OS.MAC, OS.LINUX})
 class SingBoxEngineTest {
 
     private static final String DUMMY_CONFIG = "{\"log\":{\"level\":\"info\"}}";
