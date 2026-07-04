@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ServerConfig;
+import com.vlessclient.platform.PlatformPaths;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import org.slf4j.Logger;
@@ -31,7 +32,7 @@ public class ConfigStore {
     private AppSettings settings;
 
     public ConfigStore() {
-        this(Path.of(System.getProperty("user.home"), "Library", "Application Support", "VlessClient"));
+        this(PlatformPaths.current().dataDir());
     }
 
     ConfigStore(Path dataDir) {

@@ -84,7 +84,9 @@ public class SingBoxInstaller {
     private static final String DOWNLOAD_URL_TEMPLATE =
             "https://github.com/SagerNet/sing-box/releases/download/v%s/sing-box-%s-darwin-%s.tar.gz";
 
-    private static final String BINARY_NAME = "sing-box";
+    private final com.vlessclient.platform.CorePlatform corePlatform =
+            com.vlessclient.platform.CorePlatform.current();
+    private final String binaryName = corePlatform.binaryName();
 
     private final Path installDir;
     private final HttpClient httpClient;
@@ -125,8 +127,7 @@ public class SingBoxInstaller {
     }
 
     private static Path defaultInstallDir() {
-        return Path.of(System.getProperty("user.home"),
-                "Library", "Application Support", "VlessClient", "bin");
+        return com.vlessclient.platform.PlatformPaths.current().coreBinDir();
     }
 
     /**
@@ -139,7 +140,7 @@ public class SingBoxInstaller {
         if (javaHome != null) {
             Path appBundle = Path.of(javaHome).getParent();
             if (appBundle != null) {
-                Path bundled = appBundle.resolve("Resources").resolve(BINARY_NAME);
+                Path bundled = appBundle.resolve("Resources").resolve(binaryName);
                 if (Files.isExecutable(bundled)) {
                     return Optional.of(bundled.toAbsolutePath());
                 }
@@ -147,7 +148,7 @@ public class SingBoxInstaller {
         }
 
         // 2. Cached auto-download
-        Path cached = installDir.resolve(BINARY_NAME);
+        Path cached = installDir.resolve(binaryName);
         if (Files.isExecutable(cached)) {
             return Optional.of(cached.toAbsolutePath());
         }
@@ -184,7 +185,7 @@ public class SingBoxInstaller {
         String pathEnv = System.getenv("PATH");
         if (pathEnv != null) {
             for (String dir : pathEnv.split(File.pathSeparator)) {
-                Path candidate = Path.of(dir, BINARY_NAME);
+                Path candidate = Path.of(dir, binaryName);
                 if (Files.isExecutable(candidate)) {
                     return Optional.of(candidate.toAbsolutePath());
                 }
@@ -218,9 +219,9 @@ public class SingBoxInstaller {
             verifyChecksum(tarball, arch);
             Path extractDir = Files.createTempDirectory("sing-box-extract-");
             try {
-                extractTarGz(tarball, extractDir);
+                extractArchive(tarball, extractDir);
                 Path sourceBinary = findBinaryInDir(extractDir);
-                Path targetBinary = installDir.resolve(BINARY_NAME);
+                Path targetBinary = installDir.resolve(binaryName);
                 Files.copy(sourceBinary, targetBinary, StandardCopyOption.REPLACE_EXISTING);
                 makeExecutable(targetBinary);
                 verifyBinary(targetBinary);
@@ -273,13 +274,13 @@ public class SingBoxInstaller {
         if (arch == null) {
             return Optional.empty();
         }
-        String resource = "/native/darwin-" + arch + "/" + BINARY_NAME;
+        String resource = corePlatform.bundledResourcePath(arch);
         try (InputStream in = SingBoxInstaller.class.getResourceAsStream(resource)) {
             if (in == null) {
                 return Optional.empty();
             }
             Files.createDirectories(installDir);
-            Path target = installDir.resolve(BINARY_NAME);
+            Path target = installDir.resolve(binaryName);
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
             makeExecutable(target);
             log.info("Extracted bundled sing-box ({}) from classpath to {}", arch, target);
@@ -360,31 +361,16 @@ public class SingBoxInstaller {
         }
     }
 
-    void extractTarGz(Path tarball, Path destDir) throws IOException, InterruptedException {
-        // macOS ships BSD tar which handles .tar.gz natively via -z
-        ProcessBuilder pb = new ProcessBuilder(
-                "/usr/bin/tar", "-xzf",
-                tarball.toAbsolutePath().toString(),
-                "-C", destDir.toAbsolutePath().toString()
-        );
-        pb.redirectErrorStream(true);
-        Process proc = pb.start();
-        if (!proc.waitFor(60, TimeUnit.SECONDS)) {
-            proc.destroyForcibly();
-            throw new IOException("tar extraction timed out");
-        }
-        int exit = proc.exitValue();
-        if (exit != 0) {
-            String output = new String(proc.getInputStream().readAllBytes());
-            throw new IOException("tar extraction failed (exit " + exit + "): " + output);
-        }
+    /** Extracts the downloaded core archive (per-OS: tar.gz on macOS, zip on Windows). */
+    void extractArchive(Path archive, Path destDir) throws IOException, InterruptedException {
+        corePlatform.extract(archive, destDir);
     }
 
     Path findBinaryInDir(Path dir) throws IOException {
         try (var stream = Files.walk(dir)) {
             return stream
                     .filter(Files::isRegularFile)
-                    .filter(p -> p.getFileName().toString().equals(BINARY_NAME))
+                    .filter(p -> p.getFileName().toString().equals(binaryName))
                     .findFirst()
                     .orElseThrow(() -> new IOException(
                             "sing-box binary not found in extracted archive at " + dir));
@@ -445,7 +431,7 @@ public class SingBoxInstaller {
      * to it, stay valid across updates.
      */
     public Path managedBinaryPath() {
-        return installDir.resolve(BINARY_NAME);
+        return installDir.resolve(binaryName);
     }
 
     /** Brew command the user can run to install sing-box manually. */

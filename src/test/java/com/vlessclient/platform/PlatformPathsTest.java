@@ -1,0 +1,63 @@
+package com.vlessclient.platform;
+
+import org.junit.jupiter.api.Test;
+
+import java.nio.file.Path;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class PlatformPathsTest {
+
+    @Test
+    void mac_usesLibraryApplicationSupport() {
+        String home = System.getProperty("user.home");
+        MacPlatformPaths paths = new MacPlatformPaths();
+
+        assertThat(paths.dataDir())
+                .isEqualTo(Path.of(home, "Library", "Application Support", "VlessClient"));
+        // coreBinDir/logsDir are derived — they must match the pre-refactor
+        // hardcoded locations exactly so nothing moves on macOS.
+        assertThat(paths.coreBinDir())
+                .isEqualTo(Path.of(home, "Library", "Application Support", "VlessClient", "bin"));
+        assertThat(paths.logsDir())
+                .isEqualTo(Path.of(home, "Library", "Application Support", "VlessClient", "logs"));
+        assertThat(paths.downloadsDir()).isEqualTo(Path.of(home, "Downloads"));
+    }
+
+    @Test
+    void windows_usesAppDataRoaming() {
+        Path appData = Path.of("C:", "Users", "dima", "AppData", "Roaming");
+        WindowsPlatformPaths paths = new WindowsPlatformPaths(appData);
+
+        assertThat(paths.dataDir()).isEqualTo(appData.resolve("VlessClient"));
+        assertThat(paths.coreBinDir()).isEqualTo(appData.resolve("VlessClient").resolve("bin"));
+        assertThat(paths.logsDir()).isEqualTo(appData.resolve("VlessClient").resolve("logs"));
+    }
+
+    @Test
+    void current_matchesDetectedPlatform() {
+        PlatformPaths current = PlatformPaths.current();
+        if (Platform.current().isWindows()) {
+            assertThat(current).isInstanceOf(WindowsPlatformPaths.class);
+        } else {
+            assertThat(current).isInstanceOf(MacPlatformPaths.class);
+        }
+    }
+
+    @Test
+    void platformDetect_knownOsNames() {
+        assertThat(mapOs("Mac OS X")).isEqualTo(Platform.MAC);
+        assertThat(mapOs("Windows 11")).isEqualTo(Platform.WINDOWS);
+        assertThat(mapOs("Linux")).isEqualTo(Platform.OTHER);
+    }
+
+    private static Platform mapOs(String osName) {
+        String prev = System.getProperty("os.name");
+        System.setProperty("os.name", osName);
+        try {
+            return Platform.detect();
+        } finally {
+            System.setProperty("os.name", prev);
+        }
+    }
+}
