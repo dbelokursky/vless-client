@@ -141,11 +141,13 @@ public class UpdateManager {
 
     /**
      * Downloads the .dmg file from the given URL to ~/Downloads/.
+     *
+     * @return the saved file path, or {@code null} if the download failed
      */
-    public void downloadUpdate(String url) {
+    public Path downloadUpdate(String url) {
         if (url == null || url.isBlank()) {
             log.warn("No download URL provided");
-            return;
+            return null;
         }
 
         try {
@@ -161,7 +163,7 @@ public class UpdateManager {
 
             if (response.statusCode() != 200) {
                 log.error("Download failed with status {}", response.statusCode());
-                return;
+                return null;
             }
 
             String fileName = extractFileName(url);
@@ -173,11 +175,13 @@ public class UpdateManager {
             }
 
             log.info("Update downloaded to {}", target);
+            return target;
         } catch (IOException | InterruptedException e) {
             log.error("Failed to download update: {}", e.getMessage());
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
+            return null;
         }
     }
 

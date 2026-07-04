@@ -4,6 +4,7 @@ import com.vlessclient.app.I18n;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.service.CoreUpdateService;
 import com.vlessclient.service.SingBoxInstaller;
+import com.vlessclient.service.UpdateManager;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -49,6 +50,18 @@ public class SettingsViewCoreUpdateTest extends ApplicationTest {
         }
         fake = new FakeCoreUpdateService();
         ServiceLocator.register(CoreUpdateService.class, fake);
+        // No-op app updater so the About "Updates" block wires the app row
+        // without hitting GitHub in a headless test (default: no update).
+        ServiceLocator.register(UpdateManager.class, new UpdateManager() {
+            @Override
+            public void checkForUpdates() {
+            }
+
+            @Override
+            public java.nio.file.Path downloadUpdate(String url) {
+                return null;
+            }
+        });
         // The controller treats the section as active only when the resolved
         // binary is the managed one; give it a resolvable path and let the
         // fake claim management.
@@ -68,6 +81,17 @@ public class SettingsViewCoreUpdateTest extends ApplicationTest {
         Parent root = loader.load();
         stage.setScene(new Scene(root, 800, 600));
         stage.show();
+    }
+
+    @Test
+    void appUpdateRowShowsUpToDateByDefault() {
+        // The Updates block lists the app on its own row; with no newer
+        // release it reads "up to date" and offers no Download button.
+        Label appDetail = lookup("#appUpdateDetail").query();
+        assertThat(appDetail.getText()).contains(I18n.get("settings.core.uptodate"));
+        assertThat(lookup("#appUpdateDot").query().getStyleClass())
+                .contains("status-circle-connected");
+        assertThat(lookup("#downloadAppButton").query().isVisible()).isFalse();
     }
 
     @Test
