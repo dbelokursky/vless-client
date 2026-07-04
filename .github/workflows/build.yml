@@ -1,8 +1,7 @@
 name: Build
 on:
   push:
-    # TODO(linux-tun): drop feat/linux-tun-autostart before merge (validation).
-    branches: [main, feat/linux-tun-autostart]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
