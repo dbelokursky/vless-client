@@ -1,7 +1,8 @@
 name: Build
 on:
   push:
-    branches: [main]
+    # TODO(linux-package): drop feat/linux-package before merge (validation).
+    branches: [main, feat/linux-package]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -90,12 +91,14 @@ jobs:
       # installable .deb as a 14-day workflow artifact. Tagged releases get
       # their .deb from release.yml via the same script.
       - name: Package DEB
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # TODO(linux-package): restore the refs/heads/main gate before merge.
+        if: github.event_name == 'push'
         run: |
           mvn -B package -DskipTests
           scripts/package-linux.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "0.1.0+dev${{ github.run_number }}"
       - name: Upload DEB artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # TODO(linux-package): restore the refs/heads/main gate before merge.
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: vless-client-linux-${{ github.sha }}
