@@ -1,0 +1,185 @@
+package com.vlessclient.ui.view;
+
+import com.vlessclient.app.I18n;
+import com.vlessclient.app.ServiceLocator;
+import com.vlessclient.service.CoreUpdateService;
+import com.vlessclient.service.SingBoxInstaller;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.stage.Stage;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.testfx.framework.junit5.ApplicationTest;
+import org.testfx.util.WaitForAsyncUtils;
+
+import java.io.IOException;
+import java.net.ProxySelector;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * UI contract of the Settings core-update section: the verdict must be
+ * visible next to the sing-box version — immediately on open when a prior
+ * check exists, and after pressing "Check for updates" in every outcome
+ * (up to date, update available, failure).
+ */
+public class SettingsViewCoreUpdateTest extends ApplicationTest {
+
+    private static FakeCoreUpdateService fake;
+
+    @BeforeAll
+    static void setupHeadless() throws IOException {
+        System.setProperty("testfx.robot", "glass");
+        System.setProperty("testfx.headless", "true");
+        System.setProperty("prism.order", "sw");
+        System.setProperty("prism.text", "t2k");
+        System.setProperty("java.awt.headless", "true");
+        try {
+            ServiceLocator.initialize();
+        } catch (Exception e) {
+            // Tolerate service initialization failures in headless CI
+        }
+        fake = new FakeCoreUpdateService();
+        ServiceLocator.register(CoreUpdateService.class, fake);
+        // The controller treats the section as active only when the resolved
+        // binary is the managed one; give it a resolvable path and let the
+        // fake claim management.
+        Path fakeBinary = Files.createTempFile("fake-sing-box", "");
+        ServiceLocator.registerSingBoxEngine(fakeBinary.toAbsolutePath());
+    }
+
+    @Override
+    public void start(Stage stage) throws Exception {
+        // Fresh, deterministic fake state for each test's view load.
+        fake.nextResult = Optional.empty();
+        fake.failure = null;
+        fake.available = null;
+        fake.lastCheck = System.currentTimeMillis();
+
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/SettingsView.fxml"));
+        Parent root = loader.load();
+        stage.setScene(new Scene(root, 800, 600));
+        stage.show();
+    }
+
+    @Test
+    void verdictVisibleOnOpen_withoutClicking() {
+        // A prior check concluded "no update" — opening Settings must already
+        // say the core is current, no interaction required.
+        Label status = lookup("#coreUpdateStatusLabel").query();
+        assertThat(status.getText()).isEqualTo(I18n.get("settings.core.uptodate"));
+    }
+
+    @Test
+    void click_showsUpToDate() throws Exception {
+        fireCheckButton();
+
+        awaitStatus(() -> statusText().equals(I18n.get("settings.core.uptodate")));
+        Button check = lookup("#checkCoreUpdateButton").query();
+        assertThat(check.isDisabled()).isFalse();
+    }
+
+    @Test
+    void click_showsAvailableUpdate_andInstallButton() throws Exception {
+        fake.nextResult = Optional.of(new CoreUpdateService.CoreUpdate(
+                "9.9.9", "http://127.0.0.1:1/x.tar.gz", "0".repeat(64)));
+
+        fireCheckButton();
+
+        awaitStatus(() -> statusText().contains("9.9.9"));
+        assertThat(statusText())
+                .isEqualTo(I18n.get("settings.core.available", "9.9.9"));
+        Button install = lookup("#installCoreUpdateButton").query();
+        assertThat(install.isVisible()).isTrue();
+        assertThat(install.getText()).contains("9.9.9");
+    }
+
+    @Test
+    void click_showsError_whenManualCheckFails() throws Exception {
+        fake.failure = new IOException("boom-network");
+
+        fireCheckButton();
+
+        awaitStatus(() -> statusText().contains("boom-network"));
+        Button check = lookup("#checkCoreUpdateButton").query();
+        assertThat(check.isDisabled()).isFalse();
+    }
+
+    // ===== helpers =====
+
+    /**
+     * Fires the check button's action on the FX thread. The About section
+     * sits at the bottom of a ScrollPane, out of the headless viewport, so a
+     * physical clickOn cannot reach it — the contract under test is the
+     * handler behavior, not scrolling.
+     */
+    private void fireCheckButton() {
+        Button check = lookup("#checkCoreUpdateButton").query();
+        assertThat(check.isDisabled()).isFalse();
+        interact(check::fire);
+    }
+
+    private String statusText() {
+        Label status = lookup("#coreUpdateStatusLabel").query();
+        return status.getText() == null ? "" : status.getText();
+    }
+
+    private void awaitStatus(Supplier<Boolean> condition) throws Exception {
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, condition::get);
+        WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    /** Deterministic stand-in: no network, behavior set per test. */
+    private static class FakeCoreUpdateService extends CoreUpdateService {
+        volatile Optional<CoreUpdate> nextResult = Optional.empty();
+        volatile IOException failure;
+        volatile String available;
+        volatile long lastCheck = System.currentTimeMillis();
+
+        FakeCoreUpdateService() {
+            super(new SingBoxInstaller());
+        }
+
+        @Override
+        public Optional<CoreUpdate> checkForUpdate(ProxySelector proxySelector)
+                throws IOException {
+            if (failure != null) {
+                throw failure;
+            }
+            return nextResult;
+        }
+
+        @Override
+        public boolean managesBinary(Path activeBinary) {
+            return true;
+        }
+
+        @Override
+        public String availableVersion() {
+            return available;
+        }
+
+        @Override
+        public long lastCheckEpochMs() {
+            return lastCheck;
+        }
+
+        @Override
+        public boolean canRollback() {
+            return false;
+        }
+
+        @Override
+        public boolean isTrial() {
+            return false;
+        }
+    }
+}
