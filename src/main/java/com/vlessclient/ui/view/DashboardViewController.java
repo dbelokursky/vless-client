@@ -871,7 +871,7 @@ public class DashboardViewController {
         TextField nameField = new TextField();
         nameField.setPromptText(I18n.get("health.target.name"));
         TextField urlField = new TextField();
-        urlField.setPromptText("https://example.com");
+        urlField.setPromptText("https://example.com  ·  1.1.1.1  ·  1.1.1.1:53");
 
         GridPane grid = new GridPane();
         grid.setHgap(8);
@@ -879,48 +879,61 @@ public class DashboardViewController {
         grid.setPadding(new Insets(12));
         grid.add(new Label(I18n.get("health.target.name")), 0, 0);
         grid.add(nameField, 1, 0);
-        grid.add(new Label(I18n.get("health.target.url")), 0, 1);
+        grid.add(new Label(I18n.get("health.target.target")), 0, 1);
         grid.add(urlField, 1, 1);
         dialog.getDialogPane().setContent(grid);
 
         var okButton = dialog.getDialogPane().lookupButton(ButtonType.OK);
         okButton.setDisable(true);
         urlField.textProperty().addListener((obs, o, n) ->
-                okButton.setDisable(parseTargetUrl(n) == null));
+                okButton.setDisable(normalizeTarget(n) == null));
 
         dialog.setResultConverter(button -> {
             if (button != ButtonType.OK) {
                 return null;
             }
-            URI uri = parseTargetUrl(urlField.getText());
-            if (uri == null) {
+            ParsedTarget parsed = normalizeTarget(urlField.getText());
+            if (parsed == null) {
                 return null;
             }
             String name = nameField.getText() != null && !nameField.getText().isBlank()
                     ? nameField.getText().trim()
-                    : uri.getHost();
-            return new HealthCheckTarget(name, uri.toString());
+                    : parsed.displayHost();
+            return new HealthCheckTarget(name, parsed.stored());
         });
 
         Platform.runLater(urlField::requestFocus);
         dialog.showAndWait().ifPresent(this::addHealthTarget);
     }
 
-    /** Accepts only absolute http(s) URLs with a host; null otherwise. */
-    private static URI parseTargetUrl(String raw) {
+    /** A validated target: {@code stored} is persisted, {@code displayHost} names it. */
+    private record ParsedTarget(String stored, String displayHost) {
+    }
+
+    /**
+     * Accepts either an absolute http(s) URL (probed over HTTP) or a bare
+     * IP / host, optionally with {@code :port} (probed by a TCP connect
+     * through the tunnel). Returns null for anything else.
+     */
+    private static ParsedTarget normalizeTarget(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
         String trimmed = raw.trim();
-        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-            return null;
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            try {
+                URI uri = new URI(trimmed);
+                if (uri.getHost() == null || uri.getHost().isBlank()) {
+                    return null;
+                }
+                return new ParsedTarget(uri.toString(), uri.getHost());
+            } catch (URISyntaxException e) {
+                return null;
+            }
         }
-        try {
-            URI uri = new URI(trimmed);
-            return uri.getHost() != null && !uri.getHost().isBlank() ? uri : null;
-        } catch (URISyntaxException e) {
-            return null;
-        }
+        ServiceReachabilityChecker.HostPort hp =
+                ServiceReachabilityChecker.parseHostPort(trimmed);
+        return hp == null ? null : new ParsedTarget(trimmed, hp.host());
     }
 
     private void addHealthTarget(HealthCheckTarget target) {

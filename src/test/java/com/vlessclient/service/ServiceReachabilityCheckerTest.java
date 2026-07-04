@@ -1,15 +1,22 @@
 package com.vlessclient.service;
 
 import com.vlessclient.model.HealthCheckTarget;
+import com.vlessclient.service.ServiceReachabilityChecker.HostPort;
 import com.vlessclient.service.ServiceReachabilityChecker.ProbeResult;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -114,6 +121,123 @@ class ServiceReachabilityCheckerTest {
         assertThat(results).hasSize(1);
         assertThat(results.get(0).reachable()).isFalse();
         assertThat(results.get(0).latencyMs()).isEqualTo(-1);
+    }
+
+    // ===== IP / host:port parsing =====
+
+    @Test
+    void parseHostPort_bareIp_defaultsTo443() {
+        HostPort hp = ServiceReachabilityChecker.parseHostPort("1.1.1.1");
+        assertThat(hp).isNotNull();
+        assertThat(hp.host()).isEqualTo("1.1.1.1");
+        assertThat(hp.port()).isEqualTo(443);
+    }
+
+    @Test
+    void parseHostPort_ipWithPort() {
+        HostPort hp = ServiceReachabilityChecker.parseHostPort("8.8.8.8:53");
+        assertThat(hp.host()).isEqualTo("8.8.8.8");
+        assertThat(hp.port()).isEqualTo(53);
+    }
+
+    @Test
+    void parseHostPort_hostname() {
+        HostPort hp = ServiceReachabilityChecker.parseHostPort("example.com:8443");
+        assertThat(hp.host()).isEqualTo("example.com");
+        assertThat(hp.port()).isEqualTo(8443);
+    }
+
+    @Test
+    void parseHostPort_bracketedIpv6WithPort() {
+        HostPort hp = ServiceReachabilityChecker.parseHostPort("[2606:4700:4700::1111]:53");
+        assertThat(hp.host()).isEqualTo("2606:4700:4700::1111");
+        assertThat(hp.port()).isEqualTo(53);
+    }
+
+    @Test
+    void parseHostPort_bareIpv6DefaultsPort() {
+        HostPort hp = ServiceReachabilityChecker.parseHostPort("2606:4700:4700::1111");
+        assertThat(hp.host()).isEqualTo("2606:4700:4700::1111");
+        assertThat(hp.port()).isEqualTo(443);
+    }
+
+    @Test
+    void parseHostPort_rejectsHttpUrlAndGarbage() {
+        assertThat(ServiceReachabilityChecker.parseHostPort("https://example.com")).isNull();
+        assertThat(ServiceReachabilityChecker.parseHostPort("http://1.1.1.1")).isNull();
+        assertThat(ServiceReachabilityChecker.parseHostPort("1.1.1.1:99999")).isNull();
+        assertThat(ServiceReachabilityChecker.parseHostPort("1.1.1.1:0")).isNull();
+        assertThat(ServiceReachabilityChecker.parseHostPort("  ")).isNull();
+        assertThat(ServiceReachabilityChecker.parseHostPort(null)).isNull();
+    }
+
+    // ===== TCP-connect probe through a fake proxy =====
+
+    @Test
+    void tcpProbe_proxyEstablishesConnection_marksReachable() throws Exception {
+        AtomicReference<String> seenConnect = new AtomicReference<>();
+        try (FakeProxy proxy = new FakeProxy("HTTP/1.1 200 Connection established", seenConnect)) {
+            checker = new ServiceReachabilityChecker();
+
+            List<ProbeResult> results = checker
+                    .checkAll(List.of(new HealthCheckTarget("DNS", "1.1.1.1:853")), proxy.port())
+                    .get(20, TimeUnit.SECONDS);
+
+            assertThat(results).hasSize(1);
+            assertThat(results.get(0).reachable()).isTrue();
+            assertThat(results.get(0).latencyMs()).isGreaterThanOrEqualTo(0);
+            assertThat(seenConnect.get()).isEqualTo("CONNECT 1.1.1.1:853 HTTP/1.1");
+        }
+    }
+
+    @Test
+    void tcpProbe_proxyRefusesTarget_marksUnreachable() throws Exception {
+        try (FakeProxy proxy = new FakeProxy("HTTP/1.1 502 Bad Gateway", new AtomicReference<>())) {
+            checker = new ServiceReachabilityChecker();
+
+            List<ProbeResult> results = checker
+                    .checkAll(List.of(new HealthCheckTarget("Host", "10.0.0.1")), proxy.port())
+                    .get(20, TimeUnit.SECONDS);
+
+            assertThat(results.get(0).reachable()).isFalse();
+            assertThat(results.get(0).latencyMs()).isEqualTo(-1);
+        }
+    }
+
+    /** Minimal HTTP-CONNECT proxy: reads the request line, replies once. */
+    private static final class FakeProxy implements AutoCloseable {
+        private final ServerSocket server;
+        private final Thread thread;
+
+        FakeProxy(String statusLine, AtomicReference<String> firstLineSink) throws IOException {
+            server = new ServerSocket(0, 2, InetAddress.getLoopbackAddress());
+            thread = new Thread(() -> {
+                while (!server.isClosed()) {
+                    try (Socket client = server.accept()) {
+                        BufferedReader in = new BufferedReader(new InputStreamReader(
+                                client.getInputStream(), StandardCharsets.US_ASCII));
+                        String requestLine = in.readLine();
+                        firstLineSink.compareAndSet(null, requestLine);
+                        OutputStream out = client.getOutputStream();
+                        out.write((statusLine + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        out.flush();
+                    } catch (IOException e) {
+                        return;   // server closed
+                    }
+                }
+            }, "fake-proxy");
+            thread.setDaemon(true);
+            thread.start();
+        }
+
+        int port() {
+            return server.getLocalPort();
+        }
+
+        @Override
+        public void close() throws IOException {
+            server.close();
+        }
     }
 
     private static ProbeResult reachable(HealthCheckTarget t) {
