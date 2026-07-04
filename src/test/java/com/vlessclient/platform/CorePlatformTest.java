@@ -37,6 +37,37 @@ class CorePlatformTest {
     }
 
     @Test
+    void linux_namingAndResourcePath() {
+        CorePlatform linux = new LinuxCorePlatform();
+        assertThat(linux.binaryName()).isEqualTo("sing-box");
+        assertThat(linux.assetName("1.13.14", "amd64"))
+                .isEqualTo("sing-box-1.13.14-linux-amd64.tar.gz");
+        assertThat(linux.bundledResourcePath("amd64"))
+                .isEqualTo("/native/linux-amd64/sing-box");
+    }
+
+    @Test
+    @EnabledOnOs({OS.MAC, OS.LINUX})
+    void linux_extractsTarGzViaPathTar(@TempDir Path tmp) throws Exception {
+        // GNU/BSD tar from PATH: works on both unix CI hosts, which is the
+        // point — the Linux extractor must not depend on a fixed tar path.
+        Path stage = tmp.resolve("stage");
+        Files.createDirectories(stage);
+        Files.writeString(stage.resolve("sing-box"), "#!/bin/sh\necho ok\n");
+        Path tar = tmp.resolve("core.tar.gz");
+        Process p = new ProcessBuilder("tar", "-czf",
+                tar.toString(), "-C", stage.toString(), "sing-box").start();
+        p.getInputStream().readAllBytes();
+        p.waitFor();
+
+        Path dest = tmp.resolve("out");
+        Files.createDirectories(dest);
+        new LinuxCorePlatform().extract(tar, dest);
+
+        assertThat(dest.resolve("sing-box")).exists();
+    }
+
+    @Test
     void windows_extractsZipPreservingNestedPath(@TempDir Path tmp) throws Exception {
         Path zip = tmp.resolve("core.zip");
         try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zip))) {

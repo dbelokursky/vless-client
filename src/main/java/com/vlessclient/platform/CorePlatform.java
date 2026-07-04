@@ -34,6 +34,11 @@ public interface CorePlatform {
 
     /** The core platform for the current OS. */
     static CorePlatform current() {
-        return Platform.current().isWindows() ? new WindowsCorePlatform() : new MacCorePlatform();
+        return switch (Platform.current()) {
+            case WINDOWS -> new WindowsCorePlatform();
+            case LINUX -> new LinuxCorePlatform();
+            // OTHER keeps the mac fallback: unix-like defaults beat crashing.
+            case MAC, OTHER -> new MacCorePlatform();
+        };
     }
 }

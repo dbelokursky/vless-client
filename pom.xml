@@ -191,6 +191,22 @@
                         -->
                         <vless.singbox.skipBundled>true</vless.singbox.skipBundled>
                         <vless.singbox.installDir>${project.build.directory}/test-singbox-install</vless.singbox.installDir>
+                        <!--
+                            Headless JavaFX for the whole suite. The UI tests
+                            always set these per-class, but service tests that
+                            call Platform.startup (LogReaderTest,
+                            SingBoxEngineTest) relied on the real glass
+                            toolkit — which works on the mac/windows runners
+                            but hangs on display-less Linux waiting for X.
+                            Monocle behaves identically everywhere.
+                        -->
+                        <glass.platform>Monocle</glass.platform>
+                        <monocle.platform>Headless</monocle.platform>
+                        <prism.order>sw</prism.order>
+                        <prism.text>t2k</prism.text>
+                        <testfx.robot>glass</testfx.robot>
+                        <testfx.headless>true</testfx.headless>
+                        <java.awt.headless>true</java.awt.headless>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
@@ -392,6 +408,52 @@
                                         <argument>-File</argument>
                                         <argument>${project.basedir}/scripts/write-jvm-args.ps1</argument>
                                         <argument>-OutFile</argument>
+                                        <argument>${project.build.directory}/jvm-args.txt</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>bundle-core-linux</id>
+            <activation>
+                <os><name>Linux</name></os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <!-- Same bash scripts as macOS: bundle-singbox.sh
+                                 picks linux-amd64 from uname, write-jvm-args.sh
+                                 drops the -Xdock flags off macOS. -->
+                            <execution>
+                                <id>bundle-sing-box</id>
+                                <phase>generate-resources</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/scripts/bundle-singbox.sh</argument>
+                                        <argument>${project.build.directory}/classes/native</argument>
+                                        <argument>${singbox.version}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>write-jvm-args</id>
+                                <phase>generate-resources</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/scripts/write-jvm-args.sh</argument>
                                         <argument>${project.build.directory}/jvm-args.txt</argument>
                                     </arguments>
                                 </configuration>

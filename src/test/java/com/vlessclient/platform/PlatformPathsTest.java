@@ -35,12 +35,47 @@ class PlatformPathsTest {
     }
 
     @Test
+    void linux_usesXdgDataHomeWhenSet(@org.junit.jupiter.api.io.TempDir Path home) {
+        LinuxPlatformPaths paths = new LinuxPlatformPaths(home, "/custom/xdg-data");
+
+        assertThat(paths.dataDir())
+                .isEqualTo(Path.of("/custom/xdg-data", "vless-client"));
+        assertThat(paths.logsDir())
+                .isEqualTo(Path.of("/custom/xdg-data", "vless-client", "logs"));
+    }
+
+    @Test
+    void linux_defaultsToLocalShare(@org.junit.jupiter.api.io.TempDir Path home) {
+        LinuxPlatformPaths paths = new LinuxPlatformPaths(home, null);
+
+        assertThat(paths.dataDir())
+                .isEqualTo(home.resolve(".local").resolve("share").resolve("vless-client"));
+        assertThat(paths.downloadsDir()).isEqualTo(home.resolve("Downloads"));
+    }
+
+    @Test
+    void linux_downloadsHonorUserDirs(@org.junit.jupiter.api.io.TempDir Path home) throws Exception {
+        Path config = home.resolve(".config");
+        java.nio.file.Files.createDirectories(config);
+        java.nio.file.Files.writeString(config.resolve("user-dirs.dirs"), """
+                # This file is written by xdg-user-dirs-update
+                XDG_DESKTOP_DIR="$HOME/Desktop"
+                XDG_DOWNLOAD_DIR="$HOME/Stuff/Downloads"
+                """);
+
+        LinuxPlatformPaths paths = new LinuxPlatformPaths(home, null);
+
+        assertThat(paths.downloadsDir())
+                .isEqualTo(home.resolve("Stuff").resolve("Downloads"));
+    }
+
+    @Test
     void current_matchesDetectedPlatform() {
         PlatformPaths current = PlatformPaths.current();
-        if (Platform.current().isWindows()) {
-            assertThat(current).isInstanceOf(WindowsPlatformPaths.class);
-        } else {
-            assertThat(current).isInstanceOf(MacPlatformPaths.class);
+        switch (Platform.current()) {
+            case WINDOWS -> assertThat(current).isInstanceOf(WindowsPlatformPaths.class);
+            case LINUX -> assertThat(current).isInstanceOf(LinuxPlatformPaths.class);
+            default -> assertThat(current).isInstanceOf(MacPlatformPaths.class);
         }
     }
 
@@ -48,7 +83,8 @@ class PlatformPathsTest {
     void platformDetect_knownOsNames() {
         assertThat(mapOs("Mac OS X")).isEqualTo(Platform.MAC);
         assertThat(mapOs("Windows 11")).isEqualTo(Platform.WINDOWS);
-        assertThat(mapOs("Linux")).isEqualTo(Platform.OTHER);
+        assertThat(mapOs("Linux")).isEqualTo(Platform.LINUX);
+        assertThat(mapOs("FreeBSD")).isEqualTo(Platform.OTHER);
     }
 
     private static Platform mapOs(String osName) {

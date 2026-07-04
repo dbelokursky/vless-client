@@ -166,7 +166,7 @@ class CoreUpdateServiceTest {
         servedReleasesJson = "[{\"tag_name\":\"v" + NEW_VERSION + "\","
                 + "\"prerelease\":false,\"draft\":false,"
                 + "\"assets\":[{"
-                + "\"name\":\"sing-box-" + NEW_VERSION + "-darwin-" + arch + ".tar.gz\","
+                + "\"name\":\"" + com.vlessclient.platform.CorePlatform.current().assetName(NEW_VERSION, arch) + "\","
                 + "\"digest\":\"sha256:" + sha256(servedTarball) + "\","
                 + "\"browser_download_url\":\"http://evil.example.com/sing-box.tar.gz\""
                 + "}]}]";
@@ -464,7 +464,7 @@ class CoreUpdateServiceTest {
                 + "\"prerelease\":" + prerelease + ","
                 + "\"draft\":false,"
                 + "\"assets\":[{"
-                + "\"name\":\"sing-box-" + version + "-darwin-" + arch + ".tar.gz\","
+                + "\"name\":\"" + com.vlessclient.platform.CorePlatform.current().assetName(version, arch) + "\","
                 + "\"digest\":\"sha256:" + digest + "\","
                 + "\"browser_download_url\":\"http://127.0.0.1:" + port
                 + "/download/sing-box-" + version + ".tar.gz\""
@@ -477,7 +477,7 @@ class CoreUpdateServiceTest {
                 + "\"prerelease\":false,"
                 + "\"draft\":false,"
                 + "\"assets\":[{"
-                + "\"name\":\"sing-box-" + version + "-darwin-" + arch + ".tar.gz\","
+                + "\"name\":\"" + com.vlessclient.platform.CorePlatform.current().assetName(version, arch) + "\","
                 + "\"browser_download_url\":\"http://127.0.0.1:" + port
                 + "/download/sing-box-" + version + ".tar.gz\""
                 + "}]}";
