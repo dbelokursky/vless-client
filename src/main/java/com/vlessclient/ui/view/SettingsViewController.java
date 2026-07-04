@@ -15,6 +15,7 @@ import com.vlessclient.service.RoutingService;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.ThemeManager;
+import com.vlessclient.service.UpdateManager;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
@@ -24,6 +25,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
+import javafx.scene.shape.Circle;
 import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,11 +87,19 @@ public class SettingsViewController {
     @FXML private TextField tunInterfaceNameField;
     @FXML private TextField tunIpv4Field;
 
+    @FXML private Label updatesLabel;
     @FXML private Label coreUpdateStatusLabel;
     @FXML private ProgressBar coreUpdateProgress;
     @FXML private Button checkCoreUpdateButton;
     @FXML private Button installCoreUpdateButton;
     @FXML private Button rollbackCoreButton;
+    @FXML private Circle coreUpdateDot;
+    @FXML private HBox coreUpdateRow;
+
+    @FXML private HBox appUpdateRow;
+    @FXML private Circle appUpdateDot;
+    @FXML private Label appUpdateDetail;
+    @FXML private Button downloadAppButton;
 
     private ConfigStore configStore;
     private ThemeManager themeManager;
@@ -96,6 +107,9 @@ public class SettingsViewController {
     private boolean suppressLaunchAtLoginListener;
 
     private CoreUpdateService coreUpdateService;
+    private UpdateManager updateManager;
+    /** True when the sing-box core can actually be checked/updated in-app. */
+    private boolean coreCheckEnabled;
     private CoreUpdateService.CoreUpdate pendingCoreUpdate;
     /** Blocks re-entry into install/rollback while one is running. */
     private boolean coreOperationInFlight;
@@ -349,14 +363,111 @@ public class SettingsViewController {
 
     private void initAboutSection() {
         appVersionValue.setText(AppVersion.VERSION);
-
-        String singboxVersion = detectSingBoxVersion();
-        singboxVersionValue.setText(singboxVersion);
-
-        initCoreUpdateSection();
+        singboxVersionValue.setText(detectSingBoxVersion());
+        initUpdatesSection();
     }
 
-    // ===== in-app sing-box core update =====
+    // ===== Updates: the app itself + the sing-box core =====
+
+    /** Wires both update rows and the shared "Check for updates" button. */
+    private void initUpdatesSection() {
+        initAppUpdateRow();
+        initCoreUpdateSection();
+        // One button checks whatever can be checked (app and/or core).
+        checkCoreUpdateButton.setOnAction(e -> {
+            runAppCheck();
+            if (coreCheckEnabled) {
+                runCoreCheck(false);
+            }
+        });
+        if (updateManager == null && !coreCheckEnabled) {
+            checkCoreUpdateButton.setVisible(false);
+            checkCoreUpdateButton.setManaged(false);
+        }
+    }
+
+    // ----- app update row -----
+
+    private void initAppUpdateRow() {
+        try {
+            updateManager = ServiceLocator.get(UpdateManager.class);
+        } catch (IllegalArgumentException e) {
+            updateManager = null;
+            appUpdateRow.setVisible(false);
+            appUpdateRow.setManaged(false);
+            return;
+        }
+        downloadAppButton.setOnAction(e -> onDownloadAppClicked());
+        // The background periodic check updates these on the FX thread, so the
+        // row reflects a newer release even without pressing the button.
+        updateManager.updateAvailableProperty().addListener((o, ov, nv) -> renderAppRow());
+        updateManager.latestVersionProperty().addListener((o, ov, nv) -> renderAppRow());
+        renderAppRow();
+    }
+
+    private void renderAppRow() {
+        if (updateManager == null) {
+            return;
+        }
+        if (updateManager.updateAvailableProperty().get()) {
+            String latest = updateManager.latestVersionProperty().get();
+            setUpdateRow(appUpdateDetail, appUpdateDot,
+                    AppVersion.VERSION + "  →  " + latest, "core-status-available");
+            downloadAppButton.setVisible(true);
+            downloadAppButton.setManaged(true);
+        } else {
+            setUpdateRow(appUpdateDetail, appUpdateDot,
+                    I18n.get("settings.core.uptodate"), "core-status-ok");
+            downloadAppButton.setVisible(false);
+            downloadAppButton.setManaged(false);
+        }
+    }
+
+    private void runAppCheck() {
+        if (updateManager == null) {
+            return;
+        }
+        setUpdateRow(appUpdateDetail, appUpdateDot,
+                I18n.get("settings.core.checking"), "core-status-muted");
+        Thread t = new Thread(() -> {
+            updateManager.checkForUpdates();       // updates properties via runLater
+            Platform.runLater(this::renderAppRow); // reflect the outcome either way
+        }, "app-update-check");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void onDownloadAppClicked() {
+        if (updateManager == null) {
+            return;
+        }
+        String url = updateManager.downloadUrlProperty().get();
+        if (url == null || url.isBlank()) {
+            return;
+        }
+        downloadAppButton.setDisable(true);
+        setUpdateRow(appUpdateDetail, appUpdateDot,
+                I18n.get("settings.update.downloading"), "core-status-muted");
+        Thread t = new Thread(() -> {
+            java.nio.file.Path saved = updateManager.downloadUpdate(url);
+            Platform.runLater(() -> {
+                downloadAppButton.setDisable(false);
+                if (saved != null) {
+                    setUpdateRow(appUpdateDetail, appUpdateDot,
+                            I18n.get("settings.update.downloaded"), "core-status-ok");
+                    downloadAppButton.setVisible(false);
+                    downloadAppButton.setManaged(false);
+                } else {
+                    setUpdateRow(appUpdateDetail, appUpdateDot,
+                            I18n.get("settings.update.download.failed"), "core-status-error");
+                }
+            });
+        }, "app-update-download");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    // ----- sing-box core row -----
 
     private void initCoreUpdateSection() {
         try {
@@ -373,14 +484,13 @@ public class SettingsViewController {
         if (!managed) {
             // Binary comes from Homebrew/$PATH/.app bundle — replacing the
             // managed cache would not change what actually runs.
-            checkCoreUpdateButton.setDisable(true);
             setCoreStatus(activePath == null
                     ? I18n.get("settings.version.unknown")
                     : I18n.get("settings.core.external"), "core-status-muted");
             return;
         }
+        coreCheckEnabled = true;
 
-        checkCoreUpdateButton.setOnAction(e -> runCoreCheck(false));
         installCoreUpdateButton.setOnAction(e -> runCoreInstall());
         rollbackCoreButton.setOnAction(e -> runCoreRollback());
         installCoreUpdateButton.setTooltip(
@@ -419,10 +529,12 @@ public class SettingsViewController {
     }
 
     private void hideCoreUpdateSection() {
-        coreUpdateStatusLabel.setVisible(false);
-        coreUpdateStatusLabel.setManaged(false);
-        checkCoreUpdateButton.setVisible(false);
-        checkCoreUpdateButton.setManaged(false);
+        // Core can't be checked/updated in-app; hide only its row. The shared
+        // check button stays for the app-update row (hidden separately in
+        // initUpdatesSection if the app can't be checked either).
+        coreCheckEnabled = false;
+        coreUpdateRow.setVisible(false);
+        coreUpdateRow.setManaged(false);
     }
 
     private SingBoxEngine findEngine() {
@@ -524,17 +636,27 @@ public class SettingsViewController {
      * the line so it never leaves an empty row behind.
      */
     private void setCoreStatus(String text, String modifier) {
-        boolean show = text != null && !text.isBlank();
-        String glyph = switch (modifier) {
-            case "core-status-ok" -> "✓  ";
-            case "core-status-available" -> "↑  ";
-            case "core-status-error" -> "⚠  ";
-            default -> "";
+        setUpdateRow(coreUpdateStatusLabel, coreUpdateDot, text, modifier);
+    }
+
+    /**
+     * Sets an update row's detail text + colour and its status dot. The dot
+     * carries the state (green ok / amber available / red error / grey idle),
+     * so no leading glyph is needed in the text.
+     */
+    private void setUpdateRow(Label detail, Circle dot, String text, String modifier) {
+        detail.setText(text == null ? "" : text);
+        detail.getStyleClass().setAll("core-status", modifier);
+        dot.getStyleClass().setAll(dotClassFor(modifier));
+    }
+
+    private static String dotClassFor(String modifier) {
+        return switch (modifier) {
+            case "core-status-ok" -> "status-circle-connected";
+            case "core-status-available" -> "status-circle-connecting";
+            case "core-status-error" -> "status-circle-error";
+            default -> "status-circle-disconnected";
         };
-        coreUpdateStatusLabel.setText(show ? glyph + text : "");
-        coreUpdateStatusLabel.getStyleClass().setAll("core-status", modifier);
-        coreUpdateStatusLabel.setVisible(show);
-        coreUpdateStatusLabel.setManaged(show);
     }
 
     private void showCoreUpdateAvailable(CoreUpdateService.CoreUpdate update) {
@@ -701,7 +823,9 @@ public class SettingsViewController {
         aboutLabel.textProperty().bind(I18n.binding("settings.about"));
         appVersionLabel.textProperty().bind(I18n.binding("settings.app.version"));
         singboxVersionLabel.textProperty().bind(I18n.binding("settings.singbox.version"));
+        updatesLabel.textProperty().bind(I18n.binding("settings.updates"));
         checkCoreUpdateButton.textProperty().bind(I18n.binding("settings.core.check"));
+        downloadAppButton.textProperty().bind(I18n.binding("settings.update.download"));
         advancedLabel.textProperty().bind(I18n.binding("settings.advanced"));
         proxyDnsLabel.textProperty().bind(I18n.binding("settings.proxy.dns"));
         directDnsLabel.textProperty().bind(I18n.binding("settings.direct.dns"));
