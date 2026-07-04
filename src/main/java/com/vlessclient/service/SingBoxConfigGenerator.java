@@ -426,6 +426,15 @@ public class SingBoxConfigGenerator {
         http.put("tag", "http-in");
         http.put("listen", "127.0.0.1");
         http.put("listen_port", settings.getHttpPort());
+        // In SYSTEM_PROXY mode sing-box itself registers this inbound as the
+        // OS proxy on start and restores the previous state on a graceful
+        // stop — one cross-platform mechanism (networksetup on macOS, WinINET
+        // on Windows) instead of app-side platform code. SystemProxyGuard
+        // covers the non-graceful exits.
+        if (settings.getProxyMode() == ProxyMode.SYSTEM_PROXY
+                && settings.isSystemProxyAutoConfig()) {
+            http.put("set_system_proxy", true);
+        }
         inbounds.add(http);
 
         return inbounds;

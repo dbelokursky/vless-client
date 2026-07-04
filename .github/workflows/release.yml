@@ -28,3 +28,28 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*.dmg
+
+  # Windows twin of the job above: same gates (fat JAR, real-binary smoke),
+  # same shared packaging script as the per-merge build, MSI instead of DMG.
+  # Both jobs upload to the same tag's release; action-gh-release appends.
+  release-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25-ea'
+          distribution: 'temurin'
+      - name: Build fat JAR
+        run: mvn -B clean package -DskipTests
+      - name: Smoke-test the bundled sing-box
+        # The MSI must never ship a core the generator can't drive: the same
+        # real-binary smoke suite as macOS, running the bundled sing-box.exe.
+        run: mvn -B test -Psmoke "-Dtest=SingBoxRealBinarySmokeTest"
+      - name: Create MSI with jpackage
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -Version "$($env:GITHUB_REF_NAME -replace '^v', '')"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.msi

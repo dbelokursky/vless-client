@@ -10,7 +10,7 @@ import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.CoreUpdateService;
-import com.vlessclient.service.LoginItemService;
+import com.vlessclient.platform.Autostart;
 import com.vlessclient.service.RoutingService;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
@@ -82,6 +82,7 @@ public class SettingsViewController {
     @FXML private TextField healthCheckIntervalField;
     @FXML private TextField healthCheckReconnectDelayField;
     @FXML private ComboBox<ProxyMode> proxyModeCombo;
+    @FXML private CheckBox systemProxyAutoConfigCheck;
     @FXML private TextField proxyDnsField;
     @FXML private TextField directDnsField;
     @FXML private TextField tunInterfaceNameField;
@@ -103,7 +104,7 @@ public class SettingsViewController {
 
     private ConfigStore configStore;
     private ThemeManager themeManager;
-    private LoginItemService loginItemService;
+    private Autostart autostart;
     private boolean suppressLaunchAtLoginListener;
 
     private CoreUpdateService coreUpdateService;
@@ -135,9 +136,9 @@ public class SettingsViewController {
         }
 
         try {
-            loginItemService = ServiceLocator.get(LoginItemService.class);
+            autostart = ServiceLocator.get(Autostart.class);
         } catch (IllegalArgumentException e) {
-            log.warn("LoginItemService not available");
+            log.warn("Autostart not available");
         }
 
         AppSettings settings = configStore.getSettings();
@@ -147,9 +148,24 @@ public class SettingsViewController {
         initConnectionSettings(settings);
         initHealthCheckSettings(settings);
         initProxyModeCombo(settings);
+        initSystemProxyAutoConfig(settings);
         initAdvancedSettings(settings);
         initAboutSection();
         bindLabels();
+    }
+
+    /**
+     * Wires the "Set system proxy automatically" toggle: in SYSTEM_PROXY mode
+     * sing-box registers its http inbound as the OS proxy on connect and
+     * restores the previous state on disconnect. Applies from the next
+     * connect.
+     */
+    private void initSystemProxyAutoConfig(AppSettings settings) {
+        systemProxyAutoConfigCheck.setSelected(settings.isSystemProxyAutoConfig());
+        systemProxyAutoConfigCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setSystemProxyAutoConfig(newVal);
+            saveSettings(settings);
+        });
     }
 
     private void initAdvancedSettings(AppSettings settings) {
@@ -315,17 +331,17 @@ public class SettingsViewController {
      * checkbox reverts so it never claims a state that did not take effect.
      */
     private void initLaunchAtLogin() {
-        if (loginItemService == null) {
+        if (autostart == null) {
             launchAtLoginCheck.setDisable(true);
             return;
         }
-        launchAtLoginCheck.setSelected(loginItemService.isEnabled());
+        launchAtLoginCheck.setSelected(autostart.isEnabled());
         launchAtLoginCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
             if (suppressLaunchAtLoginListener) {
                 return;
             }
             try {
-                loginItemService.setEnabled(newVal);
+                autostart.setEnabled(newVal);
             } catch (IOException e) {
                 log.error("Failed to {} launch at login", newVal ? "enable" : "disable", e);
                 suppressLaunchAtLoginListener = true;
@@ -815,6 +831,8 @@ public class SettingsViewController {
         socksPortLabel.textProperty().bind(I18n.binding("settings.socks.port"));
         httpPortLabel.textProperty().bind(I18n.binding("settings.http.port"));
         proxyModeLabel.textProperty().bind(I18n.binding("settings.proxy.mode"));
+        systemProxyAutoConfigCheck.textProperty()
+                .bind(I18n.binding("settings.proxy.autoconfig"));
         healthCheckLabel.textProperty().bind(I18n.binding("settings.health.check"));
         healthCheckEnabledCheck.textProperty().bind(I18n.binding("settings.health.check.enabled"));
         healthCheckAutoReconnectCheck.textProperty()

@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -29,6 +31,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * plays both the GitHub releases API and the download host; "binaries" are
  * shell scripts that answer {@code version} and {@code check} on demand.
  */
+// "Binaries" are #!/bin/sh scripts and archives are built with /usr/bin/tar,
+// so the whole suite is Unix-only.
+@EnabledOnOs({OS.MAC, OS.LINUX})
 class CoreUpdateServiceTest {
 
     // Versions are derived from the real pin so the tests keep meaning

@@ -4,6 +4,8 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
@@ -27,6 +29,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Tests for {@link SingBoxInstaller}. Uses a local {@link HttpServer} to serve
  * a fake sing-box tarball so the tests are offline-safe and hermetic.
  */
+// Serves fake #!/bin/sh "binaries" and builds tarballs with /usr/bin/tar; the
+// Windows installer path (zip extraction) is covered by CorePlatformTest.
+@EnabledOnOs({OS.MAC, OS.LINUX})
 class SingBoxInstallerTest {
 
     @TempDir Path tempDir;

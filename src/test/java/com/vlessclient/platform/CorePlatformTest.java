@@ -1,6 +1,8 @@
 package com.vlessclient.platform;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.OutputStream;
@@ -71,6 +73,7 @@ class CorePlatformTest {
     }
 
     @Test
+    @EnabledOnOs({OS.MAC, OS.LINUX})
     void mac_extractsTarGz(@TempDir Path tmp) throws Exception {
         // Build a real .tar.gz with the system tar so the macOS extractor path
         // is exercised end to end.

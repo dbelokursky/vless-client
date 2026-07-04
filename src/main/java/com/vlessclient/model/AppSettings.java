@@ -33,6 +33,14 @@ public class AppSettings {
     @JsonProperty("proxy_mode")
     private ProxyMode proxyMode = ProxyMode.SYSTEM_PROXY;
 
+    /**
+     * In SYSTEM_PROXY mode, have sing-box register itself as the OS proxy on
+     * connect (and restore the previous state on disconnect) instead of only
+     * listening on the local ports.
+     */
+    @JsonProperty("system_proxy_auto_config")
+    private boolean systemProxyAutoConfig = true;
+
     @JsonProperty("proxy_dns")
     private String proxyDns = "https://1.1.1.1/dns-query";
 
@@ -138,6 +146,14 @@ public class AppSettings {
 
     public void setProxyMode(ProxyMode proxyMode) {
         this.proxyMode = proxyMode;
+    }
+
+    public boolean isSystemProxyAutoConfig() {
+        return systemProxyAutoConfig;
+    }
+
+    public void setSystemProxyAutoConfig(boolean systemProxyAutoConfig) {
+        this.systemProxyAutoConfig = systemProxyAutoConfig;
     }
 
     public String getProxyDns() {

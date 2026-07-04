@@ -5,19 +5,26 @@ import com.vlessclient.model.ProxyMode;
 import javafx.application.Platform;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+// Drives the engine with fake #!/bin/sh binaries and POSIX file permissions,
+// so it only runs where a Unix shell and POSIX attributes exist.
+@EnabledOnOs({OS.MAC, OS.LINUX})
 class SingBoxEngineTest {
 
     private static final String DUMMY_CONFIG = "{\"log\":{\"level\":\"info\"}}";
@@ -158,5 +165,60 @@ class SingBoxEngineTest {
 
         awaitConnectionState(engine, ConnectionState.ERROR, 5000);
         assertThat(engine.errorMessageProperty().get()).contains("exited unexpectedly");
+    }
+
+    private static final String SET_SYSTEM_PROXY_CONFIG = """
+            {"inbounds":[
+              {"type":"socks","listen":"127.0.0.1","listen_port":1080},
+              {"type":"http","listen":"127.0.0.1","listen_port":1081,"set_system_proxy":true}
+            ]}""";
+
+    @Test
+    void stopRunsSystemProxyGuardForMarkedConfig(@TempDir Path tmp) throws Exception {
+        Path fake = createFakeSingBox(tmp, "sing-box", 30);
+        SingBoxEngine engine = new SingBoxEngine(fake);
+        List<String> guardCalls = new CopyOnWriteArrayList<>();
+        engine.setSystemProxyGuard((host, port) -> guardCalls.add(host + ":" + port));
+
+        engine.start(SET_SYSTEM_PROXY_CONFIG, ProxyMode.SYSTEM_PROXY);
+        engine.stop();
+
+        // The guard runs on the monitor thread once the process is dead.
+        long deadline = System.currentTimeMillis() + 5000;
+        while (guardCalls.isEmpty() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(25);
+        }
+        assertThat(guardCalls).containsExactly("127.0.0.1:1081");
+    }
+
+    @Test
+    void crashRunsSystemProxyGuardToo(@TempDir Path tmp) throws Exception {
+        Path fake = createCrashingSingBox(tmp, "sing-box");
+        SingBoxEngine engine = new SingBoxEngine(fake);
+        List<String> guardCalls = new CopyOnWriteArrayList<>();
+        engine.setSystemProxyGuard((host, port) -> guardCalls.add(host + ":" + port));
+
+        engine.start(SET_SYSTEM_PROXY_CONFIG, ProxyMode.SYSTEM_PROXY);
+
+        awaitConnectionState(engine, ConnectionState.ERROR, 5000);
+        long deadline = System.currentTimeMillis() + 5000;
+        while (guardCalls.isEmpty() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(25);
+        }
+        assertThat(guardCalls).containsExactly("127.0.0.1:1081");
+    }
+
+    @Test
+    void unmarkedConfigNeverInvokesTheGuard(@TempDir Path tmp) throws Exception {
+        Path fake = createFakeSingBox(tmp, "sing-box", 30);
+        SingBoxEngine engine = new SingBoxEngine(fake);
+        List<String> guardCalls = new CopyOnWriteArrayList<>();
+        engine.setSystemProxyGuard((host, port) -> guardCalls.add(host + ":" + port));
+
+        engine.start(DUMMY_CONFIG, ProxyMode.SYSTEM_PROXY);
+        engine.stop();
+
+        Thread.sleep(300);
+        assertThat(guardCalls).isEmpty();
     }
 }

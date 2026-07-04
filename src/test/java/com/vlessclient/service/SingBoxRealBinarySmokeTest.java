@@ -2,6 +2,7 @@ package com.vlessclient.service;
 
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.Protocol;
+import com.vlessclient.platform.CorePlatform;
 import com.vlessclient.model.ProxyMode;
 import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.RoutingRule;
@@ -59,7 +60,9 @@ class SingBoxRealBinarySmokeTest {
         String osArch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
         String arch = osArch.contains("aarch64") || osArch.contains("arm64")
                 ? "arm64" : "amd64";
-        binary = Path.of("target", "classes", "native", "darwin-" + arch, "sing-box")
+        CorePlatform core = CorePlatform.current();
+        binary = Path.of("target", "classes", "native",
+                        core.osKey() + "-" + arch, core.binaryName())
                 .toAbsolutePath();
         assumeTrue(Files.isExecutable(binary),
                 "bundled sing-box not found at " + binary
@@ -142,6 +145,10 @@ class SingBoxRealBinarySmokeTest {
 
         AppSettings settings = new AppSettings();
         settings.setProxyMode(ProxyMode.SYSTEM_PROXY);
+        // The live run must never rewire the host's real proxy settings
+        // (developer machines, CI runners). The set_system_proxy shape is
+        // still config-checked by checkAcceptsEveryProtocolInBothModes.
+        settings.setSystemProxyAutoConfig(false);
         settings.setSocksPort(socksPort);
         settings.setHttpPort(httpPort);
         settings.setClashApiPort(clashPort);

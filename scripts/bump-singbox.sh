@@ -6,12 +6,13 @@
 #
 # Usage: scripts/bump-singbox.sh <version>       (e.g. 1.13.14)
 #
-# For each darwin arch the script downloads the release tarball, computes its
-# SHA-256 locally, and cross-checks it against the digest published by the
-# GitHub Releases API. The two values travel different paths (CDN download vs
-# API metadata), so a tampered or corrupted download fails the bump instead of
-# getting pinned. Downloads land in the same build cache bundle-singbox.sh
-# uses, so the follow-up build doesn't re-download.
+# For each bundled asset (a darwin tar.gz per arch and the windows amd64 zip)
+# the script downloads the release archive, computes its SHA-256 locally, and
+# cross-checks it against the digest published by the GitHub Releases API. The
+# two values travel different paths (CDN download vs API metadata), so a
+# tampered or corrupted download fails the bump instead of getting pinned.
+# Downloads land in the same build cache the bundlers use, so the follow-up
+# build doesn't re-download.
 #
 # After a successful bump, verify before committing:
 #   mvn clean verify -Psmoke
@@ -57,36 +58,42 @@ else:
 ' "$1" <<<"${release_json}"
 }
 
-declare_line() {
-    printf 'singbox.sha256.darwin-%s=%s\n' "$1" "$2"
-}
+# Accumulates the "singbox.sha256.<os>-<arch>=<sha>" lines to pin, in order.
+pinned_lines=()
 
-sha_arm64=""
-sha_amd64=""
-for arch in arm64 amd64; do
-    asset="sing-box-${VERSION}-darwin-${arch}.tar.gz"
-    tarball="${CACHE_DIR}/${asset}"
-    url="https://github.com/SagerNet/sing-box/releases/download/v${VERSION}/${asset}"
+# Downloads one release asset, verifies its bytes against the sha256 digest the
+# GitHub API publishes, and records its pin line.
+#   $1 os   $2 arch   $3 archive extension
+process_asset() {
+    local os="$1" arch="$2" ext="$3"
+    local asset="sing-box-${VERSION}-${os}-${arch}.${ext}"
+    local file="${CACHE_DIR}/${asset}"
+    local url="https://github.com/SagerNet/sing-box/releases/download/v${VERSION}/${asset}"
 
-    if [[ ! -f "${tarball}" ]]; then
+    if [[ ! -f "${file}" ]]; then
         echo "[bump-singbox] downloading ${url}"
-        curl --fail --silent --show-error --location --output "${tarball}.part" "${url}"
-        mv "${tarball}.part" "${tarball}"
+        curl --fail --silent --show-error --location --output "${file}.part" "${url}"
+        mv "${file}.part" "${file}"
     fi
 
-    local_sha=$(shasum -a 256 "${tarball}" | awk '{print $1}')
+    local local_sha api_sha
+    local_sha=$(shasum -a 256 "${file}" | awk '{print $1}')
     api_sha=$(api_digest_for "${asset}")
     if [[ "${local_sha}" != "${api_sha}" ]]; then
-        echo "[bump-singbox] SHA-256 mismatch for ${arch}:" >&2
+        echo "[bump-singbox] SHA-256 mismatch for ${os}-${arch}:" >&2
         echo "  downloaded bytes: ${local_sha}" >&2
         echo "  GitHub API says:  ${api_sha}" >&2
         echo "  The download may be corrupted or tampered with — NOT pinning." >&2
-        rm -f "${tarball}"
+        rm -f "${file}"
         exit 1
     fi
-    echo "[bump-singbox] ${arch}: ${local_sha} (matches API digest)"
-    if [[ "${arch}" == arm64 ]]; then sha_arm64="${local_sha}"; else sha_amd64="${local_sha}"; fi
-done
+    echo "[bump-singbox] ${os}-${arch}: ${local_sha} (matches API digest)"
+    pinned_lines+=("singbox.sha256.${os}-${arch}=${local_sha}")
+}
+
+process_asset darwin arm64 tar.gz
+process_asset darwin amd64 tar.gz
+process_asset windows amd64 zip
 
 # Sanity: the host-arch binary must actually run and report the version.
 host_arch=$(uname -m)
@@ -107,12 +114,13 @@ echo "[bump-singbox] binary check OK: ${reported}"
 
 tmp_props="$(mktemp)"
 {
-    # Preserve everything except the three managed keys, then append them.
-    grep -vE '^[[:space:]]*singbox\.(version|sha256\.darwin-(arm64|amd64))[[:space:]]*=' \
+    # Preserve everything except the managed keys, then append them in order.
+    grep -vE '^[[:space:]]*singbox\.(version|sha256\.(darwin-(arm64|amd64)|windows-amd64))[[:space:]]*=' \
         "${PROPS_FILE}"
     printf 'singbox.version=%s\n' "${VERSION}"
-    declare_line arm64 "${sha_arm64}"
-    declare_line amd64 "${sha_amd64}"
+    for line in "${pinned_lines[@]}"; do
+        printf '%s\n' "${line}"
+    done
 } > "${tmp_props}"
 mv "${tmp_props}" "${PROPS_FILE}"
 
