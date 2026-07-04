@@ -164,11 +164,13 @@
                        prefWidth="120"/>
                 <Label fx:id="singboxVersionValue" text="Unknown" styleClass="stats-value"
                        style="-fx-font-size: 13px;"/>
+                <!-- Inline verdict next to the version: "up to date" /
+                     "update available: X" / "checking…" / error -->
+                <Label fx:id="coreUpdateStatusLabel" text="" wrapText="true"
+                       style="-fx-font-size: 12px; -fx-opacity: 0.75;"/>
             </HBox>
 
             <!-- In-app sing-box core update / rollback -->
-            <Label fx:id="coreUpdateStatusLabel" text="" wrapText="true"
-                   style="-fx-font-size: 12px;"/>
             <ProgressBar fx:id="coreUpdateProgress" visible="false" managed="false"
                          maxWidth="Infinity" prefHeight="14"/>
             <HBox spacing="8" alignment="CENTER_LEFT">

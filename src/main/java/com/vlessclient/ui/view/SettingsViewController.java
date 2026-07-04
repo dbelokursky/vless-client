@@ -401,13 +401,17 @@ public class SettingsViewController {
         updateCoreButtonsEnabled();
         refreshRollbackButton();
 
+        // Show the last known verdict immediately: no clicking required to
+        // learn whether the core is current.
         String available = coreUpdateService.availableVersion();
         if (available != null) {
             showCoreUpdateAvailable(new CoreUpdateService.CoreUpdate(available, null, null));
+        } else if (coreUpdateService.lastCheckEpochMs() > 0) {
+            coreUpdateStatusLabel.setText(I18n.get("settings.core.uptodate"));
         }
 
-        // Quiet periodic check so the user learns about new releases without
-        // pressing the button.
+        // Periodic re-check so the verdict stays fresh without pressing the
+        // button; quiet=true only silences a failure (e.g. offline start).
         if (System.currentTimeMillis() - coreUpdateService.lastCheckEpochMs()
                 > CORE_CHECK_INTERVAL_MS) {
             runCoreCheck(true);
@@ -470,11 +474,15 @@ public class SettingsViewController {
         return ProxySelector.getDefault();
     }
 
+    /**
+     * Runs an update check. The transient "checking…" state and the verdict
+     * ("up to date" / "update available: X") are always shown — {@code quiet}
+     * only swallows failures, so a startup check on an offline machine
+     * doesn't greet the user with an error.
+     */
     private void runCoreCheck(boolean quiet) {
         checkCoreUpdateButton.setDisable(true);
-        if (!quiet) {
-            coreUpdateStatusLabel.setText(I18n.get("settings.core.checking"));
-        }
+        coreUpdateStatusLabel.setText(I18n.get("settings.core.checking"));
         ProxySelector proxySelector = coreCheckProxySelector();
         Thread t = new Thread(() -> {
             try {
@@ -493,9 +501,7 @@ public class SettingsViewController {
                         pendingCoreUpdate = null;
                         installCoreUpdateButton.setVisible(false);
                         installCoreUpdateButton.setManaged(false);
-                        if (!quiet) {
-                            coreUpdateStatusLabel.setText(I18n.get("settings.core.uptodate"));
-                        }
+                        coreUpdateStatusLabel.setText(I18n.get("settings.core.uptodate"));
                     }
                 });
             } catch (Exception e) {
@@ -503,10 +509,8 @@ public class SettingsViewController {
                 Platform.runLater(() -> {
                     installAfterCheck = false;
                     checkCoreUpdateButton.setDisable(false);
-                    if (!quiet) {
-                        coreUpdateStatusLabel.setText(
-                                I18n.get("settings.core.error", e.getMessage()));
-                    }
+                    coreUpdateStatusLabel.setText(quiet ? ""
+                            : I18n.get("settings.core.error", e.getMessage()));
                 });
             }
         }, "core-update-check");
