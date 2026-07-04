@@ -39,40 +39,44 @@
                 onAction="#onRetryInstallClicked"/>
     </HBox>
 
-    <!-- Compact status bar: single card, one row -->
-    <HBox styleClass="card, hero-card, status-bar" alignment="CENTER_LEFT" spacing="16">
+    <!-- Status hero: two rows so nothing is clipped at a narrow window.
+         Row 1 is the status (full width, subtitle free to wrap/ellipsize);
+         row 2 carries the Mode selector + Connect button on their own line,
+         so the fixed-width controls never fight the status text for space. -->
+    <VBox styleClass="card, hero-card, status-bar" spacing="14">
         <padding>
             <Insets top="14" right="18" bottom="14" left="18"/>
         </padding>
 
-        <StackPane fx:id="statusHalo" styleClass="status-halo, status-halo-sm"
-                   prefWidth="44" prefHeight="44" maxWidth="44" maxHeight="44">
-            <Circle fx:id="statusCircle" radius="9" styleClass="status-circle-disconnected"/>
-        </StackPane>
+        <!-- Row 1: status -->
+        <HBox alignment="CENTER_LEFT" spacing="16">
+            <StackPane fx:id="statusHalo" styleClass="status-halo, status-halo-sm"
+                       prefWidth="44" prefHeight="44" maxWidth="44" maxHeight="44">
+                <Circle fx:id="statusCircle" radius="9" styleClass="status-circle-disconnected"/>
+            </StackPane>
 
-        <VBox spacing="1" HBox.hgrow="ALWAYS">
-            <Label fx:id="statusTitle" text="Disconnected" styleClass="status-title"/>
-            <Label fx:id="statusLabel" text="Add a server to get started"
-                   styleClass="status-subtitle" wrapText="true" maxWidth="520"/>
-        </VBox>
+            <VBox spacing="1" HBox.hgrow="ALWAYS" minWidth="0">
+                <Label fx:id="statusTitle" text="Disconnected" styleClass="status-title"/>
+                <Label fx:id="statusLabel" text="Add a server to get started"
+                       styleClass="status-subtitle" wrapText="true" maxWidth="Infinity"/>
+            </VBox>
+        </HBox>
 
-        <!-- Mode selector + connect button on one row so the combo and the
-             button stay vertically aligned; the TUN warning wraps underneath.
-             fillHeight=false stops the HBox from stretching the 44px button to
-             the warning's height (it used to balloon to ~68px). minWidth=
-             -Infinity keeps the whole group from being squeezed by a long
-             status message. -->
-        <VBox alignment="CENTER_RIGHT" spacing="4" minWidth="-Infinity">
-            <HBox alignment="CENTER_RIGHT" spacing="12" fillHeight="false">
+        <!-- Row 2: mode + connect. The spacer pushes Connect to the right;
+             it collapses first when the window is narrow, so the fixed combo
+             and button always stay on screen. The TUN warning wraps under. -->
+        <VBox spacing="4">
+            <HBox alignment="CENTER_LEFT" spacing="12" fillHeight="false">
                 <Label text="Mode" styleClass="stats-title"/>
-                <ComboBox fx:id="proxyModeCombo" prefWidth="130" styleClass="mode-combo"/>
+                <ComboBox fx:id="proxyModeCombo" prefWidth="150" styleClass="mode-combo"/>
+                <Region HBox.hgrow="ALWAYS"/>
                 <Button fx:id="connectButton" text="Connect" styleClass="connect-button"
                         onAction="#onConnectClicked" minWidth="170" prefWidth="170" prefHeight="44"/>
             </HBox>
             <Label fx:id="proxyModeWarning" text="" styleClass="hint-label"
-                   wrapText="true" maxWidth="320" visible="false" managed="false"/>
+                   wrapText="true" maxWidth="Infinity" visible="false" managed="false"/>
         </VBox>
-    </HBox>
+    </VBox>
 
     <!-- Hidden legacy field used elsewhere; no longer rendered. -->
     <Label fx:id="serverNameLabel" text="" managed="false" visible="false"/>
@@ -119,8 +123,10 @@
         </VBox>
     </GridPane>
 
-    <!-- Session totals and latency: inline strip, no extra cards -->
-    <HBox styleClass="card, totals-strip" alignment="CENTER_LEFT" spacing="24">
+    <!-- Session totals and latency: inline strip, no extra cards.
+         Tighter spacing + a natural-width button so the whole row fits at the
+         minimum window width instead of clipping the button off the right. -->
+    <HBox styleClass="card, totals-strip" alignment="CENTER_LEFT" spacing="14">
         <padding>
             <Insets top="12" right="18" bottom="12" left="20"/>
         </padding>
@@ -141,10 +147,10 @@
         <Label text="LATENCY" styleClass="stats-title"/>
         <Label fx:id="latencyResultLabel" text="—" styleClass="stats-value latency-result"/>
 
-        <Region HBox.hgrow="ALWAYS"/>
+        <Region HBox.hgrow="ALWAYS" minWidth="8"/>
 
         <Button fx:id="testLatencyButton" text="Test Latency"
-                styleClass="secondary-button" prefWidth="120"
+                styleClass="secondary-button" minWidth="-Infinity"
                 onAction="#onTestLatencyClicked"/>
     </HBox>
 
