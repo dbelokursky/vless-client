@@ -23,10 +23,16 @@
             <maxFileSize>10MB</maxFileSize>
             <maxHistory>10</maxHistory>
             <totalSizeCap>100MB</totalSizeCap>
+            <!-- Purge stale history at startup too, not only at rollover —
+                 matters for a desktop app that can sit unopened for weeks. -->
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
         </rollingPolicy>
     </appender>
 
-    <logger name="com.vlessclient" level="DEBUG"/>
+    <!-- INFO by default (packaged app); dev runs via `mvn javafx:run` pass
+         -Dvless.log.level=DEBUG through the jvm-args argfile. Users can
+         raise verbosity for troubleshooting the same way without a rebuild. -->
+    <logger name="com.vlessclient" level="${vless.log.level:-INFO}"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
