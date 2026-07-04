@@ -81,7 +81,19 @@ if (-not (Test-Path $zip)) {
     Move-Item -Force -LiteralPath $part -Destination $zip
 }
 
-$actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLower()
+# Hash via .NET rather than Get-FileHash: some Windows PowerShell builds on CI
+# don't expose that cmdlet, but the SHA256 type is present in every version.
+$sha256 = [System.Security.Cryptography.SHA256]::Create()
+try {
+    $stream = [System.IO.File]::OpenRead($zip)
+    try {
+        $actual = [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '').ToLower()
+    } finally {
+        $stream.Dispose()
+    }
+} finally {
+    $sha256.Dispose()
+}
 if ($actual -ne $expected.ToLower()) {
     Remove-Item -Force -LiteralPath $zip
     throw ("[bundle-singbox] SHA-256 mismatch for windows-$arch`n" +
@@ -92,10 +104,12 @@ New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $targetBinary, $stampFile
 
 # Extract just sing-box.exe out of the nested sing-box-<version>-windows-amd64/
-# directory (the .sh bundler's --strip-components=1 equivalent).
+# directory (the .sh bundler's --strip-components=1 equivalent). Use .NET
+# ZipFile instead of Expand-Archive, which isn't on every CI PowerShell.
 $extractDir = Join-Path $cacheDir 'extract'
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -LiteralPath $extractDir
-Expand-Archive -LiteralPath $zip -DestinationPath $extractDir -Force
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $extractDir)
 $exe = Get-ChildItem -Path $extractDir -Recurse -Filter 'sing-box.exe' | Select-Object -First 1
 if (-not $exe) {
     throw "[bundle-singbox] sing-box.exe not found inside $zip"
