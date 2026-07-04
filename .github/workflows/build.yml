@@ -1,7 +1,8 @@
 name: Build
 on:
   push:
-    branches: [main]
+    # TODO(windows-polish): drop feat/windows-polish before merge (validation).
+    branches: [main, feat/windows-polish]
   pull_request:
     branches: [main]
   workflow_dispatch:
