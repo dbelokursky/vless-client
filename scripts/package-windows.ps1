@@ -1,0 +1,84 @@
+<#
+.SYNOPSIS
+    Builds the Windows MSI from the shaded JAR via jpackage. Windows
+    counterpart to package-dmg.sh, shared by the two CI paths so they can
+    never drift: build.yml packages merges to main (workflow artifact),
+    release.yml packages tagged releases.
+
+.PARAMETER Version
+    Human-readable version passed to the app via -Dapp.version
+    (e.g. "0.2.0" or "0.1.0-dev-abc1234").
+
+.PARAMETER MsiVersion
+    Numeric x.y.z for the MSI ProductVersion (WiX rejects anything else).
+    Defaults to -Version, which only works for plain x.y.z labels -- dev
+    builds must pass this explicitly.
+
+.NOTES
+    Expects 'mvn package' to have produced the shaded JAR already; the JAR
+    built on a Windows host already carries the Windows JavaFX natives and
+    the bundled sing-box.exe. Requires the WiX Toolset on PATH (preinstalled
+    on the windows-latest GitHub runners).
+
+    The upgrade UUID is fixed for the lifetime of the product: it is what
+    lets a newer MSI upgrade an existing install in place instead of
+    installing a second copy side by side. Never change it.
+#>
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)][string]$Version,
+    [string]$MsiVersion = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrEmpty($MsiVersion)) {
+    $MsiVersion = $Version
+}
+if ($MsiVersion -notmatch '^\d+(\.\d+){0,2}$') {
+    throw ("[package-windows] MSI version '$MsiVersion' is not numeric x.y.z" +
+        " -- pass -MsiVersion explicitly for non-numeric labels")
+}
+
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent $scriptDir
+Set-Location $repoRoot
+
+$jarName = 'vless-client-0.1.0-SNAPSHOT.jar'
+if (-not (Test-Path "target/$jarName")) {
+    throw "[package-windows] missing target/$jarName -- run 'mvn package' first"
+}
+
+# Stage just the shaded jar (not the original-*.jar the shade plugin
+# leaves alongside it).
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -Path staging, dist
+New-Item -ItemType Directory -Force -Path staging | Out-Null
+Copy-Item "target/$jarName" staging/
+
+# Per-user install: lands in %LOCALAPPDATA%\Programs without an admin
+# prompt, matching how the app manages everything else per-user.
+& jpackage `
+    --type msi `
+    --name 'VLESS Client' `
+    --app-version $MsiVersion `
+    --input staging `
+    --main-jar $jarName `
+    --main-class com.vlessclient.app.Launcher `
+    --icon src/main/resources/icons/app-icon.ico `
+    --dest dist `
+    --win-upgrade-uuid 'ff1f0b21-e3d2-420f-80ce-95d5d9ab61fb' `
+    --win-menu `
+    --win-menu-group 'VLESS Client' `
+    --win-shortcut `
+    --win-per-user-install `
+    --java-options '--enable-preview' `
+    --java-options "-Dapp.version=$Version"
+if ($LASTEXITCODE -ne 0) {
+    throw "[package-windows] jpackage failed with exit code $LASTEXITCODE"
+}
+
+$msi = Get-ChildItem dist -Filter '*.msi' | Select-Object -First 1
+if (-not $msi) {
+    throw '[package-windows] jpackage reported success but no MSI in dist/'
+}
+Write-Host "[package-windows] built: $($msi.FullName) (app-version=$Version, ProductVersion=$MsiVersion)"
