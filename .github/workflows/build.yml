@@ -1,8 +1,7 @@
 name: Build
 on:
   push:
-    # TODO(linux-system-proxy): drop feat/linux-system-proxy before merge (validation).
-    branches: [main, feat/linux-system-proxy]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
