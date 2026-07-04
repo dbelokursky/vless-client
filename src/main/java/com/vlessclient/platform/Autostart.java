@@ -34,6 +34,11 @@ public interface Autostart {
      * @return the autostart implementation for the host platform
      */
     static Autostart current() {
-        return Platform.current().isWindows() ? new WindowsAutostart() : new MacAutostart();
+        return switch (Platform.current()) {
+            case WINDOWS -> new WindowsAutostart();
+            case LINUX -> new LinuxAutostart();
+            // OTHER keeps the mac fallback: unix-like defaults beat crashing.
+            case MAC, OTHER -> new MacAutostart();
+        };
     }
 }

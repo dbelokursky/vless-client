@@ -248,9 +248,13 @@ public class UpdateManager {
         }
     }
 
-    /** The installer format this platform consumes (DMG on macOS, MSI on Windows). */
+    /** The installer format this platform consumes (DMG/MSI/DEB). */
     static String installerExtension() {
-        return com.vlessclient.platform.Platform.current().isWindows() ? ".msi" : ".dmg";
+        return switch (com.vlessclient.platform.Platform.current()) {
+            case WINDOWS -> ".msi";
+            case LINUX -> ".deb";
+            case MAC, OTHER -> ".dmg";
+        };
     }
 
     static String findInstallerAssetUrl(JsonNode assets) {

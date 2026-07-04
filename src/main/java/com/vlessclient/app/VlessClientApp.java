@@ -185,12 +185,19 @@ public class VlessClientApp extends Application {
         loadAppIcon(primaryStage);
 
         // Keep the app alive when the main window is closed — it continues
-        // running in the menu bar (tray). The user can quit via the tray menu
-        // or Cmd+Q.
+        // running in the tray, where the user can reopen or quit it. On
+        // desktops with no system tray (notably stock GNOME) hiding would
+        // strand the app with no way back, so there closing the window quits.
         Platform.setImplicitExit(false);
+        boolean trayAvailable = java.awt.SystemTray.isSupported();
         primaryStage.setOnCloseRequest(event -> {
-            event.consume();
-            primaryStage.hide();
+            if (trayAvailable) {
+                event.consume();
+                primaryStage.hide();
+            } else {
+                log.info("No system tray on this desktop — window close quits the app");
+                Platform.exit();
+            }
         });
 
         primaryStage.show();
