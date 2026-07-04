@@ -349,6 +349,84 @@ class SingBoxRealBinarySmokeTest {
         }
     }
 
+    /**
+     * Full Windows TUN launch cycle through the real
+     * {@code WindowsTunLauncher}: outer script, elevated wrapper, real
+     * sing-box with a TUN inbound, live log tailing, stop via the signal
+     * file. On GitHub's windows runners the shell is already elevated, so
+     * {@code Start-Process -Verb RunAs} succeeds without an interactive UAC
+     * prompt — making the whole privileged path CI-testable.
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void windowsTunLauncherFullCycle() throws Exception {
+        AppSettings settings = new AppSettings();
+        settings.setProxyMode(ProxyMode.TUN);
+        settings.setSocksPort(freePort());
+        settings.setHttpPort(freePort());
+        settings.setClashApiPort(freePort());
+
+        com.fasterxml.jackson.databind.ObjectMapper mapper =
+                new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.node.ObjectNode config = (com.fasterxml.jackson.databind.node.ObjectNode)
+                mapper.readTree(generator.generate(serverFor(Protocol.VLESS), settings));
+        for (com.fasterxml.jackson.databind.JsonNode inbound : config.get("inbounds")) {
+            if ("tun".equals(inbound.path("type").asText())) {
+                // Never reroute the CI runner's own traffic.
+                ((com.fasterxml.jackson.databind.node.ObjectNode) inbound)
+                        .put("auto_route", false);
+            }
+        }
+        Path configFile = Files.createTempFile("smoke-tunlauncher-", ".json");
+        Files.writeString(configFile, mapper.writeValueAsString(config));
+
+        com.vlessclient.platform.TunLauncher.Launched launched =
+                new com.vlessclient.platform.WindowsTunLauncher().launch(binary, configFile);
+        Process outer = launched.process();
+        List<String> lines = new java.util.concurrent.CopyOnWriteArrayList<>();
+        Thread collector = new Thread(() -> {
+            try (var reader = outer.inputReader()) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    lines.add(line);
+                }
+            } catch (IOException ignored) {
+                // stream closes when the outer script exits
+            }
+        }, "tun-log-collector");
+        collector.setDaemon(true);
+        collector.start();
+
+        try {
+            // The outer script tails the elevated core's log files to its
+            // stdout; a "started" line proves elevation, core start and
+            // tailing all work end to end.
+            long deadline = System.currentTimeMillis() + 30_000;
+            while (System.currentTimeMillis() < deadline
+                    && lines.stream().noneMatch(l -> l.contains("sing-box started"))) {
+                if (!outer.isAlive()) {
+                    throw new AssertionError("TUN launch chain exited early (code "
+                            + outer.exitValue() + "):\n" + String.join("\n", lines));
+                }
+                Thread.sleep(250);
+            }
+            assertThat(lines)
+                    .as("core log lines tailed by the outer script:\n%s",
+                            String.join("\n", lines))
+                    .anyMatch(l -> l.contains("sing-box started"));
+
+            // Stop contract: creating the signal file shuts the chain down.
+            Files.createFile(launched.stopSignalFile());
+            assertThat(outer.waitFor(20, TimeUnit.SECONDS))
+                    .as("launch chain exits after the stop file appears")
+                    .isTrue();
+        } finally {
+            outer.destroyForcibly();
+            Files.deleteIfExists(configFile);
+            Files.deleteIfExists(launched.stopSignalFile());
+        }
+    }
+
     /** Waits until the port accepts connections; fails fast if the process dies. */
     private static void awaitPort(int port, Process proc) throws Exception {
         long deadline = System.currentTimeMillis() + 15_000;

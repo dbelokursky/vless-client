@@ -62,7 +62,11 @@ class SingBoxConfigGeneratorTunTest {
             if ("tun".equals(inbound.get("type").asText())) {
                 hasTun = true;
                 assertThat(inbound.get("tag").asText()).isEqualTo("tun-in");
-                assertThat(inbound.get("interface_name").asText()).isEqualTo("utun99");
+                // The default interface name is platform-dependent (utunN is
+                // a macOS kernel requirement; Windows names the adapter
+                // freely), so pin against the settings value, not a literal.
+                assertThat(inbound.get("interface_name").asText())
+                        .isEqualTo(new AppSettings().getTunInterfaceName());
                 JsonNode addr = inbound.get("address");
                 assertThat(addr).isNotNull();
                 assertThat(addr.isArray()).isTrue();

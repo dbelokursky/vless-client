@@ -221,4 +221,39 @@ class SingBoxEngineTest {
         Thread.sleep(300);
         assertThat(guardCalls).isEmpty();
     }
+
+    @Test
+    void tunModeUsesTunLauncherAndStopSignalsTheWrapper(@TempDir Path tmp) throws Exception {
+        // Fake privileged wrapper honoring the TunLauncher contract: streams a
+        // started line and exits as soon as the stop-signal file appears.
+        Path stopFile = tmp.resolve("stop.signal");
+        Path wrapper = tmp.resolve("wrapper.sh");
+        Files.writeString(wrapper, "#!/bin/sh\n"
+                + "echo 'sing-box started'\n"
+                + "while [ ! -f '" + stopFile + "' ]; do sleep 0.2; done\n");
+        makeExecutable(wrapper);
+
+        Path fakeBinary = createFakeSingBox(tmp, "sing-box", 30);
+        SingBoxEngine engine = new SingBoxEngine(fakeBinary);
+        java.util.concurrent.atomic.AtomicReference<Process> wrapperProc =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        engine.setTunLauncher((binary, config) -> {
+            Process p = new ProcessBuilder(wrapper.toString()).redirectErrorStream(true).start();
+            wrapperProc.set(p);
+            return new com.vlessclient.platform.TunLauncher.Launched(p, stopFile);
+        });
+
+        engine.start(DUMMY_CONFIG, ProxyMode.TUN);
+        try {
+            assertThat(engine.isRunning()).isTrue();
+        } finally {
+            engine.stop();
+        }
+
+        awaitConnectionState(engine, ConnectionState.DISCONNECTED, 5000);
+        assertThat(engine.isRunning()).isFalse();
+        // The wrapper must have exited on its own after seeing the stop file
+        // (exit 0) — a force-kill fallback would surface as a signal exit.
+        assertThat(wrapperProc.get().exitValue()).isZero();
+    }
 }

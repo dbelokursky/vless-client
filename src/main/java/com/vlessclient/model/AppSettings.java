@@ -51,7 +51,17 @@ public class AppSettings {
     private String dnsStrategy = "prefer_ipv4";
 
     @JsonProperty("tun_interface_name")
-    private String tunInterfaceName = "utun99";
+    private String tunInterfaceName = defaultTunInterfaceName();
+
+    /**
+     * macOS requires TUN devices to be named {@code utunN}; Windows names the
+     * wintun adapter freely, where a recognizable name beats a fake utun.
+     */
+    private static String defaultTunInterfaceName() {
+        return com.vlessclient.platform.Platform.current().isWindows()
+                ? "VlessClientTun"
+                : "utun99";
+    }
 
     @JsonProperty("tun_ipv4_address")
     private String tunIpv4Address = "172.19.0.1/30";
