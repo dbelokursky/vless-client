@@ -1,8 +1,7 @@
 name: Build
 on:
   push:
-    # TODO(linux-platform): drop feat/linux-platform before merge (validation).
-    branches: [main, feat/linux-platform]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
