@@ -9,3 +9,5 @@ target/
 *.swo
 .claude/
 dependency-reduced-pom.xml
+staging/
+dist/
