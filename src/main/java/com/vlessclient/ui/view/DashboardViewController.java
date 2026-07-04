@@ -71,7 +71,7 @@ public class DashboardViewController {
     @FXML private Label totalUploadLabel;
     @FXML private Label totalDownloadLabel;
     @FXML private Button testLatencyButton;
-    @FXML private Label latencyResultLabel;
+    @FXML private VBox latencyResultList;
     @FXML private ComboBox<ProxyMode> proxyModeCombo;
     @FXML private Label proxyModeWarning;
     @FXML private HBox singBoxMissingBanner;
@@ -402,7 +402,7 @@ public class DashboardViewController {
     @FXML
     private void onTestLatencyClicked() {
         if (latencyTester == null) {
-            latencyResultLabel.setText("Latency tester unavailable");
+            showLatencyStatus("Latency tester unavailable");
             return;
         }
 
@@ -416,20 +416,19 @@ public class DashboardViewController {
             ConfigStore configStore = ServiceLocator.get(ConfigStore.class);
             List<ServerConfig> servers = configStore.getServers();
             if (servers.isEmpty()) {
-                latencyResultLabel.setText("No servers configured");
+                showLatencyStatus("No servers configured");
                 return;
             }
 
             startLatencyLoop(servers);
         } catch (IllegalArgumentException e) {
-            latencyResultLabel.setText("No servers configured");
+            showLatencyStatus("No servers configured");
         }
     }
 
     private void startLatencyLoop(List<ServerConfig> servers) {
         testLatencyButton.setText("Stop");
-        latencyResultLabel.setText("Testing…");
-        latencyResultLabel.getStyleClass().setAll("stats-value", "latency-result");
+        showLatencyStatus("Testing…");
 
         // Fire once immediately so the user sees feedback within the first
         // second, then every second afterwards.
@@ -461,8 +460,14 @@ public class DashboardViewController {
         latencyTester.testAll(servers).whenComplete((results, err) ->
                 Platform.runLater(() -> {
                     latencyInFlight = false;
+                    // A tick can be outstanding for seconds (5s connect
+                    // timeout). If the user pressed Stop meanwhile, drop the
+                    // late result instead of popping the list back into view.
+                    if (latencyTimeline == null) {
+                        return;
+                    }
                     if (err != null) {
-                        latencyResultLabel.setText("Test failed");
+                        showLatencyStatus("Test failed");
                         return;
                     }
                     displayLatencyResults(results, servers);
@@ -471,26 +476,59 @@ public class DashboardViewController {
 
     private void displayLatencyResults(Map<String, Long> results, List<ServerConfig> servers) {
         if (results.isEmpty()) {
-            latencyResultLabel.setText("No results");
+            showLatencyStatus("No results");
             return;
         }
 
-        StringBuilder sb = new StringBuilder();
+        latencyResultList.getChildren().clear();
         for (ServerConfig server : servers) {
             Long latency = results.get(server.getId());
-            if (latency != null) {
-                if (!sb.isEmpty()) {
-                    sb.append("  |  ");
-                }
-                String name = server.getName() != null ? server.getName() : server.getAddress();
-                if (latency < 0) {
-                    sb.append(name).append(": timeout");
-                } else {
-                    sb.append(name).append(": ").append(latency).append(" ms");
-                }
+            if (latency == null) {
+                continue;
             }
+            String name = server.getName() != null ? server.getName() : server.getAddress();
+            latencyResultList.getChildren().add(buildLatencyRow(name, latency));
         }
-        latencyResultLabel.setText(sb.toString());
+        if (latencyResultList.getChildren().isEmpty()) {
+            showLatencyStatus("No results");
+            return;
+        }
+        setLatencyListVisible(true);
+    }
+
+    /** One latency row: green dot + name + "NNN ms", or red dot + "timeout". */
+    private HBox buildLatencyRow(String name, long latency) {
+        boolean ok = latency >= 0;
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+
+        Circle dot = new Circle(5);
+        dot.getStyleClass().setAll(ok ? "status-circle-connected" : "status-circle-error");
+
+        Label nameLabel = new Label(name);
+        nameLabel.getStyleClass().setAll("service-name");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Label result = new Label(ok ? latency + " ms" : "timeout");
+        result.getStyleClass().setAll(ok ? "service-ok" : "service-fail");
+
+        row.getChildren().addAll(dot, nameLabel, spacer, result);
+        return row;
+    }
+
+    /** Shows a single muted status line (Testing…, No results, errors). */
+    private void showLatencyStatus(String text) {
+        Label status = new Label(text);
+        status.getStyleClass().setAll("service-pending");
+        latencyResultList.getChildren().setAll(status);
+        setLatencyListVisible(true);
+    }
+
+    private void setLatencyListVisible(boolean visible) {
+        latencyResultList.setVisible(visible);
+        latencyResultList.setManaged(visible);
     }
 
     /**

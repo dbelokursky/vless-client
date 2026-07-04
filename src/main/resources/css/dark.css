@@ -930,3 +930,11 @@
 .core-status-available { -fx-text-fill: -c-warn; }
 .core-status-error     { -fx-text-fill: -c-danger-fg; }
 .core-status-muted     { -fx-text-fill: -c-text-secondary; -fx-font-weight: normal; }
+
+/* Per-server latency results, listed under the SESSION row. A hairline
+   top border separates them from the metrics above. */
+.latency-list {
+    -fx-border-color: -c-border transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 8 0 0 0;
+}

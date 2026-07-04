@@ -123,36 +123,39 @@
         </VBox>
     </GridPane>
 
-    <!-- Session totals and latency: inline strip, no extra cards.
-         Tighter spacing + a natural-width button so the whole row fits at the
-         minimum window width instead of clipping the button off the right. -->
-    <HBox styleClass="card, totals-strip" alignment="CENTER_LEFT" spacing="14">
+    <!-- Session totals + latency. Session metrics and the Test Latency button
+         sit on the top row; latency results are listed one-per-server below,
+         so a multi-server result never overflows the strip into ellipsis. -->
+    <VBox styleClass="card, totals-strip" spacing="10">
         <padding>
             <Insets top="12" right="18" bottom="12" left="20"/>
         </padding>
-        <Label text="SESSION" styleClass="stats-title"/>
 
-        <HBox alignment="CENTER_LEFT" spacing="6">
-            <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
-            <Label fx:id="totalUploadLabel" text="—" styleClass="stats-value"/>
+        <HBox alignment="CENTER_LEFT" spacing="14">
+            <Label text="SESSION" styleClass="stats-title"/>
+
+            <HBox alignment="CENTER_LEFT" spacing="6">
+                <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
+                <Label fx:id="totalUploadLabel" text="—" styleClass="stats-value"/>
+            </HBox>
+
+            <HBox alignment="CENTER_LEFT" spacing="6">
+                <Label text="&#x2B07;" styleClass="stats-icon-download"/>
+                <Label fx:id="totalDownloadLabel" text="—" styleClass="stats-value"/>
+            </HBox>
+
+            <Region HBox.hgrow="ALWAYS" minWidth="8"/>
+
+            <Button fx:id="testLatencyButton" text="Test Latency"
+                    styleClass="secondary-button" minWidth="-Infinity"
+                    onAction="#onTestLatencyClicked"/>
         </HBox>
 
-        <HBox alignment="CENTER_LEFT" spacing="6">
-            <Label text="&#x2B07;" styleClass="stats-icon-download"/>
-            <Label fx:id="totalDownloadLabel" text="—" styleClass="stats-value"/>
-        </HBox>
-
-        <Separator orientation="VERTICAL"/>
-
-        <Label text="LATENCY" styleClass="stats-title"/>
-        <Label fx:id="latencyResultLabel" text="—" styleClass="stats-value latency-result"/>
-
-        <Region HBox.hgrow="ALWAYS" minWidth="8"/>
-
-        <Button fx:id="testLatencyButton" text="Test Latency"
-                styleClass="secondary-button" minWidth="-Infinity"
-                onAction="#onTestLatencyClicked"/>
-    </HBox>
+        <!-- One row per server (dot + name + latency), populated on Test
+             Latency. Hidden until a measurement runs. -->
+        <VBox fx:id="latencyResultList" styleClass="latency-list" spacing="6"
+              visible="false" managed="false"/>
+    </VBox>
 
     <!-- Service availability: reachability of key services through the tunnel -->
     <VBox fx:id="healthCard" styleClass="card" spacing="10"
