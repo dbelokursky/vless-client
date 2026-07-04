@@ -18,6 +18,12 @@ public final class Launcher {
     }
 
     public static void main(String[] args) {
+        // Point logging at the per-OS logs directory. Must run before any
+        // class with a static logger loads (logback resolves ${vless.log.dir}
+        // on first use), so it sits at the very top of main().
+        System.setProperty("vless.log.dir",
+                com.vlessclient.platform.PlatformPaths.current().logsDir().toString());
+
         // Must be set before any AWT / Swing / JavaFX class touches the
         // Toolkit; otherwise the menu bar and Dock keep the fully-qualified
         // main-class name that java-lang assigns by default.

@@ -125,8 +125,7 @@ public class SingBoxInstaller {
     }
 
     private static Path defaultInstallDir() {
-        return Path.of(System.getProperty("user.home"),
-                "Library", "Application Support", "VlessClient", "bin");
+        return com.vlessclient.platform.PlatformPaths.current().coreBinDir();
     }
 
     /**

@@ -3,8 +3,11 @@
 
     <property name="LOG_PATTERN"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
+    <!-- Launcher.main sets vless.log.dir to the per-OS logs directory before
+         logging initializes. The fallback keeps the macOS location for any
+         path that starts logging without the launcher (e.g. tests). -->
     <property name="LOG_DIR"
-              value="${user.home}/Library/Application Support/VlessClient/logs"/>
+              value="${vless.log.dir:-${user.home}/Library/Application Support/VlessClient/logs}"/>
     <property name="LOG_FILE" value="${LOG_DIR}/vless-client.log"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
