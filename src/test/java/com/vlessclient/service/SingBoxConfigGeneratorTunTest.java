@@ -190,7 +190,8 @@ class SingBoxConfigGeneratorTunTest {
 
         JsonNode servers = dns.get("servers");
         assertThat(servers).isNotNull();
-        assertThat(servers.size()).isEqualTo(2);
+        // proxy-dns, direct-dns, and the local resolver for localhost/*.local.
+        assertThat(servers.size()).isEqualTo(3);
 
         assertThat(servers.get(0).get("tag").asText()).isEqualTo("proxy-dns");
         assertThat(servers.get(0).get("type").asText()).isEqualTo("https");
@@ -205,6 +206,18 @@ class SingBoxConfigGeneratorTunTest {
         // sing-box 1.13 rejects detour: "direct" pointing at an empty direct
         // outbound, so direct-dns no longer sets the detour field.
         assertThat(servers.get(1).has("detour")).isFalse();
+
+        // Local resolver so localhost / *.local resolve on the LAN via the OS
+        // (mDNS) instead of the remote DoH server, which can't answer them.
+        assertThat(servers.get(2).get("tag").asText()).isEqualTo("local-dns");
+        assertThat(servers.get(2).get("type").asText()).isEqualTo("local");
+
+        JsonNode dnsRules = dns.get("rules");
+        assertThat(dnsRules).isNotNull();
+        assertThat(dnsRules.size()).isEqualTo(1);
+        assertThat(dnsRules.get(0).get("domain").get(0).asText()).isEqualTo("localhost");
+        assertThat(dnsRules.get(0).get("domain_suffix").get(0).asText()).isEqualTo(".local");
+        assertThat(dnsRules.get(0).get("server").asText()).isEqualTo("local-dns");
 
         // sing-box 1.13 uses dns.final instead of a match-all rule
         assertThat(dns.get("final").asText()).isEqualTo("proxy-dns");
@@ -275,12 +288,14 @@ class SingBoxConfigGeneratorTunTest {
         String json = generator.generate(createVlessServer(), tunSettings());
         JsonNode rules = parse(json).get("route").get("rules");
 
-        // sniff, hijack-dns, ip_is_private — in that exact order.
-        assertThat(rules.size()).isEqualTo(3);
+        // sniff, hijack-dns, local-domain, ip_is_private — in that exact order.
+        assertThat(rules.size()).isEqualTo(4);
         assertThat(rules.get(0).get("action").asText()).isEqualTo("sniff");
         assertThat(rules.get(1).get("action").asText()).isEqualTo("hijack-dns");
-        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(2).get("domain_suffix").get(0).asText()).isEqualTo(".local");
         assertThat(rules.get(2).get("outbound").asText()).isEqualTo("direct");
+        assertThat(rules.get(3).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(3).get("outbound").asText()).isEqualTo("direct");
     }
 
     @Test
@@ -295,20 +310,31 @@ class SingBoxConfigGeneratorTunTest {
         JsonNode rules = parse(json).get("route").get("rules");
 
         int privateCount = 0;
+        int localDomainCount = 0;
         for (int i = 0; i < rules.size(); i++) {
             JsonNode privateFlag = rules.get(i).get("ip_is_private");
             if (privateFlag != null && privateFlag.asBoolean()) {
                 privateCount++;
             }
+            JsonNode suffix = rules.get(i).get("domain_suffix");
+            if (suffix != null && suffix.isArray()) {
+                for (JsonNode s : suffix) {
+                    if (".local".equals(s.asText())) {
+                        localDomainCount++;
+                    }
+                }
+            }
         }
+        // Neither local-bypass rule is duplicated by the TUN essentials.
         assertThat(privateCount).isEqualTo(1);
+        assertThat(localDomainCount).isEqualTo(1);
 
-        // Sniff and hijack-dns are still prepended in order.
+        // Order: sniff, hijack-dns (TUN-only), then the local-bypass rules
+        // buildRoute already emitted.
         assertThat(rules.get(0).get("action").asText()).isEqualTo("sniff");
         assertThat(rules.get(1).get("action").asText()).isEqualTo("hijack-dns");
-        // The single ip_is_private rule that buildRoute emitted should sit
-        // right after the two TUN-only essentials.
-        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(2).get("domain_suffix").get(0).asText()).isEqualTo(".local");
+        assertThat(rules.get(3).get("ip_is_private").asBoolean()).isTrue();
     }
 
     @Test

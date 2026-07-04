@@ -15,6 +15,12 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Universal local-bypass ordering (top of the rule list):
+ * {@code [ user-bypass?, local-domain (localhost/*.local), private-ip, preset/custom… ]}.
+ * The two local-bypass rules are prepended unconditionally so local services
+ * stay reachable in every preset and mode.
+ */
 class SingBoxConfigGeneratorRoutingTest {
 
     private SingBoxConfigGenerator generator;
@@ -44,6 +50,20 @@ class SingBoxConfigGeneratorRoutingTest {
         return mapper.readTree(json);
     }
 
+    /** True for the {localhost + *.local → direct} rule. */
+    private static boolean isLocalDomainRule(JsonNode rule) {
+        JsonNode suffix = rule.get("domain_suffix");
+        if (suffix == null || !suffix.isArray()) {
+            return false;
+        }
+        for (JsonNode s : suffix) {
+            if (".local".equals(s.asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Test
     void bypassList_mergedIntoDirectRule() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
@@ -64,11 +84,11 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode rules = parse(json).get("route").get("rules");
 
         assertThat(rules).isNotNull();
-        // Bypass-list rule first, then the universal ip_is_private LAN bypass.
-        // User bypass takes precedence over LAN bypass.
-        assertThat(rules.size()).isEqualTo(2);
-        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
-        assertThat(rules.get(1).get("outbound").asText()).isEqualTo("direct");
+        // [ bypass-list, local-domain, private-ip ]
+        assertThat(rules.size()).isEqualTo(3);
+        assertThat(isLocalDomainRule(rules.get(1))).isTrue();
+        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(2).get("outbound").asText()).isEqualTo("direct");
 
         JsonNode bypass = rules.get(0);
         assertThat(bypass.get("action").asText()).isEqualTo("route");
@@ -103,9 +123,10 @@ class SingBoxConfigGeneratorRoutingTest {
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");
 
-        // Only the unconditional LAN bypass remains; no domain/keyword/cidr rule.
-        assertThat(rules.size()).isEqualTo(1);
-        assertThat(rules.get(0).get("ip_is_private").asBoolean()).isTrue();
+        // Only the two unconditional local-bypass rules; no user domain/cidr rule.
+        assertThat(rules.size()).isEqualTo(2);
+        assertThat(isLocalDomainRule(rules.get(0))).isTrue();
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
     }
 
     @Test
@@ -120,12 +141,33 @@ class SingBoxConfigGeneratorRoutingTest {
         assertThat(route).isNotNull();
         assertThat(route.get("final").asText()).isEqualTo("proxy");
         assertThat(route.get("auto_detect_interface").asBoolean()).isTrue();
-        assertThat(route.get("rules")).isNotNull();
-        // route_all still emits the unconditional LAN-bypass rule — local
+        JsonNode rules = route.get("rules");
+        assertThat(rules).isNotNull();
+        // route_all still emits the unconditional local-bypass rules — local
         // services must stay reachable even in "everything via proxy".
-        assertThat(route.get("rules").size()).isEqualTo(1);
-        assertThat(route.get("rules").get(0).get("ip_is_private").asBoolean()).isTrue();
-        assertThat(route.get("rules").get(0).get("outbound").asText()).isEqualTo("direct");
+        assertThat(rules.size()).isEqualTo(2);
+        assertThat(isLocalDomainRule(rules.get(0))).isTrue();
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(1).get("outbound").asText()).isEqualTo("direct");
+    }
+
+    @Test
+    void localHostnames_goDirect() throws Exception {
+        // localhost + *.local by NAME must bypass the tunnel: the private-IP
+        // rule only catches them once resolved to an IP, which never happens
+        // in system-proxy mode (the app hands the hostname to the proxy).
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("route_all");
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode rules = parse(json).get("route").get("rules");
+
+        JsonNode local = rules.get(0);
+        assertThat(isLocalDomainRule(local)).isTrue();
+        assertThat(local.get("domain").get(0).asText()).isEqualTo("localhost");
+        assertThat(local.get("domain_suffix").get(0).asText()).isEqualTo(".local");
+        assertThat(local.get("action").asText()).isEqualTo("route");
+        assertThat(local.get("outbound").asText()).isEqualTo("direct");
     }
 
     @Test
@@ -139,24 +181,21 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode route = root.get("route");
         assertThat(route).isNotNull();
 
-        // Three rules: universal LAN bypass (default-on), then geosite (RU
-        // only available under category-* prefix) and geoip-ru — all direct.
+        // [ local-domain, private-ip, geosite-category-ru, geoip-ru ] — all direct.
         JsonNode rules = route.get("rules");
-        assertThat(rules.size()).isEqualTo(3);
+        assertThat(rules.size()).isEqualTo(4);
 
-        assertThat(rules.get(0).get("ip_is_private").asBoolean()).isTrue();
-        assertThat(rules.get(0).get("outbound").asText()).isEqualTo("direct");
-
-        assertThat(rules.get(1).get("rule_set").get(0).asText())
-                .isEqualTo("geosite-category-ru");
+        assertThat(isLocalDomainRule(rules.get(0))).isTrue();
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
         assertThat(rules.get(1).get("outbound").asText()).isEqualTo("direct");
 
-        assertThat(rules.get(2).get("rule_set").get(0).asText()).isEqualTo("geoip-ru");
+        assertThat(rules.get(2).get("rule_set").get(0).asText())
+                .isEqualTo("geosite-category-ru");
         assertThat(rules.get(2).get("outbound").asText()).isEqualTo("direct");
 
-        // Matching remote rule_set definitions must be registered on route
-        // and resolve to the real files in SagerNet/sing-geosite's rule-set
-        // branch (which for RU lives under 'category-*', not a bare 'ru').
+        assertThat(rules.get(3).get("rule_set").get(0).asText()).isEqualTo("geoip-ru");
+        assertThat(rules.get(3).get("outbound").asText()).isEqualTo("direct");
+
         JsonNode ruleSet = route.get("rule_set");
         assertThat(ruleSet).isNotNull();
         assertThat(ruleSet.size()).isEqualTo(2);
@@ -177,8 +216,7 @@ class SingBoxConfigGeneratorRoutingTest {
 
     @Test
     void bypassDomestic_chinaUsesPlainGeositeTag() throws Exception {
-        // CN is the one country with a bare 'geosite-cn.srs' aggregate; all
-        // others either use 'geosite-category-<code>' or have no geosite set.
+        // CN is the one country with a bare 'geosite-cn.srs' aggregate.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
         routingConfig.setBypassCountry("cn");
@@ -186,8 +224,8 @@ class SingBoxConfigGeneratorRoutingTest {
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode route = parse(json).get("route");
 
-        // rules.get(0) is the universal LAN bypass; preset rules start at 1.
-        assertThat(route.get("rules").get(1).get("rule_set").get(0).asText())
+        // rules[0]=local-domain, rules[1]=private-ip; preset rules start at 2.
+        assertThat(route.get("rules").get(2).get("rule_set").get(0).asText())
                 .isEqualTo("geosite-cn");
         assertThat(route.get("rule_set").get(0).get("url").asText())
                 .endsWith("/geosite-cn.srs");
@@ -197,7 +235,6 @@ class SingBoxConfigGeneratorRoutingTest {
     void bypassDomestic_skipsGeositeWhenCountryHasNoAggregate() throws Exception {
         // Germany (and most others) has no sing-geosite aggregate; the
         // generator must drop the geosite rule rather than emit a 404 URL.
-        // The geoip rule alone still handles IP-level routing to .de hosts.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
         routingConfig.setBypassCountry("DE");
@@ -206,9 +243,11 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode route = parse(json).get("route");
 
         JsonNode rules = route.get("rules");
-        assertThat(rules.size()).isEqualTo(2); // LAN bypass + geoip-de
-        assertThat(rules.get(0).get("ip_is_private").asBoolean()).isTrue();
-        assertThat(rules.get(1).get("rule_set").get(0).asText()).isEqualTo("geoip-de");
+        // [ local-domain, private-ip, geoip-de ]
+        assertThat(rules.size()).isEqualTo(3);
+        assertThat(isLocalDomainRule(rules.get(0))).isTrue();
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(2).get("rule_set").get(0).asText()).isEqualTo("geoip-de");
 
         JsonNode ruleSet = route.get("rule_set");
         assertThat(ruleSet.size()).isEqualTo(1);
@@ -241,35 +280,30 @@ class SingBoxConfigGeneratorRoutingTest {
         JsonNode root = parse(json);
 
         JsonNode rules = root.get("route").get("rules");
-        // 7 user-defined rules + 1 unconditional LAN bypass prepended at index 0.
-        assertThat(rules.size()).isEqualTo(8);
+        // 7 user-defined rules + local-domain + private-ip prepended.
+        assertThat(rules.size()).isEqualTo(9);
 
-        // LAN bypass (always prepended)
-        JsonNode rule0 = rules.get(0);
-        assertThat(rule0.get("ip_is_private").asBoolean()).isTrue();
-        assertThat(rule0.get("outbound").asText()).isEqualTo("direct");
+        // Local-bypass block (always prepended)
+        assertThat(isLocalDomainRule(rules.get(0))).isTrue();
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(1).get("outbound").asText()).isEqualTo("direct");
 
         // domain_suffix rule
-        JsonNode rule1 = rules.get(1);
-        assertThat(rule1.get("domain_suffix").get(0).asText()).isEqualTo(".google.com");
-        assertThat(rule1.get("outbound").asText()).isEqualTo("proxy");
+        assertThat(rules.get(2).get("domain_suffix").get(0).asText()).isEqualTo(".google.com");
+        assertThat(rules.get(2).get("outbound").asText()).isEqualTo("proxy");
 
         // ip_cidr rule
-        JsonNode rule2 = rules.get(2);
-        assertThat(rule2.get("ip_cidr").get(0).asText()).isEqualTo("10.0.0.0/8");
-        assertThat(rule2.get("outbound").asText()).isEqualTo("direct");
+        assertThat(rules.get(3).get("ip_cidr").get(0).asText()).isEqualTo("10.0.0.0/8");
+        assertThat(rules.get(3).get("outbound").asText()).isEqualTo("direct");
 
         // geosite rule — migrated to rule_set reference
-        JsonNode rule3 = rules.get(3);
-        assertThat(rule3.get("rule_set").get(0).asText()).isEqualTo("geosite-cn");
-        assertThat(rule3.get("outbound").asText()).isEqualTo("direct");
+        assertThat(rules.get(4).get("rule_set").get(0).asText()).isEqualTo("geosite-cn");
+        assertThat(rules.get(4).get("outbound").asText()).isEqualTo("direct");
 
         // geoip rule — migrated to rule_set reference
-        JsonNode rule4 = rules.get(4);
-        assertThat(rule4.get("rule_set").get(0).asText()).isEqualTo("geoip-cn");
-        assertThat(rule4.get("outbound").asText()).isEqualTo("direct");
+        assertThat(rules.get(5).get("rule_set").get(0).asText()).isEqualTo("geoip-cn");
+        assertThat(rules.get(5).get("outbound").asText()).isEqualTo("direct");
 
-        // The matching remote rule_set entries should be registered on route.
         JsonNode ruleSet = root.get("route").get("rule_set");
         assertThat(ruleSet).isNotNull();
         assertThat(ruleSet.size()).isEqualTo(2);
@@ -277,36 +311,26 @@ class SingBoxConfigGeneratorRoutingTest {
         assertThat(ruleSet.get(1).get("tag").asText()).isEqualTo("geoip-cn");
 
         // domain rule
-        JsonNode rule5 = rules.get(5);
-        assertThat(rule5.get("domain").get(0).asText()).isEqualTo("example.com");
-        assertThat(rule5.get("outbound").asText()).isEqualTo("block");
+        assertThat(rules.get(6).get("domain").get(0).asText()).isEqualTo("example.com");
+        assertThat(rules.get(6).get("outbound").asText()).isEqualTo("block");
 
         // domain_keyword rule
-        JsonNode rule6 = rules.get(6);
-        assertThat(rule6.get("domain_keyword").get(0).asText()).isEqualTo("ads");
-        assertThat(rule6.get("outbound").asText()).isEqualTo("block");
+        assertThat(rules.get(7).get("domain_keyword").get(0).asText()).isEqualTo("ads");
+        assertThat(rules.get(7).get("outbound").asText()).isEqualTo("block");
 
         // domain_regex rule
-        JsonNode rule7 = rules.get(7);
-        assertThat(rule7.get("domain_regex").get(0).asText()).isEqualTo(".*\\.ads\\..*");
-        assertThat(rule7.get("outbound").asText()).isEqualTo("block");
+        assertThat(rules.get(8).get("domain_regex").get(0).asText()).isEqualTo(".*\\.ads\\..*");
+        assertThat(rules.get(8).get("outbound").asText()).isEqualTo("block");
     }
 
     @Test
     void legacyGeoFields_neverEmitted() throws Exception {
-        // sing-box 1.12 removed both the flat route.geo_asset_path and the
-        // nested route.geoip / route.geosite database forms entirely. The
-        // generator must not emit any of them — country matching is done
-        // through rule_set only. The geoip_path/geosite_path fields used
-        // to feed those legacy blocks; v0.1.7 removed them from the model,
-        // so we just sanity-check that bypass_domestic still doesn't leak.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
-        JsonNode root = parse(json);
+        JsonNode route = parse(json).get("route");
 
-        JsonNode route = root.get("route");
         assertThat(route.has("geo_asset_path")).isFalse();
         assertThat(route.has("geoip")).isFalse();
         assertThat(route.has("geosite")).isFalse();
@@ -318,13 +342,11 @@ class SingBoxConfigGeneratorRoutingTest {
         routingConfig.setPreset("route_all");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
-        JsonNode root = parse(json);
+        JsonNode route = parse(json).get("route");
 
-        JsonNode route = root.get("route");
         assertThat(route.has("geo_asset_path")).isFalse();
         assertThat(route.has("geoip")).isFalse();
         assertThat(route.has("geosite")).isFalse();
-        // No country matching needed, so no rule_set block either.
         assertThat(route.has("rule_set")).isFalse();
     }
 
@@ -346,7 +368,7 @@ class SingBoxConfigGeneratorRoutingTest {
 
     @Test
     void routeAll_localTrafficGoesDirect() throws Exception {
-        // The unconditional LAN bypass is what makes "all local traffic
+        // The unconditional local bypass is what makes "all local traffic
         // goes around the VPN" true for route_all in system-proxy mode.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("route_all");
@@ -354,8 +376,9 @@ class SingBoxConfigGeneratorRoutingTest {
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");
 
-        assertThat(rules.size()).isEqualTo(1);
-        JsonNode privateRule = rules.get(0);
+        assertThat(rules.size()).isEqualTo(2);
+        assertThat(isLocalDomainRule(rules.get(0))).isTrue();
+        JsonNode privateRule = rules.get(1);
         assertThat(privateRule.get("ip_is_private").asBoolean()).isTrue();
         assertThat(privateRule.get("action").asText()).isEqualTo("route");
         assertThat(privateRule.get("outbound").asText()).isEqualTo("direct");
@@ -364,7 +387,7 @@ class SingBoxConfigGeneratorRoutingTest {
     @Test
     void customPreset_localBypassPrecedesCustomRules() throws Exception {
         // Ordering matters: a custom PROXY rule for 10.0.0.0/8 must not be
-        // able to drag LAN traffic through the proxy. The LAN bypass is
+        // able to drag LAN traffic through the proxy. The local bypass is
         // prepended so it wins first.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("custom");
@@ -376,20 +399,18 @@ class SingBoxConfigGeneratorRoutingTest {
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");
 
-        assertThat(rules.size()).isEqualTo(2);
-        assertThat(rules.get(0).get("ip_is_private").asBoolean()).isTrue();
-        assertThat(rules.get(0).get("outbound").asText()).isEqualTo("direct");
-        assertThat(rules.get(1).get("ip_cidr").get(0).asText()).isEqualTo("10.0.0.0/8");
-        assertThat(rules.get(1).get("outbound").asText()).isEqualTo("proxy");
+        assertThat(rules.size()).isEqualTo(3);
+        assertThat(isLocalDomainRule(rules.get(0))).isTrue();
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(1).get("outbound").asText()).isEqualTo("direct");
+        assertThat(rules.get(2).get("ip_cidr").get(0).asText()).isEqualTo("10.0.0.0/8");
+        assertThat(rules.get(2).get("outbound").asText()).isEqualTo("proxy");
     }
 
     @Test
     void bypassListWinsAboveLanRule() throws Exception {
         // The user's bypass list is the most explicit signal — it must come
-        // before the LAN bypass rule so e.g. a user-listed domain on a public
-        // IP that happens to be CGNAT-private still resolves the way the user
-        // expects. (Practically this only matters for tie-breakers, but the
-        // ordering must be deterministic.)
+        // before the local-bypass rules so the ordering is deterministic.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("route_all");
         routingConfig.setBypassList(List.of("internal.example.com"));
@@ -397,17 +418,18 @@ class SingBoxConfigGeneratorRoutingTest {
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");
 
-        assertThat(rules.size()).isEqualTo(2);
-        // Position 0 = user bypass list, position 1 = LAN bypass.
+        // [ user-bypass, local-domain, private-ip ]
+        assertThat(rules.size()).isEqualTo(3);
         assertThat(rules.get(0).has("domain")).isTrue();
         assertThat(rules.get(0).get("domain").get(0).asText()).isEqualTo("internal.example.com");
-        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(isLocalDomainRule(rules.get(1))).isTrue();
+        assertThat(rules.get(2).get("ip_is_private").asBoolean()).isTrue();
     }
 
     @Test
     void lanBypass_neverDuplicatedInBypassDomestic() throws Exception {
         // Regression guard: bypass_domestic used to add its own ip_is_private
-        // rule. After the move to the universal LAN-bypass block, the preset
+        // rule. After the move to the universal local-bypass block, the preset
         // must NOT double-emit it.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
@@ -428,18 +450,19 @@ class SingBoxConfigGeneratorRoutingTest {
 
     @Test
     void customPreset_emptyRulesList_stillEmitsLanBypass() throws Exception {
-        // Even with no user-defined rules in custom preset, the LAN-bypass
-        // rule keeps local services reachable.
+        // Even with no user-defined rules in custom preset, the local-bypass
+        // rules keep local services reachable.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("custom");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
-        JsonNode root = parse(json);
+        JsonNode route = parse(json).get("route");
 
-        JsonNode route = root.get("route");
-        assertThat(route.get("rules").size()).isEqualTo(1);
-        assertThat(route.get("rules").get(0).get("ip_is_private").asBoolean()).isTrue();
-        assertThat(route.get("rules").get(0).get("outbound").asText()).isEqualTo("direct");
+        JsonNode rules = route.get("rules");
+        assertThat(rules.size()).isEqualTo(2);
+        assertThat(isLocalDomainRule(rules.get(0))).isTrue();
+        assertThat(rules.get(1).get("ip_is_private").asBoolean()).isTrue();
+        assertThat(rules.get(1).get("outbound").asText()).isEqualTo("direct");
         assertThat(route.get("final").asText()).isEqualTo("proxy");
     }
 }
