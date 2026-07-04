@@ -401,5 +401,51 @@
                 </plugins>
             </build>
         </profile>
+
+        <profile>
+            <id>bundle-core-linux</id>
+            <activation>
+                <os><name>Linux</name></os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <!-- Same bash scripts as macOS: bundle-singbox.sh
+                                 picks linux-amd64 from uname, write-jvm-args.sh
+                                 drops the -Xdock flags off macOS. -->
+                            <execution>
+                                <id>bundle-sing-box</id>
+                                <phase>generate-resources</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/scripts/bundle-singbox.sh</argument>
+                                        <argument>${project.build.directory}/classes/native</argument>
+                                        <argument>${singbox.version}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>write-jvm-args</id>
+                                <phase>generate-resources</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/scripts/write-jvm-args.sh</argument>
+                                        <argument>${project.build.directory}/jvm-args.txt</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 </project>

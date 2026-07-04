@@ -46,15 +46,34 @@ if [[ "${PROPS_VERSION}" != "${VERSION}" ]]; then
     exit 1
 fi
 
-expected_sha_for() {
-    prop "singbox.sha256.darwin-$1"
-}
-
 CACHE_DIR="${HOME}/.cache/vless-client-build/sing-box-${VERSION}"
 mkdir -p "${CACHE_DIR}" "${OUT_DIR}"
 
-for arch in arm64 amd64; do
-    target_dir="${OUT_DIR}/darwin-${arch}"
+# The build host decides which platform's binaries get bundled: a macOS host
+# bundles both darwin archs (universal DMG), a Linux host bundles linux-amd64.
+# Windows hosts use bundle-singbox.ps1 instead.
+case "$(uname -s)" in
+    Darwin) targets="darwin:arm64 darwin:amd64" ;;
+    Linux)  targets="linux:amd64" ;;
+    *)
+        echo "[bundle-singbox] unsupported build host: $(uname -s)" >&2
+        exit 1
+        ;;
+esac
+
+# shasum on macOS, sha256sum on most Linux distros.
+sha256_of() {
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    else
+        sha256sum "$1" | awk '{print $1}'
+    fi
+}
+
+for target in ${targets}; do
+    os="${target%%:*}"
+    arch="${target##*:}"
+    target_dir="${OUT_DIR}/${os}-${arch}"
     target_binary="${target_dir}/sing-box"
     stamp_file="${target_dir}/.singbox-version"
 
@@ -64,22 +83,22 @@ for arch in arm64 amd64; do
         continue
     fi
 
-    tarball="${CACHE_DIR}/sing-box-${VERSION}-darwin-${arch}.tar.gz"
+    tarball="${CACHE_DIR}/sing-box-${VERSION}-${os}-${arch}.tar.gz"
     if [[ ! -f "${tarball}" ]]; then
-        url="https://github.com/SagerNet/sing-box/releases/download/v${VERSION}/sing-box-${VERSION}-darwin-${arch}.tar.gz"
+        url="https://github.com/SagerNet/sing-box/releases/download/v${VERSION}/sing-box-${VERSION}-${os}-${arch}.tar.gz"
         echo "[bundle-singbox] downloading ${url}"
         curl --fail --silent --show-error --location --output "${tarball}.part" "${url}"
         mv "${tarball}.part" "${tarball}"
     fi
 
-    expected=$(expected_sha_for "${arch}")
+    expected=$(prop "singbox.sha256.${os}-${arch}")
     if [[ -z "${expected}" ]]; then
-        echo "[bundle-singbox] no singbox.sha256.darwin-${arch} in ${PROPS_FILE}" >&2
+        echo "[bundle-singbox] no singbox.sha256.${os}-${arch} in ${PROPS_FILE}" >&2
         exit 1
     fi
-    actual=$(shasum -a 256 "${tarball}" | awk '{print $1}')
+    actual=$(sha256_of "${tarball}")
     if [[ "${actual}" != "${expected}" ]]; then
-        echo "[bundle-singbox] SHA-256 mismatch for ${arch}:" >&2
+        echo "[bundle-singbox] SHA-256 mismatch for ${os}-${arch}:" >&2
         echo "  expected ${expected}" >&2
         echo "  got      ${actual}" >&2
         rm -f "${tarball}"
@@ -90,7 +109,7 @@ for arch in arm64 amd64; do
     rm -f "${target_binary}" "${stamp_file}"
     tar -xzf "${tarball}" -C "${target_dir}" \
         --strip-components=1 \
-        "sing-box-${VERSION}-darwin-${arch}/sing-box"
+        "sing-box-${VERSION}-${os}-${arch}/sing-box"
     chmod +x "${target_binary}"
     printf '%s' "${VERSION}" > "${stamp_file}"
     echo "[bundle-singbox] bundled ${target_binary} (${VERSION})"

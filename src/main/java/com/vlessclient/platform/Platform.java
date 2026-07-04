@@ -11,6 +11,7 @@ import java.util.Locale;
 public enum Platform {
     MAC,
     WINDOWS,
+    LINUX,
     OTHER;
 
     private static final Platform CURRENT = detect();
@@ -27,6 +28,10 @@ public enum Platform {
         return this == WINDOWS;
     }
 
+    public boolean isLinux() {
+        return this == LINUX;
+    }
+
     static Platform detect() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("mac") || os.contains("darwin")) {
@@ -34,6 +39,9 @@ public enum Platform {
         }
         if (os.contains("win")) {
             return WINDOWS;
+        }
+        if (os.contains("linux")) {
+            return LINUX;
         }
         return OTHER;
     }

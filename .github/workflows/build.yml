@@ -74,6 +74,19 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+  # Linux twin of the platform jobs: the bash bundler fetches the linux-amd64
+  # core, the OS-portable suite plus every @EnabledOnOs({MAC, LINUX}) test
+  # runs natively, and -Psmoke drives the real bundled sing-box binary.
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25-ea'
+          distribution: 'temurin'
+      - run: mvn -B clean verify -Psmoke
+
   # Rolling "dev-latest" prerelease: always holds BOTH installers (DMG + MSI)
   # of the newest merge at a stable URL on the Releases page (downloadable
   # without a GitHub login, never expires). Runs after both platform builds so

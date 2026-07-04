@@ -12,10 +12,19 @@ set -euo pipefail
 
 OUT="${1:?usage: $0 <out_file>}"
 mkdir -p "$(dirname "${OUT}")"
-cat > "${OUT}" <<'ARGFILE'
+
+# The Dock/app-name options exist only on macOS — an unknown -Xdock option
+# stops the JVM from starting on Linux.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    cat > "${OUT}" <<'ARGFILE'
 -Xdock:name="VLESS Client"
 -Dapple.awt.application.name="VLESS Client"
 -Dcom.apple.mrj.application.apple.menu.about.name="VLESS Client"
 -Dvless.log.level=DEBUG
 ARGFILE
+else
+    cat > "${OUT}" <<'ARGFILE'
+-Dvless.log.level=DEBUG
+ARGFILE
+fi
 echo "[write-jvm-args] wrote ${OUT}"

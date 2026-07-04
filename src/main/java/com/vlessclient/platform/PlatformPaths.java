@@ -9,6 +9,7 @@ import java.nio.file.Path;
  * <ul>
  *   <li>macOS: {@code ~/Library/Application Support/VlessClient}</li>
  *   <li>Windows: {@code %APPDATA%\VlessClient}</li>
+ *   <li>Linux: {@code $XDG_DATA_HOME/vless-client} ({@code ~/.local/share/…})</li>
  * </ul>
  */
 public interface PlatformPaths {
@@ -31,8 +32,11 @@ public interface PlatformPaths {
 
     /** The paths implementation for the current OS. */
     static PlatformPaths current() {
-        return Platform.current().isWindows()
-                ? new WindowsPlatformPaths()
-                : new MacPlatformPaths();
+        return switch (Platform.current()) {
+            case WINDOWS -> new WindowsPlatformPaths();
+            case LINUX -> new LinuxPlatformPaths();
+            // OTHER keeps the mac fallback: unix-like defaults beat crashing.
+            case MAC, OTHER -> new MacPlatformPaths();
+        };
     }
 }
