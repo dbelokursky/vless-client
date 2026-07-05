@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -174,8 +175,9 @@ public class SingBoxConfigGenerator {
      *
      * <ul>
      *   <li>{@code default_domain_resolver} — so outbound dial targets can be
-     *       resolved. Points at {@code direct-dns} to avoid a DNS loop
-     *       through the proxy.</li>
+     *       resolved. Points at {@code local-dns} (the OS resolver): no DNS
+     *       loop through the proxy, and no dependence on a public DoH the
+     *       local network might block.</li>
      *   <li>{@code auto_detect_interface: true} — lets sing-box pick the
      *       physical network interface for outbound dial and DNS, so those
      *       connections escape the TUN device instead of looping back.</li>
@@ -189,7 +191,12 @@ public class SingBoxConfigGenerator {
             return;
         }
         if (!route.has("default_domain_resolver")) {
-            route.put("default_domain_resolver", "direct-dns");
+            // Bootstrap resolution (the proxy server's own hostname, DoH
+            // endpoints, rule-set hosts) through the OS resolver: it works on
+            // whatever network the machine is on, unlike a hardcoded public
+            // DoH that local networks may block — a 223.5.5.5 timeout here
+            // used to kill TUN startup before the tunnel even came up.
+            route.put("default_domain_resolver", "local-dns");
         }
         if (!route.has("auto_detect_interface")) {
             route.put("auto_detect_interface", true);
@@ -852,7 +859,11 @@ public class SingBoxConfigGenerator {
         entry.put("format", "binary");
         entry.put("url", "https://raw.githubusercontent.com/SagerNet/sing-"
                 + kind + "/rule-set/" + tag + ".srs");
-        entry.put("download_detour", "direct");
+        // Through the tunnel: on the networks this client is for, GitHub raw
+        // is often blocked or poisoned when dialed directly. The proxy
+        // outbound is up by the time sing-box fetches rule-sets, and after
+        // the first success the cache_file serves them offline anyway.
+        entry.put("download_detour", "proxy");
         return entry;
     }
 
@@ -973,6 +984,26 @@ public class SingBoxConfigGenerator {
         ObjectNode clashApi = mapper.createObjectNode();
         clashApi.put("external_controller", "127.0.0.1:" + settings.getClashApiPort());
         experimental.set("clash_api", clashApi);
+
+        // Persist downloaded rule-sets (and other core state) across
+        // restarts: without the cache every start re-fetches the .srs files
+        // and an offline or blocked network turns into a startup FATAL. The
+        // path is per proxy mode because the TUN core may run as root
+        // (macOS sudo wrapper, Linux pkexec fallback) and a root-owned bbolt
+        // file would break the next user-mode system-proxy run.
+        ObjectNode cacheFile = mapper.createObjectNode();
+        cacheFile.put("enabled", true);
+        Path cacheDir = com.vlessclient.platform.PlatformPaths.current()
+                .dataDir().resolve("cache");
+        try {
+            java.nio.file.Files.createDirectories(cacheDir);
+        } catch (java.io.IOException e) {
+            log.warn("Could not create cache dir {}: {}", cacheDir, e.getMessage());
+        }
+        cacheFile.put("path", cacheDir.resolve("sing-box-"
+                + settings.getProxyMode().name().toLowerCase(java.util.Locale.ROOT)
+                + ".db").toString());
+        experimental.set("cache_file", cacheFile);
 
         return experimental;
     }
