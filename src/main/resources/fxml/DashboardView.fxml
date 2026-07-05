@@ -125,7 +125,7 @@
         </padding>
 
         <HBox alignment="CENTER_LEFT" spacing="14">
-            <Label text="SESSION" styleClass="stats-title"/>
+            <Label text="Session" styleClass="stats-title"/>
 
             <HBox alignment="CENTER_LEFT" spacing="6">
                 <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
