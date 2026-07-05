@@ -1,0 +1,400 @@
+# VLESS Client
+
+<p align="center">
+  <img src="src/main/resources/icons/app-icon-256.png" width="128" alt="VLESS Client icon"/>
+</p>
+
+<p align="center">
+  <a href="https://github.com/dbelokursky/vless-client/actions/workflows/build.yml"><img src="https://github.com/dbelokursky/vless-client/actions/workflows/build.yml/badge.svg" alt="Build"/></a>
+  <a href="https://github.com/dbelokursky/vless-client/releases/latest"><img src="https://img.shields.io/github/v/release/dbelokursky/vless-client" alt="Latest release"/></a>
+  <a href="https://github.com/dbelokursky/vless-client/releases"><img src="https://img.shields.io/github/downloads/dbelokursky/vless-client/total" alt="Downloads"/></a>
+</p>
+
+<p align="center">🇬🇧 <a href="README.md">English</a> · 🇷🇺 <b>Русский</b></p>
+
+Кроссплатформенный клиент (macOS / Windows / Linux) для
+VLESS/VMess/Trojan/Shadowsocks на JavaFX — оборачивает
+[sing-box](https://github.com/SagerNet/sing-box) и даёт ему удобный GUI с живой
+статистикой трафика, импортом share-ссылок, подписками, правилами маршрутизации
+и иконкой в трее/меню-баре.
+
+<!-- TODO(screenshots): docs/screenshots/dashboard.png — Phase 3 плана plans/readme.md -->
+
+---
+
+## Скачать
+
+Готовые установщики — на странице
+[**Releases**](https://github.com/dbelokursky/vless-client/releases/latest):
+
+| ОС | Файл | Примечание |
+|---|---|---|
+| macOS (Apple Silicon) | `VLESS.Client-1.x.y.dmg` | почему `1.x.y` — [см. ниже](#почему-dmg-называется-1xy-а-релиз-0xy) |
+| Windows 10/11 (x64) | `VLESS.Client-x.y.z.msi` | ставится per-user, без прав администратора |
+| Debian/Ubuntu (amd64) | `vless-client_x.y.z_amd64.deb` | |
+
+Сборка самого свежего мержа в `main` (может быть сырой) — в prerelease
+[**dev-latest**](https://github.com/dbelokursky/vless-client/releases/tag/dev-latest).
+
+#### Почему DMG называется `1.x.y`, а релиз `0.x.y`?
+
+macOS не принимает версию бандла с нулевым major, поэтому в имени DMG major
+поднят на единицу: релиз **v0.2.0** → файл `VLESS.Client-1.2.0.dmg`. Это то же
+приложение той же версии.
+
+---
+
+## Установка
+
+### macOS
+
+Сборки пока **не подписаны** сертификатом Apple Developer, поэтому при первом
+запуске Gatekeeper заблокирует приложение. Разблокируется один раз через
+системные настройки:
+
+1. Открой DMG и перетащи **VLESS Client** в папку **Программы** (Applications).
+2. Запусти приложение. macOS сообщит, что не может проверить его на
+   вредоносное ПО — нажми **«Готово»** (Done), *не* «Переместить в Корзину».
+3. Открой **Системные настройки → Конфиденциальность и безопасность**
+   (System Settings → Privacy & Security).
+4. Прокрути до раздела **«Безопасность»** (Security) — там будет сообщение
+   «Приложение "VLESS Client" было заблокировано для защиты Mac».
+5. Нажми **«Все равно открыть»** (Open Anyway) и подтверди паролем или Touch ID.
+6. В появившемся диалоге нажми **«Открыть»** (Open). Готово — дальше
+   приложение запускается как обычно.
+
+<!-- TODO(screenshots): диалог Gatekeeper и панель «Конфиденциальность и
+     безопасность» с кнопкой «Все равно открыть» — Phase 3 плана -->
+
+Нюансы:
+
+- Процедуру придётся повторить после **каждого обновления** приложения — пока
+  сборки не подписаны, macOS блокирует каждый новый бинарь заново.
+- На macOS 13–14 есть путь короче: правый клик по приложению в Программах →
+  **«Открыть»** → «Открыть». На macOS 15+ этот трюк для неподписанных
+  приложений больше не работает — только через настройки.
+- Эквивалент для терминала (снимает карантинный атрибут):
+
+  ```bash
+  xattr -d com.apple.quarantine "/Applications/VLESS Client.app"
+  ```
+
+### Windows
+
+1. Запусти MSI. SmartScreen покажет «Система Windows защитила ваш компьютер» —
+   нажми **«Подробнее»** (More info) → **«Выполнить в любом случае»**
+   (Run anyway).
+2. Дальше обычный мастер установки. Приложение ставится per-user — права
+   администратора не нужны.
+
+Единственное, где Windows попросит повышение прав, — UAC-промпт при
+подключении в режиме TUN.
+
+### Linux (Debian/Ubuntu)
+
+```bash
+sudo apt install ./vless-client_*.deb
+```
+
+Приложение ставится в `/opt/vless-client` и появляется в меню приложений
+(категория «Интернет»/Network).
+
+---
+
+## Первое подключение
+
+1. **Добавь сервер.** Вкладка **Servers** → **Import Link** → вставь ссылку
+   `vless://…` / `vmess://…` / `trojan://…` / `ss://…` от своего провайдера —
+   поля заполнятся сами. (Или **Add Server** и заполни форму вручную; третий
+   путь — вкладка **Subscriptions** с URL подписки, список серверов будет
+   обновляться автоматически.)
+2. **Проверь активный сервер** — клик по строке сервера вешает на него бейдж
+   **ACTIVE**; именно он используется при подключении.
+3. **Нажми Connect** на вкладке **Dashboard** (или `⌘K` / `Ctrl+K`).
+   Зелёный индикатор — подключено, оранжевый — подключается, красный — ошибка
+   (смотри вкладку **Logs**).
+4. **Проверь IP**: открой [2ip.ru](https://2ip.ru) или выполни
+   `curl ifconfig.me` — адрес должен смениться на адрес сервера.
+
+### Какой режим выбрать
+
+Выпадающий список **Mode** на Dashboard:
+
+| | **System Proxy** (по умолчанию) | **TUN** |
+|---|---|---|
+| Что идёт через туннель | приложения, уважающие системный прокси: браузеры, большинство CLI | **весь** трафик системы, включая то, что прокси игнорирует |
+| Права | не нужны | нужны (см. ниже) |
+| Когда выбирать | обычный сёрфинг | мессенджеры, игры, системные сервисы |
+
+Что просит TUN на каждой ОС:
+
+| ОС | Права для TUN |
+|---|---|
+| macOS | sudo-NOPASSWD правило (пароль один раз) или osascript-промпт на каждый Connect |
+| Windows | UAC-промпт на каждый Connect |
+| Linux | одноразовый `setcap` через PolicyKit (дальше без промптов) или pkexec-промпт на Connect |
+
+---
+
+## Как пользоваться
+
+### Серверы
+
+Правый клик по серверу — контекстное меню: **Edit**, **Duplicate**,
+**Copy Share Link**, **Delete**. Кнопка **Test Latency** на Dashboard замеряет
+пинг до всех серверов разом.
+
+### Подписки
+
+Вкладка **Subscriptions**: добавь URL — список серверов подтянется и будет
+периодически пересинхронизироваться.
+
+### Маршрутизация
+
+Вкладка **Routing** — правила маршрутизации: geoip, geosite, domain, ruleset.
+
+### Мониторинг
+
+**Dashboard** показывает живую статистику: скорость Upload/Download, суммарный
+трафик. **Logs** — стрим логов sing-box с фильтром по уровню.
+
+### Трей / меню-бар
+
+Иконка даёт быстрые действия без открытия окна: Show window,
+Connect/Disconnect, выбор сервера, Quit. Закрытие главного окна (`⌘W`, красный
+кружок) **не** завершает приложение — оно живёт в трее; выход — **Quit** в трее
+или `⌘Q`.
+
+| ОС | Где |
+|---|---|
+| macOS | меню-бар |
+| Windows | системный трей |
+| Linux | там, где трей есть (KDE/XFCE/…); на стоковом GNOME трея нет — закрытие окна завершает приложение |
+
+### Автостарт
+
+| ОС | Механизм |
+|---|---|
+| macOS | LaunchAgent |
+| Windows | реестр Run (нативный exe) |
+| Linux | XDG autostart (`~/.config/autostart`) |
+
+### Обновление ядра sing-box
+
+**Settings → About → «Проверить обновления»** — патчи ядра прилетают без
+релиза приложения (в пределах минорной ветки, с валидацией `sing-box check`
+и откатом при неудаче).
+
+### Горячие клавиши
+
+`⌘` на macOS = `Ctrl` на Windows/Linux.
+
+| Hotkey | Действие                                |
+|--------|-----------------------------------------|
+| `⌘K`   | Connect / Disconnect                    |
+| `⌘N`   | Add server                              |
+| `⌘1`   | Dashboard                               |
+| `⌘2`   | Servers                                 |
+| `⌘3`   | Subscriptions                           |
+| `⌘4`   | Routing                                 |
+| `⌘5`   | Logs                                    |
+| `⌘,`   | Settings                                |
+| `⌘W`   | Hide window (продолжает работать в tray)|
+| `⌘Q`   | Quit                                    |
+
+### Настройки
+
+| Поле                     | Описание                                              |
+|--------------------------|-------------------------------------------------------|
+| Theme                    | Light / Dark                                          |
+| Language                 | Russian / English                                     |
+| Mixed port               | Порт SOCKS/HTTP прокси (по умолчанию `2080`)          |
+| Clash API port           | Порт для статистики трафика (по умолчанию `9090`)     |
+| Auto-connect on start    | Подключаться к активному серверу при запуске          |
+| Check for updates        | Периодическая проверка обновлений приложения          |
+| Allow LAN                | Разрешить коннекты к прокси из локальной сети         |
+
+Где живут данные (`settings.json`, `servers.json`, `subscriptions.json`,
+`routing.json`, кэш бинаря `bin/`):
+
+| ОС | Путь |
+|---|---|
+| macOS | `~/Library/Application Support/VlessClient` |
+| Windows | `%APPDATA%\VlessClient` |
+| Linux | `~/.local/share/vless-client` |
+
+### System Proxy по ОС
+
+| ОС | Поведение |
+|---|---|
+| macOS | системные настройки прокси переключаются автоматически |
+| Windows | автоматически (WinINET) |
+| Linux | автоматически на GNOME; на других DE — прокси вручную (локальные порты работают везде) или TUN |
+
+---
+
+## Траблшутинг
+
+**macOS: «Приложение заблокировано» / «Apple не может проверить»**
+Это Gatekeeper и неподписанная сборка — пройди
+[шаги установки](#macos): Системные настройки → Конфиденциальность и
+безопасность → «Все равно открыть».
+
+**macOS: после обновления приложение снова заблокировано**
+Так и будет, пока сборки не подписаны, — каждый новый бинарь проходит
+Gatekeeper заново. Процедура та же.
+
+**Connect кнопка недоступна**
+Нет активного сервера — на вкладке Servers кликни по серверу, чтобы появился
+бейдж **ACTIVE**.
+
+**«Process exited unexpectedly (code N)»**
+sing-box упал. Причина — во вкладке **Logs**. Частые: неверный UUID,
+неподходящий transport, недоступный сервер, конфликт портов.
+
+**TUN-режим запрашивает пароль каждый раз**
+Создание TUN-интерфейса требует прав root/администратора: macOS показывает
+osascript-промпт (или настрой sudo-NOPASSWD — тогда пароль один раз),
+Windows — UAC, Linux — pkexec (или одноразовый `setcap`).
+
+**Порт 2080 занят**
+Смени `Mixed port` в настройках на свободный.
+
+**Linux: нет иконки в трее**
+На стоковом GNOME трея нет (нужно расширение вроде AppIndicator), закрытие
+окна завершает приложение. В KDE/XFCE трей работает из коробки.
+
+**«sing-box binary not found» при запуске**
+Актуально для запуска из исходников без бандлинга — см.
+[раздел «Разработка»](#если-бандл-недоступен). В установщиках (DMG/MSI/DEB)
+sing-box уже внутри.
+
+---
+
+## Разработка
+
+### Быстрый старт
+
+```bash
+git clone https://github.com/dbelokursky/vless-client.git
+cd vless-client
+mvn clean javafx:run
+```
+
+При первой сборке Maven автоматически скачает `sing-box` (версия пиннится в
+[singbox.properties](src/main/resources/singbox.properties)) для обеих
+архитектур (arm64 + amd64) в `target/classes/native/darwin-{arch}/` с проверкой
+SHA-256. Эти бинари бандлятся в jar и извлекаются при первом запуске.
+
+### Если бандл недоступен
+
+Если приложение запущено без build-time бандлинга (например, голый jar без
+`generate-resources`), при старте появится модальный диалог, который скачает
+`sing-box` с GitHub Releases и закэширует в
+`~/Library/Application Support/VlessClient/bin/sing-box`. Загрузка защищена
+SHA-256 проверкой.
+
+Если нет сети — в диалоге-установщике есть подсказка:
+
+```bash
+brew install sing-box
+```
+
+После ручной установки перезапусти приложение или нажми **Retry download** в
+оранжевом баннере на Dashboard — оно подхватит бинарь из стандартных
+Homebrew-путей (`/opt/homebrew/bin`, `/usr/local/bin`) или из `$PATH`.
+
+### Требования
+
+- JDK 25 (проект использует preview features)
+- Maven 3.9+
+- bash + curl + tar (стандартно для macOS) — нужны для `generate-resources`
+  чтобы скачать sing-box
+
+### Команды
+
+```bash
+mvn clean javafx:run        # запуск в dev-режиме
+mvn clean package           # сборка shade-jar (с бандлом sing-box)
+mvn test                    # все тесты
+mvn test -Dtest=SingBoxInstallerTest   # один тест-класс
+mvn validate                # checkstyle
+```
+
+### Регенерация иконки
+
+```bash
+java --source 25 scripts/GenerateAppIcon.java
+```
+
+Генерирует PNG 16/32/64/128/256/512/1024 в `src/main/resources/icons/`.
+Правь дизайн в [GenerateAppIcon.java](scripts/GenerateAppIcon.java).
+
+### Обновление sing-box
+
+Версия и SHA-256 живут в одном файле —
+[singbox.properties](src/main/resources/singbox.properties). Его читают
+pom.xml (properties-maven-plugin), [scripts/bundle-singbox.sh](scripts/bundle-singbox.sh)
+и SingBoxInstaller, так что разъехаться они не могут. Бамп — одна команда:
+
+```bash
+scripts/bump-singbox.sh 1.13.14   # качает tarballs, сверяет SHA-256 с digest из GitHub API, обновляет properties
+mvn clean verify -Psmoke          # полные тесты + smoke на реальном бинарнике
+```
+
+Smoke-профиль (`-Psmoke`,
+[SingBoxRealBinarySmokeTest](src/test/java/com/vlessclient/service/SingBoxRealBinarySmokeTest.java))
+прогоняет реальный бинарник: точное совпадение версии с пином,
+`sing-box check` для всех протоколов × режимов × роутинг-пресетов и живой
+`run` с проверкой clash_api и http-inbound. CI гоняет его на каждом PR и
+перед сборкой установщиков.
+
+Минорные обновления sing-box (1.13 → 1.14) ломают схему конфига — сначала
+мигрируй [SingBoxConfigGenerator.java](src/main/java/com/vlessclient/service/SingBoxConfigGenerator.java)
+по [миграционному гайду](https://sing-box.sagernet.org/migration/), потом бампай.
+
+### Структура
+
+```
+src/main/java/com/vlessclient/
+├── app/            # Launcher, VlessClientApp, ServiceLocator, I18n, AppVersion
+├── model/          # POJOs: ServerConfig, AppSettings, Subscription, Routing...
+├── service/        # SingBoxEngine, SingBoxInstaller, ConfigStore,
+│                   # SubscriptionService, RoutingService, LatencyTester,
+│                   # TrafficMonitor, TrayIconService, UpdateManager, ...
+└── ui/view/        # JavaFX контроллеры для каждой вкладки
+
+src/main/resources/
+├── fxml/           # FXML-разметка
+├── css/            # light.css, dark.css
+├── i18n/           # messages_en.properties, messages_ru.properties
+└── icons/          # app-icon-{16..1024}.png
+
+scripts/
+├── bundle-singbox.sh       # скачивает sing-box на этапе mvn generate-resources
+├── package-dmg.sh          # DMG (macOS), общий для build.yml и release.yml
+├── package-windows.ps1     # MSI (Windows)
+├── package-linux.sh        # DEB (Linux)
+└── GenerateAppIcon.java    # генератор иконки приложения
+```
+
+### Возможности (полный список)
+
+- **Протоколы:** VLESS, VMess, Trojan, Shadowsocks (через sing-box)
+- **Транспорты:** TCP, WebSocket, gRPC, HTTP/2
+- **TLS / Reality / XTLS-Vision**
+- **Режимы:** System Proxy, TUN
+- **Подписки** — автообновление списков серверов по URL
+- **Routing rules** — geoip, geosite, domain, ruleset
+- **Share-ссылки** — импорт/экспорт `vless://`, `vmess://`, `trojan://`, `ss://`
+- **Латентность** — замер пинга до всех серверов одной кнопкой
+- **Трафик** — живая статистика через Clash API
+- **Трей/меню-бар**, **хоткеи**, светлая/тёмная **темы**, **русский/английский**
+
+---
+
+## Лицензия
+
+TBD. sing-box лицензируется под
+[GPL-3.0](https://github.com/SagerNet/sing-box/blob/main/LICENSE); установщики
+и dev-сборки бандлят его бинарь без изменений.
