@@ -21,14 +21,6 @@
                 <Insets top="16" right="8" bottom="16" left="8"/>
             </padding>
 
-            <Label text="VLESS Client" styleClass="sidebar-title"/>
-
-            <Separator styleClass="sidebar-separator">
-                <VBox.margin>
-                    <Insets top="8" bottom="12"/>
-                </VBox.margin>
-            </Separator>
-
             <Button fx:id="btnDashboard" text="Dashboard" styleClass="nav-button"
                     onAction="#onDashboardClicked" maxWidth="Infinity" alignment="CENTER_LEFT"/>
 

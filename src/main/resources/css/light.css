@@ -52,13 +52,6 @@
     -fx-border-width: 0 1 0 0;
 }
 
-.sidebar-title {
-    -fx-font-size: 15px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -c-text;
-    -fx-padding: 4 8 0 8;
-}
-
 .sidebar-separator {
     -fx-background-color: transparent;
 }
