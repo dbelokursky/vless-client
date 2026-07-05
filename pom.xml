@@ -261,7 +261,9 @@
                     <!-- Google's ruleset, vendored so we can set 4-space indentation. -->
                     <configLocation>config/checkstyle/google_checks.xml</configLocation>
                     <includeTestSourceDirectory>false</includeTestSourceDirectory>
-                    <failOnViolation>false</failOnViolation>
+                    <!-- Enforced: google_checks emits "warning" severity, so gate on it. -->
+                    <failOnViolation>true</failOnViolation>
+                    <violationSeverity>warning</violationSeverity>
                     <consoleOutput>true</consoleOutput>
                 </configuration>
                 <executions>
