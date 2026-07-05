@@ -44,6 +44,11 @@ public interface TunLauncher {
      * @return the launcher for the host platform
      */
     static TunLauncher current() {
-        return Platform.current().isWindows() ? new WindowsTunLauncher() : new MacTunLauncher();
+        return switch (Platform.current()) {
+            case WINDOWS -> new WindowsTunLauncher();
+            case LINUX -> new LinuxTunLauncher();
+            // OTHER keeps the mac fallback: unix-like defaults beat crashing.
+            case MAC, OTHER -> new MacTunLauncher();
+        };
     }
 }

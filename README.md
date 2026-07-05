@@ -4,10 +4,25 @@
   <img src="src/main/resources/icons/app-icon-256.png" width="128" alt="VLESS Client icon"/>
 </p>
 
-Нативный macOS-клиент для VLESS/VMess/Trojan/Shadowsocks на JavaFX — оборачивает
+Кроссплатформенный клиент (macOS / Windows / Linux) для
+VLESS/VMess/Trojan/Shadowsocks на JavaFX — оборачивает
 [sing-box](https://github.com/SagerNet/sing-box) и даёт ему удобный GUI с живой
 статистикой трафика, импортом share-ссылок, подписками, правилами маршрутизации
-и иконкой в меню-баре.
+и иконкой в трее/меню-баре.
+
+## Платформы
+
+| | macOS | Windows | Linux |
+|---|---|---|---|
+| Установка | DMG | MSI (per-user) | DEB (`apt install ./vless-client_*.deb`) |
+| System Proxy режим | автоматически | автоматически (WinINET) | автоматически на GNOME; на других DE — прокси вручную (локальные порты работают везде) или TUN |
+| TUN режим | sudo-NOPASSWD (один пароль) или osascript-промпт | UAC-промпт на каждый Connect | одноразовый `setcap` через PolicyKit (дальше без промптов) или pkexec-промпт на Connect |
+| Автостарт | LaunchAgent | реестр Run (нативный exe) | XDG autostart (`~/.config/autostart`) |
+| Трей | меню-бар | системный трей | там, где трей есть (KDE/XFCE/…); на стоковом GNOME трея нет — закрытие окна завершает приложение |
+| Данные | `~/Library/Application Support/VlessClient` | `%APPDATA%\VlessClient` | `~/.local/share/vless-client` |
+
+Установщики не подписаны: macOS Gatekeeper попросит правый клик → Open,
+Windows SmartScreen — «Run anyway», deb — обычное подтверждение apt.
 
 ---
 

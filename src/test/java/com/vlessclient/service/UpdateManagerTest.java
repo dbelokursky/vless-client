@@ -61,6 +61,10 @@ class UpdateManagerTest {
                     {
                       "name": "VLESS Client-0.2.0.msi",
                       "browser_download_url": "https://github.com/x/releases/VLESS-Client-0.2.0.msi"
+                    },
+                    {
+                      "name": "vless-client_0.2.0_amd64.deb",
+                      "browser_download_url": "https://github.com/x/releases/vless-client_0.2.0_amd64.deb"
                     }
                   ]
                 }
@@ -94,8 +98,11 @@ class UpdateManagerTest {
 
     @Test
     void installerExtension_matchesHostPlatform() {
-        String expected = com.vlessclient.platform.Platform.current().isWindows()
-                ? ".msi" : ".dmg";
+        String expected = switch (com.vlessclient.platform.Platform.current()) {
+            case WINDOWS -> ".msi";
+            case LINUX -> ".deb";
+            default -> ".dmg";
+        };
         assertThat(UpdateManager.installerExtension()).isEqualTo(expected);
     }
 }
