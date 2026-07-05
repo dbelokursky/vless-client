@@ -6,48 +6,27 @@ on:
     branches: [main]
   workflow_dispatch:
 # Superseded PR pushes cancel their older runs; merge builds on main always
-# run to completion so every merge yields its own DMG artifact.
+# run to completion so every merge yields its own installers.
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  build:
+  # ============ Tests: run on every PR and push, one job per OS ============
+  # -Psmoke additionally runs the real-binary smoke suites against the
+  # bundled sing-box of that OS: version match, `sing-box check` over every
+  # generated config shape, live runs (clash_api/http inbound; TUN probes
+  # where the runner allows). Catches generator/core schema drift per OS.
+
+  test-macos:
     runs-on: macos-latest
-    permissions:
-      # Merge builds force-move the dev-latest tag and recreate its
-      # prerelease; PR runs never reach those steps.
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           java-version: '25-ea'
           distribution: 'temurin'
-      # -Psmoke additionally runs SingBoxRealBinarySmokeTest against the
-      # real bundled sing-box: version match, `sing-box check` over every
-      # generated config shape, and a live run probing clash_api + the http
-      # inbound. Catches generator/core schema drift before merge.
-      - run: mvn clean verify -Psmoke
-      # Every merge to main also produces an installable DMG (workflow
-      # artifact, 14 days) so any main commit can be tried without cutting
-      # a release. The push trigger above is main-only, so checking the
-      # event name is enough.
-      - name: Package DMG
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: scripts/package-dmg.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "1.0.${{ github.run_number }}"
-      # Per-merge history: each merge keeps its own DMG for 14 days.
-      - name: Upload DMG artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: vless-client-${{ github.sha }}
-          path: dist/*.dmg
-          retention-days: 14
-          if-no-files-found: error
-  # Proves the platform abstraction actually builds and runs on Windows: the
-  # PowerShell bundler fetches sing-box.exe, the OS-portable test subset runs
-  # (Unix-only suites skip themselves via @EnabledOnOs), and -Psmoke drives
-  # the real bundled sing-box.exe just like the macOS job does.
+      - run: mvn -B clean verify -Psmoke
+
   test-windows:
     runs-on: windows-latest
     steps:
@@ -57,26 +36,7 @@ jobs:
           java-version: '25-ea'
           distribution: 'temurin'
       - run: mvn -B clean verify -Psmoke
-      # Mirror of the macOS DMG flow: every merge to main also yields an
-      # installable MSI as a 14-day workflow artifact. Tagged releases get
-      # their MSI from release.yml via the same script.
-      - name: Package MSI
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          mvn -B package -DskipTests
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -Version "0.1.0-dev-$($env:GITHUB_SHA.Substring(0,7))" -MsiVersion "1.0.${{ github.run_number }}"
-      - name: Upload MSI artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: vless-client-windows-${{ github.sha }}
-          path: dist/*.msi
-          retention-days: 14
-          if-no-files-found: error
 
-  # Linux twin of the platform jobs: the bash bundler fetches the linux-amd64
-  # core, the OS-portable suite plus every @EnabledOnOs({MAC, LINUX}) test
-  # runs natively, and -Psmoke drives the real bundled sing-box binary.
   test-linux:
     runs-on: ubuntu-latest
     steps:
@@ -86,17 +46,66 @@ jobs:
           java-version: '25-ea'
           distribution: 'temurin'
       - run: mvn -B clean verify -Psmoke
-      # Mirror of the DMG/MSI flows: every merge to main also yields an
-      # installable .deb as a 14-day workflow artifact. Tagged releases get
-      # their .deb from release.yml via the same script.
+
+  # ========= Packaging: merges to main only, after that OS's tests =========
+  # Each produces an installable artifact (14 days) so any main commit can be
+  # tried without cutting a release. Tagged releases build their installers
+  # in release.yml through the same scripts.
+
+  package-macos:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test-macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25-ea'
+          distribution: 'temurin'
+      - run: mvn -B package -DskipTests
+      - name: Package DMG
+        run: scripts/package-dmg.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "1.0.${{ github.run_number }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vless-client-${{ github.sha }}
+          path: dist/*.dmg
+          retention-days: 14
+          if-no-files-found: error
+
+  package-windows:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test-windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25-ea'
+          distribution: 'temurin'
+      - run: mvn -B package -DskipTests
+      - name: Package MSI
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -Version "0.1.0-dev-$($env:GITHUB_SHA.Substring(0,7))" -MsiVersion "1.0.${{ github.run_number }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vless-client-windows-${{ github.sha }}
+          path: dist/*.msi
+          retention-days: 14
+          if-no-files-found: error
+
+  package-linux:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test-linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25-ea'
+          distribution: 'temurin'
+      - run: mvn -B package -DskipTests
       - name: Package DEB
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          mvn -B package -DskipTests
-          scripts/package-linux.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "0.1.0+dev${{ github.run_number }}"
-      - name: Upload DEB artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        run: scripts/package-linux.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "0.1.0+dev${{ github.run_number }}"
+      - uses: actions/upload-artifact@v4
         with:
           name: vless-client-linux-${{ github.sha }}
           path: dist/*.deb
@@ -106,13 +115,13 @@ jobs:
   # Rolling "dev-latest" prerelease: always holds ALL THREE installers
   # (DMG + MSI + DEB) of the newest merge at a stable URL on the Releases page
   # (downloadable without a GitHub login, never expires). Runs after every
-  # platform build so the release is never half-populated. Delete+recreate
+  # packaging job so the release is never half-populated. Delete+recreate
   # replaces the previous merge's assets; the tag is force-moved so the
   # release's source link points at the commit that was actually built. Real
   # releases stay untouched — a prerelease is never marked "Latest".
   dev-release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, test-windows, test-linux]
+    needs: [package-macos, package-windows, package-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
