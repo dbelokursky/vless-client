@@ -359,4 +359,36 @@ class SingBoxConfigGeneratorTunTest {
         assertThat(tun).isNotNull();
         assertThat(tun.get("address").get(0).asText()).isEqualTo("10.10.0.1/24");
     }
+
+    @Test
+    void tunMode_bootstrapResolverIsTheOsResolver() throws Exception {
+        // The proxy server's hostname and remote rule-set hosts must resolve
+        // on whatever network the machine is on. A hardcoded public DoH here
+        // (the old direct-dns default, 223.5.5.5) killed TUN startup on
+        // networks that block it before the tunnel even came up.
+        String json = generator.generate(createVlessServer(), tunSettings());
+
+        assertThat(parse(json).get("route").get("default_domain_resolver").asText())
+                .isEqualTo("local-dns");
+    }
+
+    @Test
+    void cacheFile_enabledAndPerProxyMode() throws Exception {
+        // Cached rule-sets make offline/blocked restarts survivable. Per-mode
+        // paths because the TUN core may run as root and a root-owned bbolt
+        // file would break the next user-mode system-proxy run.
+        AppSettings tun = tunSettings();
+        JsonNode tunCache = parse(generator.generate(createVlessServer(), tun))
+                .get("experimental").get("cache_file");
+        assertThat(tunCache.get("enabled").asBoolean()).isTrue();
+        assertThat(tunCache.get("path").asText()).endsWith("sing-box-tun.db");
+
+        AppSettings sysProxy = new AppSettings();
+        JsonNode proxyCache = parse(generator.generate(createVlessServer(), sysProxy))
+                .get("experimental").get("cache_file");
+        assertThat(proxyCache.get("path").asText()).endsWith("sing-box-system_proxy.db");
+
+        assertThat(tunCache.get("path").asText())
+                .isNotEqualTo(proxyCache.get("path").asText());
+    }
 }
