@@ -4,6 +4,10 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.UUID;
 
+/**
+ * A single proxy server definition, including its protocol, address, credentials,
+ * and transport and TLS settings.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ServerConfig {
 
@@ -40,6 +44,9 @@ public class ServerConfig {
     @JsonProperty("active")
     private boolean active;
 
+    /**
+     * Creates a server with a fresh random id and default transport and TLS config.
+     */
     public ServerConfig() {
         this.id = UUID.randomUUID().toString();
         this.transport = new TransportConfig();

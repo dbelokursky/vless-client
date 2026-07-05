@@ -21,6 +21,8 @@ public interface SystemProxySupport {
     boolean canAutoConfigure();
 
     /**
+     * Returns the capability check for the host platform.
+     *
      * @return the capability check for the host platform
      */
     static SystemProxySupport current() {

@@ -12,6 +12,10 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Loads and persists the routing configuration (preset and rules) as JSON in
+ * the application data directory.
+ */
 public class RoutingService {
 
     private static final Logger log = LoggerFactory.getLogger(RoutingService.class);
@@ -38,6 +42,11 @@ public class RoutingService {
         return config;
     }
 
+    /**
+     * Replaces the current routing configuration and writes it to disk.
+     *
+     * @param config the configuration to store
+     */
     public synchronized void saveConfig(RoutingConfig config) {
         this.config = config;
         Path file = dataDir.resolve(ROUTING_FILE);
@@ -59,6 +68,12 @@ public class RoutingService {
         saveConfig(config);
     }
 
+    /**
+     * Removes the rule with the given id and persists the change. Logs a
+     * warning if no matching rule is found.
+     *
+     * @param ruleId the id of the rule to remove
+     */
     public synchronized void removeRule(String ruleId) {
         boolean removed = config.getRules().removeIf(r -> r.getId().equals(ruleId));
         if (removed) {
@@ -68,6 +83,12 @@ public class RoutingService {
         }
     }
 
+    /**
+     * Reorders the rules to match the given sequence of ids and persists the
+     * change. Ids with no matching rule are ignored.
+     *
+     * @param ruleIds the rule ids in their desired order
+     */
     public synchronized void reorderRules(List<String> ruleIds) {
         List<RoutingRule> reordered = new ArrayList<>();
         for (String id : ruleIds) {

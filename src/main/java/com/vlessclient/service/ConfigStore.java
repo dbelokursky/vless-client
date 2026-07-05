@@ -18,6 +18,10 @@ import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Persists servers and application settings as JSON in the platform data
+ * directory and exposes the server list as an observable collection.
+ */
 public class ConfigStore {
 
     private static final Logger log = LoggerFactory.getLogger(ConfigStore.class);
@@ -53,6 +57,12 @@ public class ConfigStore {
         saveServers();
     }
 
+    /**
+     * Replaces the stored server that shares this server's id and persists the
+     * change. Logs a warning if no matching server is found.
+     *
+     * @param server the updated server, matched by id
+     */
     public synchronized void updateServer(ServerConfig server) {
         for (int i = 0; i < servers.size(); i++) {
             if (servers.get(i).getId().equals(server.getId())) {
@@ -64,6 +74,12 @@ public class ConfigStore {
         log.warn("Server not found for update: {}", server.getId());
     }
 
+    /**
+     * Removes the server with the given id and persists the change. Logs a
+     * warning if no matching server is found.
+     *
+     * @param serverId the id of the server to remove
+     */
     public synchronized void removeServer(String serverId) {
         boolean removed = servers.removeIf(s -> s.getId().equals(serverId));
         if (removed) {
@@ -73,6 +89,12 @@ public class ConfigStore {
         }
     }
 
+    /**
+     * Adds a copy of the server with the given id, assigning it a new id, a
+     * "(copy)" name suffix, and inactive state, then persists the change.
+     *
+     * @param serverId the id of the server to duplicate
+     */
     public synchronized void duplicateServer(String serverId) {
         Optional<ServerConfig> original = getServerById(serverId);
         if (original.isEmpty()) {
@@ -92,6 +114,12 @@ public class ConfigStore {
         }
     }
 
+    /**
+     * Finds the server with the given id.
+     *
+     * @param id the server id to look up
+     * @return the matching server, or an empty optional if none exists
+     */
     public Optional<ServerConfig> getServerById(String id) {
         return servers.stream()
                 .filter(s -> s.getId().equals(id))
@@ -102,6 +130,11 @@ public class ConfigStore {
         return settings;
     }
 
+    /**
+     * Replaces the current settings and writes them to disk.
+     *
+     * @param settings the settings to store
+     */
     public synchronized void saveSettings(AppSettings settings) {
         this.settings = settings;
         Path file = dataDir.resolve(SETTINGS_FILE);

@@ -27,6 +27,11 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Controller for the Subscriptions view. Lists configured subscriptions, adds
+ * new ones, and refreshes them (individually or all at once) off the FX thread
+ * so a slow fetch never blocks the UI.
+ */
 public class SubscriptionsViewController {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionsViewController.class);
@@ -40,6 +45,10 @@ public class SubscriptionsViewController {
 
     private SubscriptionService subscriptionService;
 
+    /**
+     * Binds the subscription list to the service and keeps the empty-state
+     * placeholder in sync as subscriptions are added or removed.
+     */
     @FXML
     public void initialize() {
         subscriptionService = ServiceLocator.get(SubscriptionService.class);
@@ -161,7 +170,6 @@ public class SubscriptionsViewController {
             row.getStyleClass().add("server-list-item");
             row.setAlignment(Pos.CENTER_LEFT);
 
-            VBox info = new VBox(2);
             Label nameLabel = new Label(sub.getName());
             nameLabel.getStyleClass().add("server-name");
 
@@ -175,11 +183,13 @@ public class SubscriptionsViewController {
             int serverCount = sub.getServerIds().size();
             String servers = serverCount + (serverCount == 1 ? " server" : " servers");
             String refresh = sub.getLastRefreshedAt() > 0
-                    ? "refreshed " + TIME_FORMAT.format(Instant.ofEpochMilli(sub.getLastRefreshedAt()))
+                    ? "refreshed " + TIME_FORMAT.format(
+                            Instant.ofEpochMilli(sub.getLastRefreshedAt()))
                     : "never refreshed";
             Label statusLabel = new Label(servers + " · " + refresh);
             statusLabel.getStyleClass().add("server-address");
 
+            VBox info = new VBox(2);
             info.getChildren().addAll(nameLabel, urlLabel, statusLabel);
 
             Region spacer = new Region();

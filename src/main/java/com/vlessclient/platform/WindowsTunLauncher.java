@@ -146,7 +146,8 @@ public final class WindowsTunLauncher implements TunLauncher {
                 try {
                     while (-not $proc.HasExited) {
                         if (Test-Path -LiteralPath $StopFile) { break }
-                        if (-not (Get-Process -Id ([int]$OwnerPid) -ErrorAction SilentlyContinue)) { break }
+                        if (-not (Get-Process -Id ([int]$OwnerPid) `
+                            -ErrorAction SilentlyContinue)) { break }
                         Start-Sleep -Milliseconds 300
                     }
                 } finally {

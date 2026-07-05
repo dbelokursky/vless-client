@@ -2,6 +2,9 @@ package com.vlessclient.model;
 
 import com.fasterxml.jackson.annotation.JsonValue;
 
+/**
+ * Supported transport layers carrying the proxy protocol (TCP, WebSocket, gRPC, etc.).
+ */
 public enum TransportType {
     TCP("tcp"),
     WEBSOCKET("ws"),

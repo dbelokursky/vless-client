@@ -6,6 +6,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * A remote subscription URL that supplies a set of servers, along with its
+ * refresh interval and the ids of the servers it has imported.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Subscription {
 

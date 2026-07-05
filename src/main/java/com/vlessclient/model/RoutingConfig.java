@@ -5,6 +5,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Persisted routing configuration: the active preset, per-country bypass,
+ * a user bypass list, and any custom routing rules.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RoutingConfig {
 
@@ -78,6 +82,10 @@ public class RoutingConfig {
         return bypassCountry;
     }
 
+    /**
+     * Sets the bypass country, normalising to a lowercase ISO code and
+     * falling back to {@code ru} when the value is null or blank.
+     */
     public void setBypassCountry(String bypassCountry) {
         // Normalise to lowercase ISO code; sing-box's geosite/geoip lookups
         // are case-sensitive and the shipped databases use lowercase keys.

@@ -30,6 +30,11 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Controller for the Routing view. Manages the routing preset, the
+ * bypass-domestic country, the editable bypass list, and the custom
+ * per-domain/IP routing rules.
+ */
 public class RoutingViewController {
 
     private static final Logger log = LoggerFactory.getLogger(RoutingViewController.class);
@@ -49,6 +54,11 @@ public class RoutingViewController {
     private RoutingService routingService;
     private final ObservableList<RoutingRule> rulesList = FXCollections.observableArrayList();
 
+    /**
+     * Loads the routing config, populates the preset and bypass-country
+     * combos, binds the rules list and bypass textarea, and shows the sections
+     * that apply to the current preset.
+     */
     @FXML
     public void initialize() {
         routingService = ServiceLocator.get(RoutingService.class);
@@ -82,7 +92,8 @@ public class RoutingViewController {
         loadRules();
         loadBypassList();
         if (bypassListArea != null) {
-            bypassListArea.textProperty().addListener((obs, oldText, newText) -> updateBypassCount());
+            bypassListArea.textProperty().addListener(
+                    (obs, oldText, newText) -> updateBypassCount());
         }
         updateBypassCount();
         updateCustomRulesVisibility(config.getPreset());

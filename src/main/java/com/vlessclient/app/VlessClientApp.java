@@ -30,6 +30,11 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * JavaFX {@link Application} entry point that wires up services, installs the
+ * macOS Dock icon and quit handler, ensures sing-box is available, and shows
+ * the main window. Kept alive in the system tray after the window is closed.
+ */
 public class VlessClientApp extends Application {
 
     private static final Logger log = LoggerFactory.getLogger(VlessClientApp.class);

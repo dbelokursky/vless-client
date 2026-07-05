@@ -55,6 +55,14 @@ public class TrayIconService {
     private ListChangeListener<ServerConfig> serversListener;
     private javafx.beans.value.ChangeListener<ConnectionState> stateListener;
 
+    /**
+     * Creates a tray icon service bound to the given engine, stores and stage.
+     *
+     * @param singBoxEngine    engine whose connection state drives the icon
+     * @param configStore      store providing the selectable server list
+     * @param configGenerator  generator used to build a config on tray connect
+     * @param stage            main window shown/hidden from the tray
+     */
     public TrayIconService(SingBoxEngine singBoxEngine,
                            ConfigStore configStore,
                            SingBoxConfigGenerator configGenerator,
@@ -71,7 +79,8 @@ public class TrayIconService {
      */
     public void install() {
         if (!SystemTray.isSupported()) {
-            log.warn("System tray is not supported on this platform; tray icon will not be installed");
+            log.warn("System tray is not supported on this platform; "
+                    + "tray icon will not be installed");
             return;
         }
 
@@ -244,7 +253,7 @@ public class TrayIconService {
             String name = server.getName() != null && !server.getName().isBlank()
                     ? server.getName()
                     : server.getAddress();
-            String label = (server.isActive() ? "\u2713 " : "    ") + name;
+            String label = (server.isActive() ? "✓ " : "    ") + name;
             final String serverId = server.getId();
             MenuItem item = new MenuItem(label);
             item.addActionListener(e -> Platform.runLater(() -> selectActiveServer(serverId)));

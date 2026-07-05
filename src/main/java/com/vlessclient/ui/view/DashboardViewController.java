@@ -109,6 +109,11 @@ public class DashboardViewController {
     // user disconnect that should cancel the health loop.
     private boolean suppressDisconnectHandling;
 
+    /**
+     * Wires up services, the connection-state listener, traffic/latency
+     * readouts, and the initial UI state. Called by the FXML loader after
+     * the view's nodes are injected.
+     */
     @FXML
     public void initialize() {
         try {
@@ -158,7 +163,7 @@ public class DashboardViewController {
         if (singBoxEngine != null) {
             singBoxEngine.connectionStateProperty().addListener(
                     (obs, oldState, newState) -> {
-                        updateUI(newState);
+                        updateUi(newState);
                         handleTrafficMonitor(newState);
                         handleHealthCheck(newState);
                     });
@@ -171,12 +176,12 @@ public class DashboardViewController {
                     });
 
             ConnectionState current = singBoxEngine.connectionStateProperty().get();
-            updateUI(current);
+            updateUi(current);
             handleTrafficMonitor(current);
             handleHealthCheck(current);
         } else {
-            connectionState.addListener((obs, oldState, newState) -> updateUI(newState));
-            updateUI(ConnectionState.DISCONNECTED);
+            connectionState.addListener((obs, oldState, newState) -> updateUi(newState));
+            updateUi(ConnectionState.DISCONNECTED);
         }
 
         if (brewCommandLabel != null) {
@@ -223,7 +228,7 @@ public class DashboardViewController {
                 singBoxEngine = ServiceLocator.get(SingBoxEngine.class);
                 singBoxEngine.connectionStateProperty().addListener(
                         (obs, oldState, newState) -> {
-                            updateUI(newState);
+                            updateUi(newState);
                             handleTrafficMonitor(newState);
                             handleHealthCheck(newState);
                         });
@@ -233,7 +238,7 @@ public class DashboardViewController {
                                 statusLabel.setText(newMsg);
                             }
                         });
-                updateUI(singBoxEngine.connectionStateProperty().get());
+                updateUi(singBoxEngine.connectionStateProperty().get());
             } catch (IllegalArgumentException e) {
                 log.warn("SingBoxEngine still unavailable after install");
             }
@@ -580,7 +585,8 @@ public class DashboardViewController {
         log.info("Connecting to server: {}", activeServer.getName());
 
         try {
-            SingBoxConfigGenerator configGenerator = ServiceLocator.get(SingBoxConfigGenerator.class);
+            SingBoxConfigGenerator configGenerator =
+                    ServiceLocator.get(SingBoxConfigGenerator.class);
             AppSettings settings = ServiceLocator.get(AppSettings.class);
             if (configGenerator == null || settings == null) {
                 showError("Configuration unavailable",
@@ -694,7 +700,8 @@ public class DashboardViewController {
                     if (gen != healthGeneration) {
                         return;   // superseded by a newer check or cancelled
                     }
-                    if (singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
+                    if (singBoxEngine.connectionStateProperty().get()
+                            != ConnectionState.CONNECTED) {
                         return;   // no longer connected
                     }
                     if (err != null) {
@@ -740,7 +747,8 @@ public class DashboardViewController {
             return;
         }
         int seconds = Math.max(1, settings.getHealthCheckIntervalSeconds());
-        periodicCheckDelay = new javafx.animation.PauseTransition(javafx.util.Duration.seconds(seconds));
+        periodicCheckDelay = new javafx.animation.PauseTransition(
+                javafx.util.Duration.seconds(seconds));
         periodicCheckDelay.setOnFinished(e -> {
             periodicCheckDelay = null;
             runReachabilityCheck();
@@ -769,7 +777,8 @@ public class DashboardViewController {
         reconnectAttempt++;
         showReconnectBanner("All services unreachable — reconnecting in " + seconds
                 + "s… (attempt " + reconnectAttempt + ")");
-        reconnectDelay = new javafx.animation.PauseTransition(javafx.util.Duration.seconds(seconds));
+        reconnectDelay = new javafx.animation.PauseTransition(
+                javafx.util.Duration.seconds(seconds));
         reconnectDelay.setOnFinished(e -> performReconnect());
         reconnectDelay.play();
     }
@@ -1114,7 +1123,7 @@ public class DashboardViewController {
         }
     }
 
-    private void updateUI(ConnectionState state) {
+    private void updateUi(ConnectionState state) {
         String haloClass;
         switch (state) {
             case CONNECTED -> {

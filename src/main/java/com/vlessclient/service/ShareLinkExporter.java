@@ -12,10 +12,20 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Serializes a {@link ServerConfig} into a protocol-specific share link URI.
+ */
 public class ShareLinkExporter {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    /**
+     * Exports the given server configuration as a share link, dispatching by protocol.
+     *
+     * @param config the server configuration to export
+     * @return the share link URI for the configuration's protocol
+     * @throws IllegalArgumentException if {@code config} is null or its protocol is unsupported
+     */
     public String export(ServerConfig config) {
         if (config == null) {
             throw new IllegalArgumentException("ServerConfig must not be null");
@@ -31,6 +41,12 @@ public class ShareLinkExporter {
         };
     }
 
+    /**
+     * Exports the configuration as a {@code vless://} share link.
+     *
+     * @param config the server configuration to export
+     * @return the VLESS share link URI
+     */
     public String exportVless(ServerConfig config) {
         Map<String, String> params = new LinkedHashMap<>();
 
@@ -66,6 +82,12 @@ public class ShareLinkExporter {
         return buildStandardUri("vless", config.getUuid(), config, params);
     }
 
+    /**
+     * Exports the configuration as a {@code vmess://} share link with a Base64 JSON payload.
+     *
+     * @param config the server configuration to export
+     * @return the VMess share link URI
+     */
     public String exportVmess(ServerConfig config) {
         ObjectNode node = OBJECT_MAPPER.createObjectNode();
         node.put("v", "2");
@@ -113,6 +135,12 @@ public class ShareLinkExporter {
         return "vmess://" + encoded;
     }
 
+    /**
+     * Exports the configuration as a {@code trojan://} share link.
+     *
+     * @param config the server configuration to export
+     * @return the Trojan share link URI
+     */
     public String exportTrojan(ServerConfig config) {
         Map<String, String> params = new LinkedHashMap<>();
 
@@ -138,6 +166,12 @@ public class ShareLinkExporter {
         return buildStandardUri("trojan", config.getUuid(), config, params);
     }
 
+    /**
+     * Exports the configuration as an {@code ss://} (Shadowsocks) share link in SIP002 format.
+     *
+     * @param config the server configuration to export
+     * @return the Shadowsocks share link URI
+     */
     public String exportShadowsocks(ServerConfig config) {
         String method = config.getEncryption() != null ? config.getEncryption() : "none";
         String password = config.getUuid() != null ? config.getUuid() : "";
@@ -162,6 +196,12 @@ public class ShareLinkExporter {
         return sb.toString();
     }
 
+    /**
+     * Exports the configuration as a {@code hysteria2://} share link.
+     *
+     * @param config the server configuration to export
+     * @return the Hysteria2 share link URI
+     */
     public String exportHysteria2(ServerConfig config) {
         Map<String, String> params = new LinkedHashMap<>();
 

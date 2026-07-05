@@ -5,6 +5,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Persisted application-wide preferences such as theme, language, local proxy
+ * ports, proxy mode, DNS, TUN interface, and health-check settings.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AppSettings {
 

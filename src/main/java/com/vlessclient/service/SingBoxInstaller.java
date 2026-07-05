@@ -121,7 +121,8 @@ public class SingBoxInstaller {
     }
 
     /** Test constructor: allows overriding install dir, URL template, and checksums. */
-    SingBoxInstaller(Path installDir, String downloadUrlTemplate, Map<String, String> expectedSha256) {
+    SingBoxInstaller(
+            Path installDir, String downloadUrlTemplate, Map<String, String> expectedSha256) {
         this.installDir = installDir;
         this.downloadUrlTemplate = downloadUrlTemplate;
         this.expectedSha256 = Map.copyOf(expectedSha256);
@@ -323,6 +324,9 @@ public class SingBoxInstaller {
     }
 
     /**
+     * Downloads {@code url} to {@code target}, reporting progress and optionally
+     * enforcing a maximum size.
+     *
      * @param maxBytes abort the download once this many bytes have been
      *                 written; 0 disables the cap
      */
@@ -345,7 +349,7 @@ public class SingBoxInstaller {
         long contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1L);
 
         try (InputStream in = response.body();
-             var out = Files.newOutputStream(target)) {
+                var out = Files.newOutputStream(target)) {
             byte[] buffer = new byte[16 * 1024];
             long downloaded = 0;
             int read;
@@ -408,7 +412,8 @@ public class SingBoxInstaller {
                 throw new IOException("sing-box version check failed: " + out);
             }
             log.info("sing-box verification OK: {}",
-                    new String(proc.getInputStream().readAllBytes()).lines().findFirst().orElse(""));
+                    new String(proc.getInputStream().readAllBytes())
+                            .lines().findFirst().orElse(""));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while verifying sing-box", e);

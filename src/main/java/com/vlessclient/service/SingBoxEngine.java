@@ -153,6 +153,17 @@ public class SingBoxEngine {
         startProcessMonitor();
     }
 
+    /**
+     * Starts sing-box with the given configuration JSON using SYSTEM_PROXY mode.
+     *
+     * @param configJson the sing-box configuration in JSON format
+     * @throws IOException          if the config file cannot be written or the process cannot start
+     * @throws IllegalStateException if sing-box is already running
+     */
+    public void start(String configJson) throws IOException {
+        start(configJson, ProxyMode.SYSTEM_PROXY);
+    }
+
     private static final long TUN_CONNECTED_DELAY_MS = 1800;
 
     private void startTunConnectedWatchdog() {
@@ -171,17 +182,6 @@ public class SingBoxEngine {
         }, "singbox-tun-watchdog");
         watchdog.setDaemon(true);
         watchdog.start();
-    }
-
-    /**
-     * Starts sing-box with the given configuration JSON using SYSTEM_PROXY mode.
-     *
-     * @param configJson the sing-box configuration in JSON format
-     * @throws IOException          if the config file cannot be written or the process cannot start
-     * @throws IllegalStateException if sing-box is already running
-     */
-    public void start(String configJson) throws IOException {
-        start(configJson, ProxyMode.SYSTEM_PROXY);
     }
 
     /**
@@ -350,7 +350,8 @@ public class SingBoxEngine {
                                 ? "sing-box exited with code " + exitCode
                                 : logLines.getLast();
                         connectionState.set(ConnectionState.ERROR);
-                        errorMessage.set("Process exited unexpectedly (code " + exitCode + "): " + lastLine);
+                        errorMessage.set("Process exited unexpectedly (code "
+                                + exitCode + "): " + lastLine);
                     }
                 });
             } catch (InterruptedException e) {

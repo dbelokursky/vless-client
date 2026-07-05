@@ -19,6 +19,12 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Controller for the add/edit server form. Adapts the visible fields and
+ * labels to the chosen {@link Protocol}, loads an existing server for editing,
+ * validates input, and hands the resulting {@link ServerConfig} back via the
+ * save callback.
+ */
 public class ServerFormController {
 
     private static final Logger log = LoggerFactory.getLogger(ServerFormController.class);
@@ -75,6 +81,11 @@ public class ServerFormController {
     private Consumer<ServerConfig> onSave;
     private Runnable onCancel;
 
+    /**
+     * Populates the protocol, encryption, flow, and transport combos with
+     * their defaults and wires the listeners that reveal the transport, TLS,
+     * and Reality fields as the relevant options are toggled.
+     */
     @FXML
     public void initialize() {
         protocolCombo.setItems(FXCollections.observableArrayList(Protocol.values()));
@@ -86,7 +97,8 @@ public class ServerFormController {
         flowCombo.setItems(FXCollections.observableArrayList("", "xtls-rprx-vision"));
         flowCombo.setValue("");
 
-        transportTypeCombo.setItems(FXCollections.observableArrayList("TCP", "WebSocket", "gRPC", "HTTP2"));
+        transportTypeCombo.setItems(
+                FXCollections.observableArrayList("TCP", "WebSocket", "gRPC", "HTTP2"));
         transportTypeCombo.setValue("TCP");
 
         transportTypeCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
@@ -106,6 +118,13 @@ public class ServerFormController {
         updateFieldsForProtocol(Protocol.VLESS);
     }
 
+    /**
+     * Loads an existing server into the form for editing, selecting its
+     * protocol and filling every field (transport, TLS, and Reality included)
+     * from the given config.
+     *
+     * @param server the server to edit
+     */
     public void setServerConfig(ServerConfig server) {
         this.editingServer = server;
 
@@ -333,6 +352,7 @@ public class ServerFormController {
                 setNodeVisible(tlsSeparator, false);
                 setNodeVisible(tlsSection, false);
             }
+            default -> throw new IllegalStateException("Unhandled protocol: " + protocol);
         }
 
         // Restore TLS checkbox for non-Hysteria2 protocols

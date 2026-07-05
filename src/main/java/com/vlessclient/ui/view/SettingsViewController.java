@@ -119,6 +119,11 @@ public class SettingsViewController {
     /** Re-check for a new core at most once a day when Settings is opened. */
     private static final long CORE_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000;
 
+    /**
+     * Resolves the settings-related services and builds every section of the
+     * Settings view (theme, language, connection, health check, proxy mode,
+     * advanced, about/updates), then binds the localized labels.
+     */
     @FXML
     public void initialize() {
         try {
@@ -242,7 +247,7 @@ public class SettingsViewController {
                 }
                 return switch (value) {
                     case "en" -> "English";
-                    case "ru" -> "\u0420\u0443\u0441\u0441\u043a\u0438\u0439";
+                    case "ru" -> "Русский";
                     default -> value;
                 };
             }
@@ -312,7 +317,8 @@ public class SettingsViewController {
             saveSettings(settings);
         });
 
-        healthCheckReconnectDelayField.setText(String.valueOf(settings.getHealthCheckDelaySeconds()));
+        healthCheckReconnectDelayField.setText(
+                String.valueOf(settings.getHealthCheckDelaySeconds()));
         healthCheckReconnectDelayField.textProperty().addListener((obs, oldVal, newVal) -> {
             settings.setHealthCheckDelaySeconds(parseSeconds(newVal, 10));
             saveSettings(settings);
@@ -836,7 +842,8 @@ public class SettingsViewController {
         healthCheckEnabledCheck.textProperty().bind(I18n.binding("settings.health.check.enabled"));
         healthCheckAutoReconnectCheck.textProperty()
                 .bind(I18n.binding("settings.health.check.auto.reconnect"));
-        healthCheckIntervalLabel.textProperty().bind(I18n.binding("settings.health.check.interval"));
+        healthCheckIntervalLabel.textProperty()
+                .bind(I18n.binding("settings.health.check.interval"));
         healthCheckReconnectDelayLabel.textProperty()
                 .bind(I18n.binding("settings.health.check.reconnect.delay"));
         aboutLabel.textProperty().bind(I18n.binding("settings.about"));

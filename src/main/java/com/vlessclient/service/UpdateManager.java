@@ -44,6 +44,10 @@ public class UpdateManager {
     private final ReadOnlyStringWrapper latestVersion = new ReadOnlyStringWrapper("");
     private final ReadOnlyStringWrapper downloadUrl = new ReadOnlyStringWrapper("");
 
+    /**
+     * Creates an update manager with a default HTTP client that follows
+     * redirects and uses the standard connect timeout.
+     */
     public UpdateManager() {
         this(HttpClient.newBuilder()
                 .connectTimeout(HTTP_TIMEOUT)

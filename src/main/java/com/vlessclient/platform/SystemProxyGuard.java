@@ -25,6 +25,8 @@ public interface SystemProxyGuard {
     void clearIfPointsAt(String host, int port);
 
     /**
+     * Returns the guard for the host platform.
+     *
      * @return the guard for the host platform
      */
     static SystemProxyGuard current() {

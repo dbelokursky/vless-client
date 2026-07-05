@@ -17,6 +17,12 @@ public final class Launcher {
     private Launcher() {
     }
 
+    /**
+     * Sets the process-wide system properties that must be in place before AWT
+     * or JavaFX initialize, then hands off to {@link VlessClientApp#main(String[])}.
+     *
+     * @param args the command-line arguments passed on to the JavaFX application
+     */
     public static void main(String[] args) {
         // Point logging at the per-OS logs directory. Must run before any
         // class with a static logger loads (logback resolves ${vless.log.dir}

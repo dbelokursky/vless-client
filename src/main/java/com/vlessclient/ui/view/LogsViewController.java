@@ -62,6 +62,11 @@ public class LogsViewController {
     private ObservableList<String> sourceLogLines;
     private FilteredList<String> filteredLogLines;
 
+    /**
+     * Builds the log toolbar (level filter, search, icon buttons), binds the
+     * engine's log buffer to the list view, and wires copy/clear shortcuts,
+     * the context menu, and the tail-following auto-scroll behaviour.
+     */
     @FXML
     public void initialize() {
         logLevelFilter.setItems(FXCollections.observableArrayList(
@@ -109,7 +114,6 @@ public class LogsViewController {
         });
 
         // Right-click context menu with Copy / Copy All / Clear
-        ContextMenu contextMenu = new ContextMenu();
         MenuItem copyItem = new MenuItem("Copy");
         copyItem.setAccelerator(copyCombo);
         copyItem.setOnAction(e -> copySelection());
@@ -119,6 +123,7 @@ public class LogsViewController {
         selectAllItem.setOnAction(e -> logListView.getSelectionModel().selectAll());
         MenuItem clearItem = new MenuItem("Clear");
         clearItem.setOnAction(e -> sourceLogLines.clear());
+        ContextMenu contextMenu = new ContextMenu();
         contextMenu.getItems().addAll(copyItem, copyAllItem, selectAllItem, clearItem);
         logListView.setContextMenu(contextMenu);
 
@@ -209,9 +214,6 @@ public class LogsViewController {
         if (sourceLogLines == null || sourceLogLines.isEmpty()) {
             return;
         }
-        Window owner = logListView.getScene() == null
-                ? null : logListView.getScene().getWindow();
-
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Save Log");
         String stamp = LocalDateTime.now()
@@ -221,6 +223,8 @@ public class LogsViewController {
                 new FileChooser.ExtensionFilter("Log files", "*.log", "*.txt"),
                 new FileChooser.ExtensionFilter("All files", "*.*"));
 
+        Window owner = logListView.getScene() == null
+                ? null : logListView.getScene().getWindow();
         File file = chooser.showSaveDialog(owner);
         if (file == null) {
             return;

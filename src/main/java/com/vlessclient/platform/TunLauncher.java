@@ -41,6 +41,8 @@ public interface TunLauncher {
     Launched launch(Path binary, Path configFile) throws IOException;
 
     /**
+     * Returns the launcher for the host platform.
+     *
      * @return the launcher for the host platform
      */
     static TunLauncher current() {
