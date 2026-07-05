@@ -8,16 +8,13 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.Protocol;
+import com.vlessclient.model.ProxyMode;
 import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.RoutingRule;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.TlsConfig;
 import com.vlessclient.model.TransportConfig;
 import com.vlessclient.model.TransportType;
-import com.vlessclient.model.ProxyMode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -25,7 +22,17 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+/**
+ * Builds the JSON configuration handed to the sing-box core from a
+ * {@link ServerConfig}, {@link AppSettings} and optional {@link RoutingConfig}.
+ *
+ * <p>Emits the sing-box 1.13 schema: log, DNS, inbounds (TUN/SOCKS/HTTP),
+ * outbounds or a WireGuard endpoint, routing rules with remote rule-sets, and
+ * the experimental Clash API / cache-file blocks.</p>
+ */
 public class SingBoxConfigGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(SingBoxConfigGenerator.class);
@@ -48,6 +55,15 @@ public class SingBoxConfigGenerator {
         return generate(server, settings, null);
     }
 
+    /**
+     * Generates the sing-box configuration JSON for the given server, settings
+     * and optional routing configuration.
+     *
+     * @param server        the server to build the proxy outbound/endpoint from
+     * @param settings      app settings controlling proxy mode, DNS and ports
+     * @param routingConfig routing rules to apply, or {@code null} for defaults
+     * @return the sing-box configuration serialized as a JSON string
+     */
     public String generate(ServerConfig server, AppSettings settings,
                            RoutingConfig routingConfig) {
         ObjectNode root = mapper.createObjectNode();
@@ -116,14 +132,12 @@ public class SingBoxConfigGenerator {
     }
 
     private ObjectNode buildDns(AppSettings settings) {
-        ObjectNode dns = mapper.createObjectNode();
-
-        ArrayNode servers = mapper.createArrayNode();
-
         ObjectNode proxyDns = mapper.createObjectNode();
         proxyDns.put("tag", "proxy-dns");
         populateDnsServerAddress(proxyDns, settings.getProxyDns());
         proxyDns.put("detour", "proxy");
+
+        ArrayNode servers = mapper.createArrayNode();
         servers.add(proxyDns);
 
         ObjectNode directDns = mapper.createObjectNode();
@@ -144,11 +158,11 @@ public class SingBoxConfigGenerator {
         localDns.put("type", "local");
         servers.add(localDns);
 
+        ObjectNode dns = mapper.createObjectNode();
         dns.set("servers", servers);
 
         // Resolve localhost / *.local via the local resolver; everything else
         // falls through to dns.final (proxy DNS).
-        ArrayNode dnsRules = mapper.createArrayNode();
         ObjectNode localRule = mapper.createObjectNode();
         ArrayNode localDomains = mapper.createArrayNode();
         localDomains.add("localhost");
@@ -157,6 +171,7 @@ public class SingBoxConfigGenerator {
         localSuffixes.add(".local");
         localRule.set("domain_suffix", localSuffixes);
         localRule.put("server", "local-dns");
+        ArrayNode dnsRules = mapper.createArrayNode();
         dnsRules.add(localRule);
         dns.set("rules", dnsRules);
 
@@ -633,8 +648,8 @@ public class SingBoxConfigGenerator {
             try {
                 int value = Integer.parseInt(trimmed);
                 if (value < 0 || value > 255) {
-                    log.warn("Skipping out-of-range reserved byte value '{}' for WireGuard server {}",
-                            trimmed, server.getAddress());
+                    log.warn("Skipping out-of-range reserved byte value '{}' "
+                            + "for WireGuard server {}", trimmed, server.getAddress());
                     continue;
                 }
                 reserved.add(value);
@@ -647,8 +662,8 @@ public class SingBoxConfigGenerator {
             return null;
         }
         if (reserved.size() != 3) {
-            log.warn("Ignoring WireGuard reserved bytes for server {}: need exactly 3 values, got {}",
-                    server.getAddress(), reserved.size());
+            log.warn("Ignoring WireGuard reserved bytes for server {}: "
+                    + "need exactly 3 values, got {}", server.getAddress(), reserved.size());
             return null;
         }
         return reserved;
@@ -732,7 +747,6 @@ public class SingBoxConfigGenerator {
     }
 
     ObjectNode buildRoute(RoutingConfig routingConfig) {
-        ObjectNode route = mapper.createObjectNode();
         ArrayNode rules = mapper.createArrayNode();
 
         // sing-box 1.12 removed the legacy geosite/geoip database form entirely;
@@ -805,6 +819,7 @@ public class SingBoxConfigGenerator {
             rules.insert(0, bypassRule);
         }
 
+        ObjectNode route = mapper.createObjectNode();
         route.set("rules", rules);
         route.put("final", "proxy");
         route.put("auto_detect_interface", true);
@@ -897,6 +912,7 @@ public class SingBoxConfigGenerator {
                 case DOMAIN_SUFFIX -> domainSuffixes.add(parsed.value());
                 case DOMAIN_KEYWORD -> domainKeywords.add(parsed.value());
                 case IP_CIDR -> ipCidrs.add(parsed.value());
+                default -> throw new IllegalStateException("Unexpected: " + parsed.kind());
             }
         }
 
@@ -972,6 +988,7 @@ public class SingBoxConfigGenerator {
                 refs.add(tag);
                 ruleNode.set("rule_set", refs);
             }
+            default -> throw new IllegalStateException("Unexpected: " + rule.getType());
         }
 
         ruleNode.put("outbound", outbound);

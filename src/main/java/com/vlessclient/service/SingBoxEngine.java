@@ -6,6 +6,10 @@ import com.vlessclient.model.ConnectionState;
 import com.vlessclient.model.ProxyMode;
 import com.vlessclient.platform.SystemProxyGuard;
 import com.vlessclient.platform.TunLauncher;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
@@ -15,11 +19,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Manages the sing-box process lifecycle: starting, stopping, and monitoring
@@ -154,6 +153,17 @@ public class SingBoxEngine {
         startProcessMonitor();
     }
 
+    /**
+     * Starts sing-box with the given configuration JSON using SYSTEM_PROXY mode.
+     *
+     * @param configJson the sing-box configuration in JSON format
+     * @throws IOException          if the config file cannot be written or the process cannot start
+     * @throws IllegalStateException if sing-box is already running
+     */
+    public void start(String configJson) throws IOException {
+        start(configJson, ProxyMode.SYSTEM_PROXY);
+    }
+
     private static final long TUN_CONNECTED_DELAY_MS = 1800;
 
     private void startTunConnectedWatchdog() {
@@ -172,17 +182,6 @@ public class SingBoxEngine {
         }, "singbox-tun-watchdog");
         watchdog.setDaemon(true);
         watchdog.start();
-    }
-
-    /**
-     * Starts sing-box with the given configuration JSON using SYSTEM_PROXY mode.
-     *
-     * @param configJson the sing-box configuration in JSON format
-     * @throws IOException          if the config file cannot be written or the process cannot start
-     * @throws IllegalStateException if sing-box is already running
-     */
-    public void start(String configJson) throws IOException {
-        start(configJson, ProxyMode.SYSTEM_PROXY);
     }
 
     /**
@@ -351,7 +350,8 @@ public class SingBoxEngine {
                                 ? "sing-box exited with code " + exitCode
                                 : logLines.getLast();
                         connectionState.set(ConnectionState.ERROR);
-                        errorMessage.set("Process exited unexpectedly (code " + exitCode + "): " + lastLine);
+                        errorMessage.set("Process exited unexpectedly (code "
+                                + exitCode + "): " + lastLine);
                     }
                 });
             } catch (InterruptedException e) {

@@ -1,11 +1,10 @@
 package com.vlessclient.platform;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * macOS proxy guard over the {@code networksetup} state that sing-box's

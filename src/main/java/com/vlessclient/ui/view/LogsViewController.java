@@ -3,11 +3,23 @@ package com.vlessclient.ui.view;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.service.LogLineFormatter;
 import com.vlessclient.service.SingBoxEngine;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
+import javafx.geometry.Bounds;
+import javafx.scene.Node;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -19,12 +31,6 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
-import javafx.application.Platform;
-import javafx.geometry.Bounds;
-import javafx.scene.Node;
-import javafx.scene.control.Alert;
-import javafx.stage.FileChooser;
-import javafx.stage.Window;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
@@ -33,17 +39,10 @@ import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.Region;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /**
  * Controller for the Logs view.
@@ -63,6 +62,11 @@ public class LogsViewController {
     private ObservableList<String> sourceLogLines;
     private FilteredList<String> filteredLogLines;
 
+    /**
+     * Builds the log toolbar (level filter, search, icon buttons), binds the
+     * engine's log buffer to the list view, and wires copy/clear shortcuts,
+     * the context menu, and the tail-following auto-scroll behaviour.
+     */
     @FXML
     public void initialize() {
         logLevelFilter.setItems(FXCollections.observableArrayList(
@@ -110,7 +114,6 @@ public class LogsViewController {
         });
 
         // Right-click context menu with Copy / Copy All / Clear
-        ContextMenu contextMenu = new ContextMenu();
         MenuItem copyItem = new MenuItem("Copy");
         copyItem.setAccelerator(copyCombo);
         copyItem.setOnAction(e -> copySelection());
@@ -120,6 +123,7 @@ public class LogsViewController {
         selectAllItem.setOnAction(e -> logListView.getSelectionModel().selectAll());
         MenuItem clearItem = new MenuItem("Clear");
         clearItem.setOnAction(e -> sourceLogLines.clear());
+        ContextMenu contextMenu = new ContextMenu();
         contextMenu.getItems().addAll(copyItem, copyAllItem, selectAllItem, clearItem);
         logListView.setContextMenu(contextMenu);
 
@@ -210,9 +214,6 @@ public class LogsViewController {
         if (sourceLogLines == null || sourceLogLines.isEmpty()) {
             return;
         }
-        Window owner = logListView.getScene() == null
-                ? null : logListView.getScene().getWindow();
-
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Save Log");
         String stamp = LocalDateTime.now()
@@ -222,6 +223,8 @@ public class LogsViewController {
                 new FileChooser.ExtensionFilter("Log files", "*.log", "*.txt"),
                 new FileChooser.ExtensionFilter("All files", "*.*"));
 
+        Window owner = logListView.getScene() == null
+                ? null : logListView.getScene().getWindow();
         File file = chooser.showSaveDialog(owner);
         if (file == null) {
             return;

@@ -3,14 +3,6 @@ package com.vlessclient.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vlessclient.app.AppVersion;
-import javafx.application.Platform;
-import javafx.beans.property.ReadOnlyBooleanProperty;
-import javafx.beans.property.ReadOnlyBooleanWrapper;
-import javafx.beans.property.ReadOnlyStringProperty;
-import javafx.beans.property.ReadOnlyStringWrapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -24,6 +16,13 @@ import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.ReadOnlyBooleanWrapper;
+import javafx.beans.property.ReadOnlyStringProperty;
+import javafx.beans.property.ReadOnlyStringWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Checks GitHub Releases for new versions and downloads updates.
@@ -45,6 +44,10 @@ public class UpdateManager {
     private final ReadOnlyStringWrapper latestVersion = new ReadOnlyStringWrapper("");
     private final ReadOnlyStringWrapper downloadUrl = new ReadOnlyStringWrapper("");
 
+    /**
+     * Creates an update manager with a default HTTP client that follows
+     * redirects and uses the standard connect timeout.
+     */
     public UpdateManager() {
         this(HttpClient.newBuilder()
                 .connectTimeout(HTTP_TIMEOUT)

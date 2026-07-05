@@ -147,6 +147,7 @@ public final class BypassPatternParser {
         return s.trim();
     }
 
+    /** The sing-box route-rule kind a pattern maps to. */
     public enum Kind {
         DOMAIN,
         DOMAIN_SUFFIX,

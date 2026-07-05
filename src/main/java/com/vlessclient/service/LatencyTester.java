@@ -1,9 +1,6 @@
 package com.vlessclient.service;
 
 import com.vlessclient.model.ServerConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.HashMap;
@@ -12,7 +9,13 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+/**
+ * Measures TCP connect latency to servers using a bounded pool of daemon
+ * threads.
+ */
 public class LatencyTester {
 
     private static final Logger log = LoggerFactory.getLogger(LatencyTester.class);
@@ -21,6 +24,9 @@ public class LatencyTester {
 
     private final ExecutorService executor;
 
+    /**
+     * Creates a tester backed by a fixed pool of daemon threads.
+     */
     public LatencyTester() {
         this.executor = Executors.newFixedThreadPool(MAX_CONCURRENT_TESTS, r -> {
             Thread t = new Thread(r, "latency-tester");
@@ -33,6 +39,13 @@ public class LatencyTester {
         return CompletableFuture.supplyAsync(() -> measureLatency(server), executor);
     }
 
+    /**
+     * Measures latency to every given server concurrently.
+     *
+     * @param servers the servers to test; may be null or empty
+     * @return a future of a map from server id to latency in milliseconds, or
+     *         {@code -1} for servers that could not be reached
+     */
     public CompletableFuture<Map<String, Long>> testAll(List<ServerConfig> servers) {
         if (servers == null || servers.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());

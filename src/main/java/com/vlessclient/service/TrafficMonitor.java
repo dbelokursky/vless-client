@@ -2,13 +2,6 @@ package com.vlessclient.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import javafx.application.Platform;
-import javafx.beans.property.LongProperty;
-import javafx.beans.property.ReadOnlyLongProperty;
-import javafx.beans.property.SimpleLongProperty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -18,7 +11,21 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javafx.application.Platform;
+import javafx.beans.property.LongProperty;
+import javafx.beans.property.ReadOnlyLongProperty;
+import javafx.beans.property.SimpleLongProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+/**
+ * Streams live upload/download traffic stats from the sing-box Clash API and
+ * exposes them as JavaFX observable properties for UI binding.
+ *
+ * <p>Opens a server-sent-events connection to {@code /traffic} on a virtual
+ * thread, reconnecting with a bounded back-off until the stream attaches or
+ * {@link #stop()} is called.</p>
+ */
 public class TrafficMonitor {
 
     private static final Logger log = LoggerFactory.getLogger(TrafficMonitor.class);
@@ -60,6 +67,12 @@ public class TrafficMonitor {
         return totalDownload;
     }
 
+    /**
+     * Starts streaming traffic stats from the Clash API on the given port.
+     * Does nothing if a monitor is already running.
+     *
+     * @param clashApiPort the port the sing-box Clash API listens on
+     */
     public void start(int clashApiPort) {
         synchronized (lifecycleLock) {
             if (running.getAndSet(true)) {
@@ -68,7 +81,8 @@ public class TrafficMonitor {
             }
 
             sseThread = Thread.ofVirtual().name("traffic-monitor").start(() -> {
-                log.info("TrafficMonitor started, connecting to Clash API on port {}", clashApiPort);
+                log.info("TrafficMonitor started, connecting to Clash API on port {}",
+                        clashApiPort);
                 try {
                     connectAndStream(clashApiPort);
                 } catch (Exception e) {
@@ -83,6 +97,11 @@ public class TrafficMonitor {
         }
     }
 
+    /**
+     * Stops the monitor and resets the live speed properties to zero. Blocks
+     * until the streaming thread has finished so callers can treat it as
+     * synchronous. Safe to call when not running.
+     */
     public void stop() {
         Thread thread;
         synchronized (lifecycleLock) {
@@ -186,6 +205,13 @@ public class TrafficMonitor {
         }
     }
 
+    /**
+     * Formats a byte-per-second rate as a human-readable string (B/s, KB/s,
+     * MB/s or GB/s). Negative values are treated as zero.
+     *
+     * @param bytesPerSec the rate in bytes per second
+     * @return the formatted speed string
+     */
     public static String formatSpeed(long bytesPerSec) {
         if (bytesPerSec < 0) {
             return "0 B/s";
@@ -202,6 +228,13 @@ public class TrafficMonitor {
         return String.format(Locale.US, "%.2f GB/s", bytesPerSec / (double) GB);
     }
 
+    /**
+     * Formats a byte count as a human-readable string (B, KB, MB or GB).
+     * Negative values are treated as zero.
+     *
+     * @param bytes the number of bytes
+     * @return the formatted byte-count string
+     */
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
             return "0 B";

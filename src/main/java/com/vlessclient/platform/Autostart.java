@@ -11,6 +11,8 @@ import java.io.IOException;
 public interface Autostart {
 
     /**
+     * Reports whether the application is currently set to start at login.
+     *
      * @return true if the application is currently set to start at login
      */
     boolean isEnabled();
@@ -31,6 +33,8 @@ public interface Autostart {
     void refresh();
 
     /**
+     * Returns the autostart implementation for the host platform.
+     *
      * @return the autostart implementation for the host platform
      */
     static Autostart current() {

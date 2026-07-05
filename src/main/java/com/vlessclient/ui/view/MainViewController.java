@@ -1,5 +1,8 @@
 package com.vlessclient.ui.view;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
@@ -13,10 +16,11 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
+/**
+ * Controller for the main application window. Owns the sidebar navigation,
+ * lazily loads and caches each page's FXML view and controller, and registers
+ * the global keyboard shortcuts.
+ */
 public class MainViewController {
 
     private static final Logger log = LoggerFactory.getLogger(MainViewController.class);
@@ -37,6 +41,10 @@ public class MainViewController {
     private Button activeButton;
     private boolean acceleratorsRegistered;
 
+    /**
+     * Installs the sidebar icons, shows the Dashboard as the initial page, and
+     * registers the keyboard shortcuts once the window's scene is available.
+     */
     @FXML
     public void initialize() {
         installSidebarIcons();
@@ -91,7 +99,8 @@ public class MainViewController {
         accelerators.put(KeyCombination.keyCombination("Shortcut+Comma"), this::showSettings);
 
         accelerators.put(KeyCombination.keyCombination("Shortcut+N"), this::onShortcutAddServer);
-        accelerators.put(KeyCombination.keyCombination("Shortcut+Shift+C"), this::onShortcutToggleConnection);
+        accelerators.put(KeyCombination.keyCombination("Shortcut+Shift+C"),
+                this::onShortcutToggleConnection);
         accelerators.put(KeyCombination.keyCombination("Shortcut+W"), this::onShortcutHideWindow);
 
         log.info("Registered {} keyboard shortcuts", accelerators.size());

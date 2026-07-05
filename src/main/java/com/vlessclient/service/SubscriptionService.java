@@ -5,11 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.Subscription;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -28,7 +23,15 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+/**
+ * Manages subscriptions: fetching remote server lists, parsing them, and keeping the
+ * backing {@link ConfigStore} in sync, with optional periodic auto-refresh.
+ */
 public class SubscriptionService {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionService.class);
@@ -43,6 +46,12 @@ public class SubscriptionService {
     private final Object lifecycleLock = new Object();
     private ScheduledExecutorService scheduler;
 
+    /**
+     * Creates a subscription service using the default data directory and HTTP client.
+     *
+     * @param configStore the store that holds the parsed servers
+     * @param shareLinkParser the parser used to decode share links from subscription content
+     */
     public SubscriptionService(ConfigStore configStore, ShareLinkParser shareLinkParser) {
         this(configStore, shareLinkParser,
                 Path.of(System.getProperty("user.home"),
@@ -68,6 +77,12 @@ public class SubscriptionService {
         return subscriptions;
     }
 
+    /**
+     * Adds a new subscription and immediately refreshes it.
+     *
+     * @param name the display name for the subscription
+     * @param url the URL to fetch subscription content from
+     */
     public synchronized void addSubscription(String name, String url) {
         Subscription sub = new Subscription();
         sub.setName(name);
@@ -77,6 +92,11 @@ public class SubscriptionService {
         refreshSubscription(sub.getId());
     }
 
+    /**
+     * Removes a subscription and all servers it contributed to the config store.
+     *
+     * @param subscriptionId the id of the subscription to remove
+     */
     public synchronized void removeSubscription(String subscriptionId) {
         Subscription sub = findById(subscriptionId);
         if (sub == null) {
@@ -88,9 +108,15 @@ public class SubscriptionService {
         }
         subscriptions.remove(sub);
         saveSubscriptions();
-        log.info("Removed subscription '{}' and {} servers", sub.getName(), sub.getServerIds().size());
+        log.info("Removed subscription '{}' and {} servers",
+                sub.getName(), sub.getServerIds().size());
     }
 
+    /**
+     * Fetches and re-parses a single subscription, applying additions, updates, and removals.
+     *
+     * @param subscriptionId the id of the subscription to refresh
+     */
     public void refreshSubscription(String subscriptionId) {
         Subscription sub = findById(subscriptionId);
         if (sub == null) {
@@ -112,15 +138,22 @@ public class SubscriptionService {
 
         sub.setLastRefreshedAt(System.currentTimeMillis());
         saveSubscriptions();
-        log.info("Refreshed subscription '{}': {} servers", sub.getName(), sub.getServerIds().size());
+        log.info("Refreshed subscription '{}': {} servers",
+                sub.getName(), sub.getServerIds().size());
     }
 
+    /**
+     * Refreshes every registered subscription.
+     */
     public void refreshAll() {
         for (Subscription sub : new ArrayList<>(subscriptions)) {
             refreshSubscription(sub.getId());
         }
     }
 
+    /**
+     * Starts hourly background auto-refresh of all subscriptions. No-op if already running.
+     */
     public void startAutoRefresh() {
         synchronized (lifecycleLock) {
             if (scheduler != null && !scheduler.isShutdown()) {
@@ -136,6 +169,10 @@ public class SubscriptionService {
         }
     }
 
+    /**
+     * Stops background auto-refresh, waiting for any in-flight refresh to finish. No-op if
+     * not running.
+     */
     public void stopAutoRefresh() {
         ScheduledExecutorService toShutdown;
         synchronized (lifecycleLock) {
@@ -152,7 +189,8 @@ public class SubscriptionService {
         toShutdown.shutdown();
         try {
             if (!toShutdown.awaitTermination(60, TimeUnit.SECONDS)) {
-                log.warn("Subscription auto-refresh did not terminate within timeout; forcing shutdown");
+                log.warn("Subscription auto-refresh did not terminate within timeout; "
+                        + "forcing shutdown");
                 toShutdown.shutdownNow();
             }
         } catch (InterruptedException e) {
@@ -169,7 +207,8 @@ public class SubscriptionService {
                 .timeout(Duration.ofSeconds(30))
                 .header("User-Agent", "VlessClient/1.0")
                 .build();
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response =
+                httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
             throw new IOException("HTTP " + response.statusCode() + " for URL: " + url);
         }
@@ -229,7 +268,8 @@ public class SubscriptionService {
                 try {
                     return new String(Base64.getDecoder().decode(padded), StandardCharsets.UTF_8);
                 } catch (IllegalArgumentException e3) {
-                    return new String(Base64.getUrlDecoder().decode(padded), StandardCharsets.UTF_8);
+                    return new String(Base64.getUrlDecoder().decode(padded),
+                            StandardCharsets.UTF_8);
                 }
             }
         }

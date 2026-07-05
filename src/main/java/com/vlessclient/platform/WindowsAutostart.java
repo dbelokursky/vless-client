@@ -1,12 +1,11 @@
 package com.vlessclient.platform;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Windows autostart via the per-user registry Run key
@@ -73,7 +72,8 @@ public final class WindowsAutostart implements Autostart {
                 "reg", "add", RUN_KEY, "/v", VALUE_NAME,
                 "/t", "REG_SZ", "/d", launchCommandLine(), "/f"));
         if (result.exitCode() != 0) {
-            throw new IOException("reg add failed (exit " + result.exitCode() + "): " + result.output());
+            throw new IOException("reg add failed (exit " + result.exitCode() + "): "
+                    + result.output());
         }
         log.info("Autostart registry value installed: {}\\{}", RUN_KEY, VALUE_NAME);
     }
@@ -136,7 +136,8 @@ public final class WindowsAutostart implements Autostart {
     private static String quote(List<String> argv) {
         List<String> quoted = new ArrayList<>(argv.size());
         for (String arg : argv) {
-            if (arg.isEmpty() || arg.chars().anyMatch(Character::isWhitespace) || arg.contains("\"")) {
+            if (arg.isEmpty() || arg.chars().anyMatch(Character::isWhitespace)
+                    || arg.contains("\"")) {
                 quoted.add('"' + arg.replace("\"", "\\\"") + '"');
             } else {
                 quoted.add(arg);

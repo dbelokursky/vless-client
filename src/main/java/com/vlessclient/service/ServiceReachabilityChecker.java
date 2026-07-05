@@ -1,9 +1,6 @@
 package com.vlessclient.service;
 
 import com.vlessclient.model.HealthCheckTarget;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -22,6 +19,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Probes whether well-known services (e.g. google.com, x.com) are reachable
@@ -64,7 +63,8 @@ public class ServiceReachabilityChecker {
      * @param latencyMs round-trip time in ms, or -1 when unreachable
      * @param detail    short human-readable status (e.g. "HTTP 204", "timeout")
      */
-    public record ProbeResult(String name, String url, boolean reachable, long latencyMs, String detail) {
+    public record ProbeResult(
+            String name, String url, boolean reachable, long latencyMs, String detail) {
     }
 
     /**
@@ -87,6 +87,8 @@ public class ServiceReachabilityChecker {
     }
 
     /**
+     * Creates a checker using the given probe implementation.
+     *
      * @param probeExecutor custom probe implementation, or {@code null} to use
      *                      the real HTTP-through-proxy probe
      */
@@ -103,7 +105,8 @@ public class ServiceReachabilityChecker {
      * Probes every target concurrently and completes with one
      * {@link ProbeResult} per target, in the same order as the input list.
      */
-    public CompletableFuture<List<ProbeResult>> checkAll(List<HealthCheckTarget> targets, int httpProxyPort) {
+    public CompletableFuture<List<ProbeResult>> checkAll(
+            List<HealthCheckTarget> targets, int httpProxyPort) {
         if (targets == null || targets.isEmpty()) {
             return CompletableFuture.completedFuture(List.of());
         }
@@ -223,14 +226,16 @@ public class ServiceReachabilityChecker {
                     .build();
             long start = System.nanoTime();
             try {
-                HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
+                HttpResponse<Void> response =
+                        client.send(request, HttpResponse.BodyHandlers.discarding());
                 long elapsed = (System.nanoTime() - start) / 1_000_000;
                 // Any HTTP status means we reached the service through the proxy.
                 log.debug("Reachable: {} -> HTTP {} in {} ms", url, response.statusCode(), elapsed);
                 return new ProbeResult(name, url, true, elapsed, "HTTP " + response.statusCode());
             } catch (Exception e) {
                 lastDetail = describe(e);
-                log.debug("Probe attempt {}/{} failed for {} ({})", attempt, MAX_ATTEMPTS, url, lastDetail);
+                log.debug("Probe attempt {}/{} failed for {} ({})",
+                        attempt, MAX_ATTEMPTS, url, lastDetail);
                 if (attempt < MAX_ATTEMPTS && sleepBeforeRetry()) {
                     continue;
                 }
@@ -245,7 +250,8 @@ public class ServiceReachabilityChecker {
      * proxy established a connection to the target through sing-box.
      * Latency is the CONNECT round-trip.
      */
-    private ProbeResult tcpProbe(String name, String display, HostPort hostPort, int httpProxyPort) {
+    private ProbeResult tcpProbe(
+            String name, String display, HostPort hostPort, int httpProxyPort) {
         String target = hostPort.host() + ":" + hostPort.port();
         String connect = "CONNECT " + target + " HTTP/1.1\r\n"
                 + "Host: " + target + "\r\n"
@@ -255,7 +261,8 @@ public class ServiceReachabilityChecker {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             long start = System.nanoTime();
             try (Socket socket = new Socket()) {
-                socket.connect(new InetSocketAddress("127.0.0.1", httpProxyPort), CONNECT_TIMEOUT_MS);
+                socket.connect(
+                        new InetSocketAddress("127.0.0.1", httpProxyPort), CONNECT_TIMEOUT_MS);
                 socket.setSoTimeout(REQUEST_TIMEOUT_MS);
                 OutputStream out = socket.getOutputStream();
                 out.write(connect.getBytes(StandardCharsets.US_ASCII));
@@ -357,6 +364,9 @@ public class ServiceReachabilityChecker {
         return cachedClient;
     }
 
+    /**
+     * Shuts down the probe thread pool and closes any cached HTTP client.
+     */
     public void shutdown() {
         executor.shutdownNow();
         synchronized (this) {

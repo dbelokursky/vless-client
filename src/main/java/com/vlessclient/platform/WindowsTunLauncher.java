@@ -1,11 +1,10 @@
 package com.vlessclient.platform;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Windows TUN launcher: sing-box must run elevated (administrator) to create
@@ -147,7 +146,8 @@ public final class WindowsTunLauncher implements TunLauncher {
                 try {
                     while (-not $proc.HasExited) {
                         if (Test-Path -LiteralPath $StopFile) { break }
-                        if (-not (Get-Process -Id ([int]$OwnerPid) -ErrorAction SilentlyContinue)) { break }
+                        if (-not (Get-Process -Id ([int]$OwnerPid) `
+                            -ErrorAction SilentlyContinue)) { break }
                         Start-Sleep -Milliseconds 300
                     }
                 } finally {

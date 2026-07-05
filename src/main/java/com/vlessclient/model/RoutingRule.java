@@ -2,9 +2,12 @@ package com.vlessclient.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.util.UUID;
 
+/**
+ * A single custom routing rule matching traffic by type and value and
+ * assigning it an action (proxy, direct, or block).
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RoutingRule {
 
@@ -24,6 +27,9 @@ public class RoutingRule {
         this.id = UUID.randomUUID().toString();
     }
 
+    /**
+     * Creates a rule with a fresh random id for the given type, value, and action.
+     */
     public RoutingRule(RuleType type, String value, RuleAction action) {
         this.id = UUID.randomUUID().toString();
         this.type = type;
@@ -63,6 +69,9 @@ public class RoutingRule {
         this.action = action;
     }
 
+    /**
+     * The kind of matcher a routing rule applies (domain, IP CIDR, geosite, etc.).
+     */
     public enum RuleType {
         @JsonProperty("domain")
         DOMAIN("domain"),
@@ -96,6 +105,9 @@ public class RoutingRule {
         }
     }
 
+    /**
+     * The action taken on traffic matched by a routing rule.
+     */
     public enum RuleAction {
         @JsonProperty("proxy")
         PROXY("proxy"),

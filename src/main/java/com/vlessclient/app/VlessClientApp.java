@@ -1,9 +1,9 @@
 package com.vlessclient.app;
 
 import com.vlessclient.model.AppSettings;
+import com.vlessclient.platform.Autostart;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.CoreUpdateService;
-import com.vlessclient.platform.Autostart;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.SingBoxInstaller;
@@ -11,6 +11,15 @@ import com.vlessclient.service.ThemeManager;
 import com.vlessclient.service.TrayIconService;
 import com.vlessclient.ui.view.MainViewController;
 import com.vlessclient.ui.view.SingBoxInstallerDialog;
+import java.awt.Desktop;
+import java.awt.Taskbar;
+import java.awt.Toolkit;
+import java.awt.desktop.QuitStrategy;
+import java.io.InputStream;
+import java.net.URL;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Optional;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
@@ -21,16 +30,11 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.awt.Desktop;
-import java.awt.Taskbar;
-import java.awt.Toolkit;
-import java.awt.desktop.QuitStrategy;
-import java.io.InputStream;
-import java.net.URL;
-import java.nio.file.Path;
-import java.util.Locale;
-import java.util.Optional;
-
+/**
+ * JavaFX {@link Application} entry point that wires up services, installs the
+ * macOS Dock icon and quit handler, ensures sing-box is available, and shows
+ * the main window. Kept alive in the system tray after the window is closed.
+ */
 public class VlessClientApp extends Application {
 
     private static final Logger log = LoggerFactory.getLogger(VlessClientApp.class);

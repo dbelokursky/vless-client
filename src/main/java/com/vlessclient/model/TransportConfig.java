@@ -2,10 +2,13 @@ package com.vlessclient.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Transport-layer settings for a server connection, such as the transport type
+ * and its path, host, service name, and headers.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class TransportConfig {
 

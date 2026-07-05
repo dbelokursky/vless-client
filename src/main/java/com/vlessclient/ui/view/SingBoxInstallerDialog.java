@@ -1,6 +1,8 @@
 package com.vlessclient.ui.view;
 
 import com.vlessclient.service.SingBoxInstaller;
+import java.nio.file.Path;
+import java.util.Optional;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -19,9 +21,6 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.nio.file.Path;
-import java.util.Optional;
 
 /**
  * Modal dialog that downloads and installs the {@code sing-box} binary on first

@@ -5,6 +5,8 @@ import com.vlessclient.model.ServerConfig;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.ShareLinkExporter;
 import com.vlessclient.service.ShareLinkParser;
+import java.io.IOException;
+import java.util.Optional;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -29,9 +31,11 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.Optional;
-
+/**
+ * Controller for the Servers view. Lists the configured servers, tracks the
+ * active selection, and opens the add/edit form as well as share-link import
+ * and per-server actions (edit, duplicate, delete, copy link).
+ */
 public class ServersViewController {
 
     private static final Logger log = LoggerFactory.getLogger(ServersViewController.class);
@@ -43,6 +47,10 @@ public class ServersViewController {
 
     private ConfigStore configStore;
 
+    /**
+     * Binds the server list to the config store, keeps the empty-state
+     * placeholder in sync, and marks the selected server active.
+     */
     @FXML
     public void initialize() {
         configStore = ServiceLocator.get(ConfigStore.class);
@@ -233,8 +241,9 @@ public class ServersViewController {
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);
 
-            Label protocolBadge = new Label(
-                    server.getProtocol() != null ? server.getProtocol().getValue().toUpperCase() : "VLESS");
+            Label protocolBadge = new Label(server.getProtocol() != null
+                    ? server.getProtocol().getValue().toUpperCase()
+                    : "VLESS");
             protocolBadge.getStyleClass().add("protocol-badge");
 
             row.getChildren().addAll(info, spacer, protocolBadge);
@@ -246,8 +255,6 @@ public class ServersViewController {
             }
 
             // Context menu for right-click
-            ContextMenu contextMenu = new ContextMenu();
-
             MenuItem editItem = new MenuItem("Edit");
             editItem.setOnAction(e -> editServer(server));
 
@@ -260,6 +267,7 @@ public class ServersViewController {
             MenuItem copyLinkItem = new MenuItem("Copy Share Link");
             copyLinkItem.setOnAction(e -> copyShareLink(server));
 
+            ContextMenu contextMenu = new ContextMenu();
             contextMenu.getItems().addAll(editItem, duplicateItem, copyLinkItem, deleteItem);
             setContextMenu(contextMenu);
 

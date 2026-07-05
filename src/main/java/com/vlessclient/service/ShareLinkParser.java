@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vlessclient.model.Protocol;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.TransportType;
-
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -14,10 +13,20 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Parses protocol-specific share link URIs into {@link ServerConfig} instances.
+ */
 public class ShareLinkParser {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    /**
+     * Parses a share link URI, dispatching by its scheme.
+     *
+     * @param uri the share link URI to parse
+     * @return the parsed server configuration
+     * @throws IllegalArgumentException if {@code uri} is null, blank, or has an unsupported scheme
+     */
     public ServerConfig parse(String uri) {
         if (uri == null || uri.isBlank()) {
             throw new IllegalArgumentException("URI must not be null or blank");
@@ -33,6 +42,13 @@ public class ShareLinkParser {
         };
     }
 
+    /**
+     * Parses a {@code vless://} share link URI.
+     *
+     * @param uri the VLESS share link URI
+     * @return the parsed server configuration
+     * @throws IllegalArgumentException if the URI is malformed or missing required fields
+     */
     public ServerConfig parseVless(String uri) {
         if (!uri.toLowerCase().startsWith("vless://")) {
             throw new IllegalArgumentException("URI must start with vless://");
@@ -103,6 +119,13 @@ public class ShareLinkParser {
         return config;
     }
 
+    /**
+     * Parses a {@code vmess://} share link URI with a Base64-encoded JSON payload.
+     *
+     * @param uri the VMess share link URI
+     * @return the parsed server configuration
+     * @throws IllegalArgumentException if the URI is malformed or missing required fields
+     */
     public ServerConfig parseVmess(String uri) {
         if (!uri.toLowerCase().startsWith("vmess://")) {
             throw new IllegalArgumentException("URI must start with vmess://");
@@ -180,6 +203,13 @@ public class ShareLinkParser {
         return config;
     }
 
+    /**
+     * Parses a {@code trojan://} share link URI.
+     *
+     * @param uri the Trojan share link URI
+     * @return the parsed server configuration
+     * @throws IllegalArgumentException if the URI is malformed or missing required fields
+     */
     public ServerConfig parseTrojan(String uri) {
         if (!uri.toLowerCase().startsWith("trojan://")) {
             throw new IllegalArgumentException("URI must start with trojan://");
@@ -219,8 +249,6 @@ public class ShareLinkParser {
             port = 443;
         }
 
-        Map<String, String> params = parseQueryParams(parsed.getRawQuery());
-
         ServerConfig config = new ServerConfig();
         config.setProtocol(Protocol.TROJAN);
         config.setUuid(password);
@@ -229,6 +257,7 @@ public class ShareLinkParser {
         config.setName(fragment != null ? fragment : host + ":" + port);
 
         // Transport
+        Map<String, String> params = parseQueryParams(parsed.getRawQuery());
         applyTransportParams(config, params);
 
         // Security / TLS - trojan defaults to TLS enabled
@@ -263,6 +292,13 @@ public class ShareLinkParser {
         return config;
     }
 
+    /**
+     * Parses an {@code ss://} (Shadowsocks) share link URI in either SIP002 or legacy format.
+     *
+     * @param uri the Shadowsocks share link URI
+     * @return the parsed server configuration
+     * @throws IllegalArgumentException if the URI is malformed or missing required fields
+     */
     public ServerConfig parseShadowsocks(String uri) {
         if (!uri.toLowerCase().startsWith("ss://")) {
             throw new IllegalArgumentException("URI must start with ss://");
@@ -323,7 +359,6 @@ public class ShareLinkParser {
                 throw new IllegalArgumentException("Invalid Shadowsocks legacy format");
             }
             String userInfo = decoded.substring(0, atInDecoded);
-            String hostPort = decoded.substring(atInDecoded + 1);
 
             int colonIndex = userInfo.indexOf(':');
             if (colonIndex < 0) {
@@ -332,6 +367,7 @@ public class ShareLinkParser {
             method = userInfo.substring(0, colonIndex);
             password = userInfo.substring(colonIndex + 1);
 
+            String hostPort = decoded.substring(atInDecoded + 1);
             int lastColon = hostPort.lastIndexOf(':');
             if (lastColon < 0) {
                 throw new IllegalArgumentException("Missing port in Shadowsocks URI");
@@ -351,6 +387,13 @@ public class ShareLinkParser {
         return config;
     }
 
+    /**
+     * Parses a {@code hysteria2://} or {@code hy2://} share link URI.
+     *
+     * @param uri the Hysteria2 share link URI
+     * @return the parsed server configuration
+     * @throws IllegalArgumentException if the URI is malformed or missing required fields
+     */
     public ServerConfig parseHysteria2(String uri) {
         String lower = uri.toLowerCase();
         if (!lower.startsWith("hysteria2://") && !lower.startsWith("hy2://")) {
@@ -392,8 +435,6 @@ public class ShareLinkParser {
             port = 443;
         }
 
-        Map<String, String> params = parseQueryParams(parsed.getRawQuery());
-
         ServerConfig config = new ServerConfig();
         config.setProtocol(Protocol.HYSTERIA2);
         config.setUuid(password);
@@ -404,6 +445,7 @@ public class ShareLinkParser {
         // TLS - hysteria2 defaults to TLS
         config.getTls().setEnabled(true);
 
+        Map<String, String> params = parseQueryParams(parsed.getRawQuery());
         String sni = params.get("sni");
         if (sni != null && !sni.isBlank()) {
             config.getTls().setServerName(sni);
@@ -541,7 +583,8 @@ public class ShareLinkParser {
                 try {
                     return new String(Base64.getDecoder().decode(padded), StandardCharsets.UTF_8);
                 } catch (IllegalArgumentException e3) {
-                    return new String(Base64.getUrlDecoder().decode(padded), StandardCharsets.UTF_8);
+                    return new String(Base64.getUrlDecoder().decode(padded),
+                            StandardCharsets.UTF_8);
                 }
             }
         }

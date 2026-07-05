@@ -1,5 +1,7 @@
 package com.vlessclient.ui.view;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import javafx.animation.AnimationTimer;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -14,9 +16,6 @@ import javafx.scene.paint.RadialGradient;
 import javafx.scene.paint.Stop;
 import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.shape.StrokeLineJoin;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
 
 /**
  * A lightweight sparkline chart for the Dashboard's real-time traffic
@@ -70,6 +69,12 @@ public class Sparkline extends Region {
         this(DEFAULT_MAX_SAMPLES);
     }
 
+    /**
+     * Creates a sparkline with the given rolling-buffer capacity.
+     *
+     * @param maxSamples maximum number of samples retained; clamped to a
+     *     minimum of 8
+     */
     public Sparkline(int maxSamples) {
         this.maxSamples = Math.max(8, maxSamples);
         getChildren().add(canvas);
@@ -173,7 +178,6 @@ public class Sparkline extends Region {
         double pad = 2;
         double chartW = w - pad * 2;
         double chartH = h - pad * 2;
-        double baseY = pad + chartH;
 
         int count = samples.size();
         double stepX = chartW / (maxSamples - 1);
@@ -191,16 +195,17 @@ public class Sparkline extends Region {
         }
 
         // Soft gradient fill under a smooth spline through the samples.
-        LinearGradient gradient = new LinearGradient(
-                0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
-                new Stop(0, fillColor.get()),
-                new Stop(1, fillColor.get().deriveColor(0, 1, 1, 0.05))
-        );
+        double baseY = pad + chartH;
         g.beginPath();
         traceSpline(g, xs, ys, count);
         g.lineTo(xs[count - 1], baseY);
         g.lineTo(xs[0], baseY);
         g.closePath();
+        LinearGradient gradient = new LinearGradient(
+                0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, fillColor.get()),
+                new Stop(1, fillColor.get().deriveColor(0, 1, 1, 0.05))
+        );
         g.setFill(gradient);
         g.fill();
 

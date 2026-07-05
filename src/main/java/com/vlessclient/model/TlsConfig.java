@@ -3,6 +3,10 @@ package com.vlessclient.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+/**
+ * TLS settings for a server connection, including SNI, ALPN, fingerprint, and
+ * REALITY parameters.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class TlsConfig {
 

@@ -2,6 +2,9 @@ package com.vlessclient.model;
 
 import com.fasterxml.jackson.annotation.JsonValue;
 
+/**
+ * Supported outbound proxy protocols for a server configuration.
+ */
 public enum Protocol {
     VLESS("vless"),
     VMESS("vmess"),

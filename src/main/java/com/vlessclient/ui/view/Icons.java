@@ -92,14 +92,37 @@ public final class Icons {
     private Icons() {
     }
 
-    public static Node dashboard(double size)     { return make(DASHBOARD, size); }
-    public static Node server(double size)        { return make(SERVER,    size); }
-    public static Node link(double size)          { return make(LINK,      size); }
-    public static Node routing(double size)       { return make(ROUTING,   size); }
-    public static Node list(double size)          { return make(LIST,      size); }
-    public static Node settings(double size)      { return make(SETTINGS,  size); }
-    public static Node download(double size)      { return make(DOWNLOAD,  size); }
-    public static Node clear(double size)         { return make(TRASH,     size); }
+    public static Node dashboard(double size) {
+        return make(DASHBOARD, size);
+    }
+
+    public static Node server(double size) {
+        return make(SERVER, size);
+    }
+
+    public static Node link(double size) {
+        return make(LINK, size);
+    }
+
+    public static Node routing(double size) {
+        return make(ROUTING, size);
+    }
+
+    public static Node list(double size) {
+        return make(LIST, size);
+    }
+
+    public static Node settings(double size) {
+        return make(SETTINGS, size);
+    }
+
+    public static Node download(double size) {
+        return make(DOWNLOAD, size);
+    }
+
+    public static Node clear(double size) {
+        return make(TRASH, size);
+    }
 
     /**
      * Builds a sized {@link StackPane} containing an {@link SVGPath} scaled
