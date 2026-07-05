@@ -1,5 +1,7 @@
 package com.vlessclient.ui.view;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import javafx.animation.AnimationTimer;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -14,9 +16,6 @@ import javafx.scene.paint.RadialGradient;
 import javafx.scene.paint.Stop;
 import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.shape.StrokeLineJoin;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
 
 /**
  * A lightweight sparkline chart for the Dashboard's real-time traffic

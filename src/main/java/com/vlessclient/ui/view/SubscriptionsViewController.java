@@ -3,6 +3,10 @@ package com.vlessclient.ui.view;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.Subscription;
 import com.vlessclient.service.SubscriptionService;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
@@ -22,11 +26,6 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.Optional;
 
 public class SubscriptionsViewController {
 

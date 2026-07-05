@@ -4,6 +4,9 @@ import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.RoutingRule;
 import com.vlessclient.service.RoutingService;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -26,10 +29,6 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 
 public class RoutingViewController {
 

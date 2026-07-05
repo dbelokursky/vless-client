@@ -6,8 +6,8 @@ import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ConnectionState;
 import com.vlessclient.model.HealthCheckTarget;
 import com.vlessclient.model.ProxyMode;
-import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.RoutingConfig;
+import com.vlessclient.model.ServerConfig;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.LatencyTester;
 import com.vlessclient.service.RoutingService;
@@ -16,6 +16,12 @@ import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.SingBoxInstaller;
 import com.vlessclient.service.TrafficMonitor;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -31,9 +37,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
-import javafx.scene.layout.GridPane;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -42,13 +48,6 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 /**
  * Controller for the Dashboard view.

@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vlessclient.model.Protocol;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.TransportType;
-
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;

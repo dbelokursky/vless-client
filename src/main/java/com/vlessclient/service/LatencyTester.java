@@ -1,9 +1,6 @@
 package com.vlessclient.service;
 
 import com.vlessclient.model.ServerConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.HashMap;
@@ -12,6 +9,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LatencyTester {
 

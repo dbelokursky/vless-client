@@ -2,13 +2,6 @@ package com.vlessclient.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import javafx.application.Platform;
-import javafx.beans.property.LongProperty;
-import javafx.beans.property.ReadOnlyLongProperty;
-import javafx.beans.property.SimpleLongProperty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -18,6 +11,12 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javafx.application.Platform;
+import javafx.beans.property.LongProperty;
+import javafx.beans.property.ReadOnlyLongProperty;
+import javafx.beans.property.SimpleLongProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TrafficMonitor {
 

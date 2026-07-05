@@ -5,12 +5,6 @@ import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ConnectionState;
 import com.vlessclient.model.ServerConfig;
-import javafx.application.Platform;
-import javafx.collections.ListChangeListener;
-import javafx.stage.Stage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.awt.AWTException;
 import java.awt.Color;
 import java.awt.EventQueue;
@@ -26,6 +20,11 @@ import java.awt.TrayIcon;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.List;
+import javafx.application.Platform;
+import javafx.collections.ListChangeListener;
+import javafx.stage.Stage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * macOS menu bar (system tray) integration using AWT SystemTray.

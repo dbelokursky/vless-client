@@ -2,9 +2,10 @@ package com.vlessclient.ui.view;
 
 import com.vlessclient.model.Protocol;
 import com.vlessclient.model.ServerConfig;
+import com.vlessclient.model.TlsConfig;
 import com.vlessclient.model.TransportConfig;
 import com.vlessclient.model.TransportType;
-import com.vlessclient.model.TlsConfig;
+import java.util.function.Consumer;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
@@ -17,8 +18,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.function.Consumer;
 
 public class ServerFormController {
 

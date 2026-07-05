@@ -8,14 +8,22 @@ import com.vlessclient.model.ConnectionState;
 import com.vlessclient.model.ProxyMode;
 import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.ServerConfig;
+import com.vlessclient.platform.Autostart;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.CoreUpdateService;
-import com.vlessclient.platform.Autostart;
 import com.vlessclient.service.RoutingService;
 import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.ThemeManager;
 import com.vlessclient.service.UpdateManager;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.ProxySelector;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
@@ -30,15 +38,6 @@ import javafx.scene.shape.Circle;
 import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.ProxySelector;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
 
 /**
  * Controller for the Settings view.

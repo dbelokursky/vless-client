@@ -6,11 +6,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.platform.PlatformPaths;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +13,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ConfigStore {
 

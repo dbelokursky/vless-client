@@ -5,6 +5,8 @@ import com.vlessclient.model.ServerConfig;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.ShareLinkExporter;
 import com.vlessclient.service.ShareLinkParser;
+import java.io.IOException;
+import java.util.Optional;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -28,9 +30,6 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.util.Optional;
 
 public class ServersViewController {
 
