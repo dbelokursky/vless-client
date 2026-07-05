@@ -141,11 +141,11 @@ jobs:
           git tag -f "$TAG"
           git push --force origin "$TAG"
           {
-            echo "Автосборка последнего мержа в main (macOS DMG + Windows MSI + Linux DEB)."
+            echo "Auto-build of the newest merge to main (macOS DMG + Windows MSI + Linux DEB)."
             echo
-            echo "- Коммит: ${GITHUB_SHA}"
-            echo "- Ран: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "- Проверки: mvn clean verify -Psmoke на macOS, Windows и Linux (полные тесты + smoke на реальном sing-box)"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Checks: mvn clean verify -Psmoke on macOS, Windows and Linux (full tests + smoke on the real sing-box)"
           } > release-notes.md
           gh release delete "$TAG" --yes || true
           gh release create "$TAG" dist/*.dmg dist/*.msi dist/*.deb \
