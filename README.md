@@ -29,19 +29,13 @@ Ready-made installers are on the
 
 | OS | File | Note |
 |---|---|---|
-| macOS (Apple Silicon) | `VLESS.Client-1.x.y.dmg` | why `1.x.y` — [see below](#why-is-the-dmg-named-1xy-when-the-release-is-0xy) |
+| macOS (Apple Silicon) | `VLESS.Client-x.y.z.dmg` | |
 | Windows 10/11 (x64) | `VLESS.Client-x.y.z.msi` | installs per-user, no admin rights needed |
 | Debian/Ubuntu (amd64) | `vless-client_x.y.z_amd64.deb` | |
 
 A build of the newest merge to `main` (possibly rough) lives in the
 [**dev-latest**](https://github.com/dbelokursky/vless-client/releases/tag/dev-latest)
 prerelease.
-
-#### Why is the DMG named `1.x.y` when the release is `0.x.y`?
-
-macOS rejects bundle versions with a zero major, so the DMG file name gets its
-major bumped by one: release **v0.2.0** → file `VLESS.Client-1.2.0.dmg`. Same
-app, same version.
 
 ---
 

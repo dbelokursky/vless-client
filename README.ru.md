@@ -29,18 +29,12 @@ VLESS/VMess/Trojan/Shadowsocks на JavaFX — оборачивает
 
 | ОС | Файл | Примечание |
 |---|---|---|
-| macOS (Apple Silicon) | `VLESS.Client-1.x.y.dmg` | почему `1.x.y` — [см. ниже](#почему-dmg-называется-1xy-а-релиз-0xy) |
+| macOS (Apple Silicon) | `VLESS.Client-x.y.z.dmg` | |
 | Windows 10/11 (x64) | `VLESS.Client-x.y.z.msi` | ставится per-user, без прав администратора |
 | Debian/Ubuntu (amd64) | `vless-client_x.y.z_amd64.deb` | |
 
 Сборка самого свежего мержа в `main` (может быть сырой) — в prerelease
 [**dev-latest**](https://github.com/dbelokursky/vless-client/releases/tag/dev-latest).
-
-#### Почему DMG называется `1.x.y`, а релиз `0.x.y`?
-
-macOS не принимает версию бандла с нулевым major, поэтому в имени DMG major
-поднят на единицу: релиз **v0.2.0** → файл `VLESS.Client-1.2.0.dmg`. Это то же
-приложение той же версии.
 
 ---
 

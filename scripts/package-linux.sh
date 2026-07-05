@@ -9,7 +9,7 @@
 #   scripts/package-linux.sh <app-version-label> [deb-version]
 #
 #   app-version-label — human-readable version passed to the app via
-#                       -Dapp.version (e.g. "0.2.0" or "0.1.0-dev-abc1234")
+#                       -Dapp.version (e.g. "1.0.0" or "1.0.0-dev-abc1234")
 #   deb-version       — Debian package Version field. Defaults to the label,
 #                       which Debian's permissive version grammar accepts for
 #                       both release (x.y.z) and dev labels.
@@ -33,7 +33,7 @@ fi
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
 
-JAR_NAME="vless-client-0.1.0-SNAPSHOT.jar"
+JAR_NAME="vless-client-1.0.0-SNAPSHOT.jar"
 if [[ ! -f "target/${JAR_NAME}" ]]; then
     echo "[package-linux] missing target/${JAR_NAME} — run 'mvn package' first" >&2
     exit 1

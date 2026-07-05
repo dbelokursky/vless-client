@@ -7,7 +7,7 @@
 
 .PARAMETER Version
     Human-readable version passed to the app via -Dapp.version
-    (e.g. "0.2.0" or "0.1.0-dev-abc1234").
+    (e.g. "1.0.0" or "1.0.0-dev-abc1234").
 
 .PARAMETER MsiVersion
     Numeric x.y.z for the MSI ProductVersion (WiX rejects anything else).
@@ -44,7 +44,7 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 Set-Location $repoRoot
 
-$jarName = 'vless-client-0.1.0-SNAPSHOT.jar'
+$jarName = 'vless-client-1.0.0-SNAPSHOT.jar'
 if (-not (Test-Path "target/$jarName")) {
     throw "[package-windows] missing target/$jarName -- run 'mvn package' first"
 }

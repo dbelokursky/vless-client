@@ -8,19 +8,19 @@
 #   scripts/package-dmg.sh <app-version-label> [cfbundle-version]
 #
 #   app-version-label — human-readable version passed to the app via
-#                       -Dapp.version (e.g. "0.2.0" or "0.1.0-dev-abc1234")
-#   cfbundle-version  — numeric x.y.z for macOS CFBundleVersion. Defaults to
-#                       the label with a zero major normalised to 1
+#                       -Dapp.version (e.g. "1.0.0" or "1.0.0-dev-abc1234")
+#   cfbundle-version  — numeric x.y.z for macOS CFBundleVersion, major >= 1
 #                       ("The first number in an app-version cannot be zero
-#                       or negative"), which only works for plain x.y.z
-#                       labels — dev builds must pass this explicitly.
+#                       or negative"). Defaults to the label, which only works
+#                       for plain x.y.z labels — dev builds must pass this
+#                       explicitly.
 #
 # Expects `mvn package` to have produced the shaded JAR already.
 #
 set -euo pipefail
 
 VERSION="${1:?usage: $0 <app-version-label> [cfbundle-version]}"
-MAC_VERSION="${2:-$(echo "${VERSION}" | sed 's/^0\./1./')}"
+MAC_VERSION="${2:-${VERSION}}"
 
 if ! [[ "${MAC_VERSION}" =~ ^[1-9][0-9]*(\.[0-9]+){0,2}$ ]]; then
     echo "[package-dmg] CFBundle version '${MAC_VERSION}' is not a valid" >&2
@@ -31,7 +31,7 @@ fi
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
 
-JAR_NAME="vless-client-0.1.0-SNAPSHOT.jar"
+JAR_NAME="vless-client-1.0.0-SNAPSHOT.jar"
 if [[ ! -f "target/${JAR_NAME}" ]]; then
     echo "[package-dmg] missing target/${JAR_NAME} — run 'mvn package' first" >&2
     exit 1

@@ -64,7 +64,7 @@ jobs:
           distribution: 'temurin'
       - run: mvn -B package -DskipTests
       - name: Package DMG
-        run: scripts/package-dmg.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "1.0.${{ github.run_number }}"
+        run: scripts/package-dmg.sh "1.0.0-dev-${GITHUB_SHA:0:7}" "1.0.${{ github.run_number }}"
       - uses: actions/upload-artifact@v4
         with:
           name: vless-client-${{ github.sha }}
@@ -84,7 +84,7 @@ jobs:
           distribution: 'temurin'
       - run: mvn -B package -DskipTests
       - name: Package MSI
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -Version "0.1.0-dev-$($env:GITHUB_SHA.Substring(0,7))" -MsiVersion "1.0.${{ github.run_number }}"
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -Version "1.0.0-dev-$($env:GITHUB_SHA.Substring(0,7))" -MsiVersion "1.0.${{ github.run_number }}"
       - uses: actions/upload-artifact@v4
         with:
           name: vless-client-windows-${{ github.sha }}
@@ -104,7 +104,7 @@ jobs:
           distribution: 'temurin'
       - run: mvn -B package -DskipTests
       - name: Package DEB
-        run: scripts/package-linux.sh "0.1.0-dev-${GITHUB_SHA:0:7}" "0.1.0+dev${{ github.run_number }}"
+        run: scripts/package-linux.sh "1.0.0-dev-${GITHUB_SHA:0:7}" "1.0.0+dev${{ github.run_number }}"
       - uses: actions/upload-artifact@v4
         with:
           name: vless-client-linux-${{ github.sha }}
