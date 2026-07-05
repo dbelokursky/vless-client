@@ -8,8 +8,6 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
-<?import javafx.scene.layout.GridPane?>
-<?import javafx.scene.layout.ColumnConstraints?>
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.Priority?>
 <?import javafx.scene.shape.Circle?>
@@ -84,16 +82,12 @@
     <!-- Real-time traffic section -->
     <Label text="Real-time traffic" styleClass="section-header"/>
 
-    <GridPane hgap="16" vgap="16">
-        <columnConstraints>
-            <ColumnConstraints hgrow="ALWAYS" percentWidth="50"/>
-            <ColumnConstraints hgrow="ALWAYS" percentWidth="50"/>
-        </columnConstraints>
-
+    <!-- Upload above Download so the ↑/↓ arrows line up one under the other
+         and each sparkline gets the full width. -->
+    <VBox spacing="16">
         <!-- Upload card with sparkline -->
         <VBox styleClass="card, traffic-card, upload-card" spacing="6"
-              alignment="CENTER_LEFT"
-              GridPane.columnIndex="0" GridPane.rowIndex="0">
+              alignment="CENTER_LEFT" maxWidth="Infinity">
             <padding>
                 <Insets top="14" right="18" bottom="14" left="20"/>
             </padding>
@@ -108,8 +102,7 @@
 
         <!-- Download card with sparkline -->
         <VBox styleClass="card, traffic-card, download-card" spacing="6"
-              alignment="CENTER_LEFT"
-              GridPane.columnIndex="1" GridPane.rowIndex="0">
+              alignment="CENTER_LEFT" maxWidth="Infinity">
             <padding>
                 <Insets top="14" right="18" bottom="14" left="20"/>
             </padding>
@@ -121,7 +114,7 @@
             </HBox>
             <Sparkline fx:id="downloadSparkline" prefHeight="52"/>
         </VBox>
-    </GridPane>
+    </VBox>
 
     <!-- Session totals + latency. Session metrics and the Test Latency button
          sit on the top row; latency results are listed one-per-server below,
