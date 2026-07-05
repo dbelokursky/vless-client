@@ -29,8 +29,8 @@ Ready-made installers are on the
 
 | OS | File | Note |
 |---|---|---|
-| macOS (Apple Silicon) | `VLESS.Client-x.y.z.dmg` | |
-| Windows 10/11 (x64) | `VLESS.Client-x.y.z.msi` | installs per-user, no admin rights needed |
+| macOS (Apple Silicon) | `vless-client_x.y.z.dmg` | |
+| Windows 10/11 (x64) | `vless-client_x.y.z.msi` | installs per-user, no admin rights needed |
 | Debian/Ubuntu (amd64) | `vless-client_x.y.z_amd64.deb` | |
 
 A build of the newest merge to `main` (possibly rough) lives in the

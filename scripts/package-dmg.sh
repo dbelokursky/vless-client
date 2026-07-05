@@ -57,4 +57,11 @@ jpackage \
     --java-options "-Dapp.version=${VERSION}" \
     --verbose
 
-echo "[package-dmg] built: $(ls dist/*.dmg) (app-version=${VERSION}, CFBundleVersion=${MAC_VERSION})"
+# Normalise the file name. jpackage names the DMG after --name
+# ("VLESS Client-<v>.dmg"); rename it to the lowercase form the .deb already
+# uses so all three installers share one scheme. Only the file on the Releases
+# page changes — the .app's display name stays "VLESS Client".
+ASSET="dist/vless-client_${MAC_VERSION}.dmg"
+mv dist/*.dmg "${ASSET}"
+
+echo "[package-dmg] built: ${ASSET} (app-version=${VERSION}, CFBundleVersion=${MAC_VERSION})"

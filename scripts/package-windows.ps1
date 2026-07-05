@@ -81,4 +81,10 @@ $msi = Get-ChildItem dist -Filter '*.msi' | Select-Object -First 1
 if (-not $msi) {
     throw '[package-windows] jpackage reported success but no MSI in dist/'
 }
-Write-Host "[package-windows] built: $($msi.FullName) (app-version=$Version, ProductVersion=$MsiVersion)"
+# Normalise the file name. jpackage names the MSI after --name
+# ("VLESS Client-<v>.msi"); rename it to the lowercase form the .deb already
+# uses so all three installers share one scheme. Only the file on the Releases
+# page changes -- the installed app's display name stays "VLESS Client".
+$asset = Join-Path 'dist' "vless-client_$MsiVersion.msi"
+Move-Item -Force $msi.FullName $asset
+Write-Host "[package-windows] built: $asset (app-version=$Version, ProductVersion=$MsiVersion)"
