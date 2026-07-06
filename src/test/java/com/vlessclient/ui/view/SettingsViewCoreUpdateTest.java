@@ -35,6 +35,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class SettingsViewCoreUpdateTest extends ApplicationTest {
 
     private static FakeCoreUpdateService fake;
+    /** App-update checks performed by the fake UpdateManager. */
+    private static final java.util.concurrent.atomic.AtomicInteger appChecks =
+            new java.util.concurrent.atomic.AtomicInteger();
+    private static SettingsViewController controller;
 
     @BeforeAll
     static void setupHeadless() throws IOException {
@@ -55,6 +59,7 @@ public class SettingsViewCoreUpdateTest extends ApplicationTest {
         ServiceLocator.register(UpdateManager.class, new UpdateManager() {
             @Override
             public void checkForUpdates() {
+                appChecks.incrementAndGet();
             }
 
             @Override
@@ -79,6 +84,7 @@ public class SettingsViewCoreUpdateTest extends ApplicationTest {
 
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/SettingsView.fxml"));
         Parent root = loader.load();
+        controller = loader.getController();
         stage.setScene(new Scene(root, 800, 600));
         stage.show();
     }
@@ -92,6 +98,21 @@ public class SettingsViewCoreUpdateTest extends ApplicationTest {
         assertThat(lookup("#appUpdateDot").query().getStyleClass())
                 .contains("status-circle-connected");
         assertThat(lookup("#downloadAppButton").query().isVisible()).isFalse();
+    }
+
+    @Test
+    void reopeningSettingsRefreshesTheAppRow_throttledOnSecondShow() throws Exception {
+        // MainViewController caches views, so onViewShown() must re-run the
+        // app check — otherwise a release published after the last check
+        // stays invisible until the button is pressed (seen with v1.1.0).
+        int before = appChecks.get();
+        interact(() -> controller.onViewShown());
+        awaitStatus(() -> appChecks.get() == before + 1);
+
+        // An immediate re-show is throttled: no second network hit.
+        interact(() -> controller.onViewShown());
+        WaitForAsyncUtils.waitForFxEvents();
+        assertThat(appChecks.get()).isEqualTo(before + 1);
     }
 
     @Test

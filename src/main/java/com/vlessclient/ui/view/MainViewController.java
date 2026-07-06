@@ -221,6 +221,12 @@ public class MainViewController {
                 wrapper.getStyleClass().add("content-scroll");
                 contentArea.getChildren().setAll(wrapper);
                 setActiveButton(navButton);
+                // Cached views are re-shown without re-initializing; give the
+                // controller a chance to refresh state that went stale.
+                Object controller = controllerCache.get(viewName);
+                if (controller instanceof ViewShownAware shown) {
+                    shown.onViewShown();
+                }
             }
         } catch (Exception e) {
             log.error("Failed to switch to view: {}", viewName, e);
