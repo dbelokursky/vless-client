@@ -1,8 +1,13 @@
 # Linux support — implementation plan
 
-Status: proposal. Target: a functional Linux build alongside macOS and
-Windows, shipped incrementally so `main` stays green and both existing
-platforms keep working at every step.
+Status: shipped (2026-07). Linux is built and packaged in CI
+(`ubuntu-latest` jobs in build.yml, `package-linux.sh`) and published on the
+Releases page. Kept for the design rationale; the "Risks & open questions"
+section below still applies to non-GNOME desktops and non-deb distros.
+
+Original target: a functional Linux build alongside macOS and Windows,
+shipped incrementally so `main` stays green and both existing platforms
+keep working at every step.
 
 ## Goal & scope
 

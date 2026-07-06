@@ -1,6 +1,10 @@
 # Windows support — implementation plan
 
-Status: proposal. Target: a functional Windows build alongside macOS, shipped
+Status: shipped (2026-07). Windows is built and packaged in CI
+(`windows-latest` jobs in build.yml, `package-windows.ps1`) and published on
+the Releases page. Kept for the design rationale and the porting playbook.
+
+Original target: a functional Windows build alongside macOS, shipped
 incrementally so `main` stays green and macOS keeps working at every step.
 
 ## Goal & scope
