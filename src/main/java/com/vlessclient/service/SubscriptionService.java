@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.Subscription;
+import com.vlessclient.platform.SecretSealer;
+import com.vlessclient.platform.SecretSealers;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -43,6 +45,7 @@ public class SubscriptionService {
     private final ConfigStore configStore;
     private final ShareLinkParser shareLinkParser;
     private final HttpClient httpClient;
+    private final SecretSealer sealer;
     private final Object lifecycleLock = new Object();
     private ScheduledExecutorService scheduler;
 
@@ -59,15 +62,26 @@ public class SubscriptionService {
                 HttpClient.newBuilder()
                         .connectTimeout(Duration.ofSeconds(15))
                         .followRedirects(HttpClient.Redirect.NORMAL)
-                        .build());
+                        .build(),
+                SecretSealers.forCurrentPlatform());
+    }
+
+    /**
+     * Test seam: sealing disabled so test suites never write into the real
+     * OS keychain. Production always goes through the public constructor.
+     */
+    SubscriptionService(ConfigStore configStore, ShareLinkParser shareLinkParser,
+                         Path dataDir, HttpClient httpClient) {
+        this(configStore, shareLinkParser, dataDir, httpClient, SecretSealers.disabled());
     }
 
     SubscriptionService(ConfigStore configStore, ShareLinkParser shareLinkParser,
-                         Path dataDir, HttpClient httpClient) {
+                         Path dataDir, HttpClient httpClient, SecretSealer sealer) {
         this.configStore = configStore;
         this.shareLinkParser = shareLinkParser;
         this.dataDir = dataDir;
         this.httpClient = httpClient;
+        this.sealer = sealer;
         this.objectMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
         this.subscriptions = FXCollections.observableArrayList();
         loadSubscriptions();
@@ -108,6 +122,7 @@ public class SubscriptionService {
         }
         subscriptions.remove(sub);
         saveSubscriptions();
+        Thread.startVirtualThread(() -> sealer.delete(urlSecretKey(sub.getId())));
         log.info("Removed subscription '{}' and {} servers",
                 sub.getName(), sub.getServerIds().size());
     }
@@ -358,10 +373,55 @@ public class SubscriptionService {
     synchronized void saveSubscriptions() {
         Path file = dataDir.resolve(SUBSCRIPTIONS_FILE);
         try {
-            objectMapper.writeValue(file.toFile(), new ArrayList<>(subscriptions));
+            objectMapper.writeValue(file.toFile(), serializableSubscriptions());
         } catch (IOException e) {
             log.error("Failed to save subscriptions to {}", file, e);
         }
+    }
+
+    /**
+     * The on-disk view of the subscription list. Subscription URLs usually
+     * embed the account token, so they get the same treatment as server
+     * credentials: plaintext in memory, sealed in the file when secure
+     * storage is enabled and a backend is available. A failed seal keeps the
+     * plaintext — a readable config always wins over a lost URL.
+     */
+    private List<Subscription> serializableSubscriptions() {
+        boolean sealing = configStore.getSettings().isStoreSecretsSecurely()
+                && sealer.isAvailable();
+        if (!sealing) {
+            return new ArrayList<>(subscriptions);
+        }
+        List<Subscription> out = new ArrayList<>(subscriptions.size());
+        for (Subscription live : subscriptions) {
+            String url = live.getUrl();
+            if (url == null || url.isBlank() || SecretSealer.isSealed(url)) {
+                out.add(live);
+                continue;
+            }
+            String sealed = sealer.seal(urlSecretKey(live.getId()), url);
+            if (sealed == null) {
+                log.warn("Could not seal URL for subscription '{}'; keeping plaintext",
+                        live.getName());
+                out.add(live);
+                continue;
+            }
+            try {
+                Subscription copy = objectMapper.readValue(
+                        objectMapper.writeValueAsString(live), Subscription.class);
+                copy.setUrl(sealed);
+                out.add(copy);
+            } catch (IOException e) {
+                log.warn("Could not copy subscription '{}' for sealing; keeping plaintext",
+                        live.getName(), e);
+                out.add(live);
+            }
+        }
+        return out;
+    }
+
+    private static String urlSecretKey(String subscriptionId) {
+        return subscriptionId + ".url";
     }
 
     private void loadSubscriptions() {
@@ -373,10 +433,29 @@ public class SubscriptionService {
         try {
             List<Subscription> loaded = objectMapper.readValue(
                     file.toFile(), new TypeReference<List<Subscription>>() {});
+            loaded.forEach(this::unsealInPlace);
             subscriptions.addAll(loaded);
             log.info("Loaded {} subscriptions from {}", subscriptions.size(), file);
         } catch (IOException e) {
             log.error("Failed to load subscriptions from {}", file, e);
         }
+    }
+
+    /**
+     * Restores the in-memory plaintext URL for a sealed subscription. On
+     * failure the tag is kept so the entry stays visible; refreshing will
+     * fail until the URL is re-entered or the backend entry reappears.
+     */
+    private void unsealInPlace(Subscription subscription) {
+        String stored = subscription.getUrl();
+        if (!SecretSealer.isSealed(stored)) {
+            return;
+        }
+        sealer.unseal(urlSecretKey(subscription.getId()), stored).ifPresentOrElse(
+                subscription::setUrl,
+                () -> log.error(
+                        "Could not unseal the URL for subscription '{}' ({}); "
+                                + "re-add it or restore the secret backend entry",
+                        subscription.getName(), subscription.getId()));
     }
 }

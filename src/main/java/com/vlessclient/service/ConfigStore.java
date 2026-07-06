@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.vlessclient.model.AppSettings;
+import com.vlessclient.model.Protocol;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.platform.PlatformPaths;
 import com.vlessclient.platform.SecretSealer;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import org.slf4j.Logger;
@@ -38,11 +40,15 @@ public class ConfigStore {
     private AppSettings settings;
 
     public ConfigStore() {
-        this(PlatformPaths.current().dataDir());
+        this(PlatformPaths.current().dataDir(), SecretSealers.forCurrentPlatform());
     }
 
+    /**
+     * Test seam: sealing disabled so test suites never write into the real
+     * OS keychain. Production always goes through the no-arg constructor.
+     */
     ConfigStore(Path dataDir) {
-        this(dataDir, SecretSealers.forCurrentPlatform());
+        this(dataDir, SecretSealers.disabled());
     }
 
     ConfigStore(Path dataDir, SecretSealer sealer) {
@@ -94,7 +100,10 @@ public class ConfigStore {
             saveServers();
             // Off the caller's (usually FX) thread; a leftover entry is inert
             // if this races or fails.
-            Thread.startVirtualThread(() -> sealer.delete(secretKey(serverId)));
+            Thread.startVirtualThread(() -> {
+                sealer.delete(secretKey(serverId, "uuid"));
+                sealer.delete(secretKey(serverId, "flow"));
+            });
         } else {
             log.warn("Server not found for removal: {}", serverId);
         }
@@ -173,24 +182,31 @@ public class ConfigStore {
      */
     private List<ServerConfig> serializableServers() {
         boolean sealing = settings.isStoreSecretsSecurely() && sealer.isAvailable();
+        if (!sealing) {
+            return new ArrayList<>(servers);
+        }
         List<ServerConfig> out = new ArrayList<>(servers.size());
         for (ServerConfig live : servers) {
-            String uuid = live.getUuid();
-            if (!sealing || uuid == null || uuid.isBlank() || SecretSealer.isSealed(uuid)) {
-                out.add(live);
-                continue;
-            }
-            String sealed = sealer.seal(secretKey(live.getId()), uuid);
-            if (sealed == null) {
-                log.warn("Could not seal credential for server '{}'; keeping plaintext",
-                        live.getName());
+            // uuid carries the credential for every protocol; flow is only a
+            // secret for Hysteria2 (obfs password) — for VLESS it holds the
+            // public flow-control mode and must stay readable.
+            String sealedUuid = sealValue(live, live.getUuid(), "uuid");
+            String sealedFlow = live.getProtocol() == Protocol.HYSTERIA2
+                    ? sealValue(live, live.getFlow(), "flow")
+                    : null;
+            if (sealedUuid == null && sealedFlow == null) {
                 out.add(live);
                 continue;
             }
             try {
                 ServerConfig copy = objectMapper.readValue(
                         objectMapper.writeValueAsString(live), ServerConfig.class);
-                copy.setUuid(sealed);
+                if (sealedUuid != null) {
+                    copy.setUuid(sealedUuid);
+                }
+                if (sealedFlow != null) {
+                    copy.setFlow(sealedFlow);
+                }
                 out.add(copy);
             } catch (IOException e) {
                 log.warn("Could not copy server '{}' for sealing; keeping plaintext",
@@ -201,8 +217,21 @@ public class ConfigStore {
         return out;
     }
 
-    private static String secretKey(String serverId) {
-        return serverId + ".uuid";
+    /** Seals one field's value; null when there is nothing to seal or it failed. */
+    private String sealValue(ServerConfig live, String value, String field) {
+        if (value == null || value.isBlank() || SecretSealer.isSealed(value)) {
+            return null;
+        }
+        String sealed = sealer.seal(secretKey(live.getId(), field), value);
+        if (sealed == null) {
+            log.warn("Could not seal {} for server '{}'; keeping plaintext",
+                    field, live.getName());
+        }
+        return sealed;
+    }
+
+    private static String secretKey(String serverId, String field) {
+        return serverId + "." + field;
     }
 
     private void ensureDataDir() {
@@ -237,16 +266,21 @@ public class ConfigStore {
      * connecting will fail until the credential is re-entered.
      */
     private void unsealInPlace(ServerConfig server) {
-        String stored = server.getUuid();
+        unsealField(server, server.getUuid(), "uuid", server::setUuid);
+        unsealField(server, server.getFlow(), "flow", server::setFlow);
+    }
+
+    private void unsealField(ServerConfig server, String stored, String field,
+                             Consumer<String> setter) {
         if (!SecretSealer.isSealed(stored)) {
             return;
         }
-        sealer.unseal(secretKey(server.getId()), stored).ifPresentOrElse(
-                server::setUuid,
+        sealer.unseal(secretKey(server.getId(), field), stored).ifPresentOrElse(
+                setter,
                 () -> log.error(
-                        "Could not unseal the credential for server '{}' ({}); "
+                        "Could not unseal {} for server '{}' ({}); "
                                 + "re-enter it or restore the secret backend entry",
-                        server.getName(), server.getId()));
+                        field, server.getName(), server.getId()));
     }
 
     private void loadSettings() {
