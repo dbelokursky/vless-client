@@ -256,15 +256,18 @@
                         <configuration>
                             <rules>
                                 <rule>
-                                    <!-- Floor, not target: bundle line coverage
-                                         was 54.6% when introduced (2026-07);
-                                         raise the minimum as coverage grows. -->
+                                    <!-- Floor, not target. Coverage differs by
+                                         OS (some TestFX/UI tests are skipped
+                                         off-macOS): at introduction (2026-07)
+                                         macOS measured 54.6%, Windows 46% —
+                                         the floor must clear the lowest
+                                         platform. Raise it as coverage grows. -->
                                     <element>BUNDLE</element>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.50</minimum>
+                                            <minimum>0.40</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
