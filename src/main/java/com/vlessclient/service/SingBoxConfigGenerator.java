@@ -12,15 +12,17 @@ import com.vlessclient.model.ProxyMode;
 import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.RoutingRule;
 import com.vlessclient.model.ServerConfig;
-import com.vlessclient.model.TlsConfig;
-import com.vlessclient.model.TransportConfig;
-import com.vlessclient.model.TransportType;
+import com.vlessclient.service.outbound.Hysteria2OutboundBuilder;
+import com.vlessclient.service.outbound.ShadowsocksOutboundBuilder;
+import com.vlessclient.service.outbound.TrojanOutboundBuilder;
+import com.vlessclient.service.outbound.VlessOutboundBuilder;
+import com.vlessclient.service.outbound.VmessOutboundBuilder;
+import com.vlessclient.service.outbound.WireguardEndpointBuilder;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +34,10 @@ import org.slf4j.LoggerFactory;
  * <p>Emits the sing-box 1.13 schema: log, DNS, inbounds (TUN/SOCKS/HTTP),
  * outbounds or a WireGuard endpoint, routing rules with remote rule-sets, and
  * the experimental Clash API / cache-file blocks.</p>
+ *
+ * <p>Per-protocol outbound/endpoint construction is delegated to the builders
+ * in {@code com.vlessclient.service.outbound}; this class keeps the document
+ * assembly (log, DNS, inbounds, route, experimental).</p>
  */
 public class SingBoxConfigGenerator {
 
@@ -39,6 +45,12 @@ public class SingBoxConfigGenerator {
 
     private final ObjectMapper mapper;
     private final com.vlessclient.platform.SystemProxySupport systemProxySupport;
+    private final VlessOutboundBuilder vlessBuilder;
+    private final VmessOutboundBuilder vmessBuilder;
+    private final TrojanOutboundBuilder trojanBuilder;
+    private final ShadowsocksOutboundBuilder shadowsocksBuilder;
+    private final Hysteria2OutboundBuilder hysteria2Builder;
+    private final WireguardEndpointBuilder wireguardBuilder;
 
     public SingBoxConfigGenerator() {
         this(com.vlessclient.platform.SystemProxySupport.current());
@@ -49,6 +61,12 @@ public class SingBoxConfigGenerator {
         this.mapper = new ObjectMapper();
         this.mapper.enable(SerializationFeature.INDENT_OUTPUT);
         this.systemProxySupport = systemProxySupport;
+        this.vlessBuilder = new VlessOutboundBuilder(mapper);
+        this.vmessBuilder = new VmessOutboundBuilder(mapper);
+        this.trojanBuilder = new TrojanOutboundBuilder(mapper);
+        this.shadowsocksBuilder = new ShadowsocksOutboundBuilder(mapper);
+        this.hysteria2Builder = new Hysteria2OutboundBuilder(mapper);
+        this.wireguardBuilder = new WireguardEndpointBuilder(mapper);
     }
 
     public String generate(ServerConfig server, AppSettings settings) {
@@ -82,7 +100,7 @@ public class SingBoxConfigGenerator {
         // route.final and dns detour references resolve to it unchanged.
         if (server.getProtocol() == Protocol.WIREGUARD) {
             ArrayNode endpoints = mapper.createArrayNode();
-            endpoints.add(buildWireguardEndpoint(server));
+            endpoints.add(wireguardBuilder.build(server));
             root.set("endpoints", endpoints);
         }
         root.set("outbounds", buildOutbounds(server));
@@ -489,261 +507,14 @@ public class SingBoxConfigGenerator {
 
     private ObjectNode buildProxyOutbound(ServerConfig server) {
         return switch (server.getProtocol()) {
-            case VLESS -> buildVlessOutbound(server);
-            case VMESS -> buildVmessOutbound(server);
-            case TROJAN -> buildTrojanOutbound(server);
-            case SHADOWSOCKS -> buildShadowsocksOutbound(server);
-            case HYSTERIA2 -> buildHysteria2Outbound(server);
+            case VLESS -> vlessBuilder.build(server);
+            case VMESS -> vmessBuilder.build(server);
+            case TROJAN -> trojanBuilder.build(server);
+            case SHADOWSOCKS -> shadowsocksBuilder.build(server);
+            case HYSTERIA2 -> hysteria2Builder.build(server);
             case WIREGUARD -> throw new IllegalStateException(
                     "WireGuard is emitted as an endpoint, not an outbound");
         };
-    }
-
-    private ObjectNode buildVlessOutbound(ServerConfig server) {
-        ObjectNode outbound = mapper.createObjectNode();
-        outbound.put("type", "vless");
-        outbound.put("tag", "proxy");
-        outbound.put("server", server.getAddress());
-        outbound.put("server_port", server.getPort());
-        outbound.put("uuid", server.getUuid());
-
-        if (server.getFlow() != null && !server.getFlow().isEmpty()) {
-            outbound.put("flow", server.getFlow());
-        }
-
-        addTlsIfEnabled(outbound, server.getTls());
-        addTransportIfNeeded(outbound, server.getTransport());
-
-        return outbound;
-    }
-
-    private ObjectNode buildVmessOutbound(ServerConfig server) {
-        ObjectNode outbound = mapper.createObjectNode();
-        outbound.put("type", "vmess");
-        outbound.put("tag", "proxy");
-        outbound.put("server", server.getAddress());
-        outbound.put("server_port", server.getPort());
-        outbound.put("uuid", server.getUuid());
-        outbound.put("alter_id", 0);
-        outbound.put("security", "auto");
-
-        addTlsIfEnabled(outbound, server.getTls());
-        addTransportIfNeeded(outbound, server.getTransport());
-
-        return outbound;
-    }
-
-    private ObjectNode buildTrojanOutbound(ServerConfig server) {
-        ObjectNode outbound = mapper.createObjectNode();
-        outbound.put("type", "trojan");
-        outbound.put("tag", "proxy");
-        outbound.put("server", server.getAddress());
-        outbound.put("server_port", server.getPort());
-        outbound.put("password", server.getUuid());
-
-        addTlsIfEnabled(outbound, server.getTls());
-        addTransportIfNeeded(outbound, server.getTransport());
-
-        return outbound;
-    }
-
-    private ObjectNode buildShadowsocksOutbound(ServerConfig server) {
-        ObjectNode outbound = mapper.createObjectNode();
-        outbound.put("type", "shadowsocks");
-        outbound.put("tag", "proxy");
-        outbound.put("server", server.getAddress());
-        outbound.put("server_port", server.getPort());
-        outbound.put("method", server.getEncryption());
-        outbound.put("password", server.getUuid());
-
-        return outbound;
-    }
-
-    private ObjectNode buildHysteria2Outbound(ServerConfig server) {
-        ObjectNode outbound = mapper.createObjectNode();
-        outbound.put("type", "hysteria2");
-        outbound.put("tag", "proxy");
-        outbound.put("server", server.getAddress());
-        outbound.put("server_port", server.getPort());
-        outbound.put("password", server.getUuid());
-
-        if (server.getFlow() != null && !server.getFlow().isEmpty()) {
-            ObjectNode obfs = mapper.createObjectNode();
-            obfs.put("type", "salamander");
-            obfs.put("password", server.getFlow());
-            outbound.set("obfs", obfs);
-        }
-
-        addTlsIfEnabled(outbound, server.getTls());
-
-        return outbound;
-    }
-
-    /**
-     * Builds a WireGuard endpoint (sing-box 1.11+ schema; the legacy
-     * {@code wireguard} outbound was removed in 1.13). Field sources keep the
-     * ServerConfig mapping the legacy outbound used: uuid → private_key,
-     * encryption → peer public_key, flow → interface address,
-     * tls.serverName → reserved bytes.
-     */
-    private ObjectNode buildWireguardEndpoint(ServerConfig server) {
-        ObjectNode endpoint = mapper.createObjectNode();
-        endpoint.put("type", "wireguard");
-        endpoint.put("tag", "proxy");
-
-        if (server.getFlow() != null && !server.getFlow().isBlank()) {
-            ArrayNode address = mapper.createArrayNode();
-            address.add(server.getFlow().trim());
-            endpoint.set("address", address);
-        }
-
-        endpoint.put("private_key", server.getUuid());
-
-        ObjectNode peer = mapper.createObjectNode();
-        peer.put("address", server.getAddress());
-        peer.put("port", server.getPort());
-
-        if (server.getEncryption() != null && !server.getEncryption().isEmpty()
-                && !"none".equals(server.getEncryption())) {
-            peer.put("public_key", server.getEncryption());
-        }
-
-        // The legacy single-peer outbound implicitly routed everything through
-        // the peer; the endpoint schema makes allowed_ips explicit.
-        ArrayNode allowedIps = mapper.createArrayNode();
-        allowedIps.add("0.0.0.0/0");
-        allowedIps.add("::/0");
-        peer.set("allowed_ips", allowedIps);
-
-        ArrayNode reserved = parseReservedBytes(server);
-        if (reserved != null) {
-            peer.set("reserved", reserved);
-        }
-
-        ArrayNode peers = mapper.createArrayNode();
-        peers.add(peer);
-        endpoint.set("peers", peers);
-
-        return endpoint;
-    }
-
-    /**
-     * Parses the comma-separated reserved-bytes list (stored in
-     * tls.serverName). sing-box fatally rejects a reserved array that is not
-     * exactly 3 values, and JSON-decodes each value as uint8 — so anything
-     * other than exactly three ints in 0..255 must be dropped entirely,
-     * or the config won't start at all.
-     */
-    private ArrayNode parseReservedBytes(ServerConfig server) {
-        if (server.getTls() == null || server.getTls().getServerName() == null
-                || server.getTls().getServerName().isBlank()) {
-            return null;
-        }
-        ArrayNode reserved = mapper.createArrayNode();
-        for (String part : server.getTls().getServerName().split(",")) {
-            String trimmed = part.trim();
-            if (trimmed.isEmpty()) {
-                continue;
-            }
-            try {
-                int value = Integer.parseInt(trimmed);
-                if (value < 0 || value > 255) {
-                    log.warn("Skipping out-of-range reserved byte value '{}' "
-                            + "for WireGuard server {}", trimmed, server.getAddress());
-                    continue;
-                }
-                reserved.add(value);
-            } catch (NumberFormatException e) {
-                log.warn("Skipping invalid reserved byte value '{}' for WireGuard server {}",
-                        trimmed, server.getAddress());
-            }
-        }
-        if (reserved.size() == 0) {
-            return null;
-        }
-        if (reserved.size() != 3) {
-            log.warn("Ignoring WireGuard reserved bytes for server {}: "
-                    + "need exactly 3 values, got {}", server.getAddress(), reserved.size());
-            return null;
-        }
-        return reserved;
-    }
-
-    private void addTlsIfEnabled(ObjectNode outbound, TlsConfig tls) {
-        if (tls == null || !tls.isEnabled()) {
-            return;
-        }
-
-        ObjectNode tlsNode = mapper.createObjectNode();
-        tlsNode.put("enabled", true);
-
-        if (tls.getServerName() != null && !tls.getServerName().isEmpty()) {
-            tlsNode.put("server_name", tls.getServerName());
-        }
-
-        if (tls.getAlpn() != null && !tls.getAlpn().isEmpty()) {
-            ArrayNode alpnArray = mapper.createArrayNode();
-            for (String a : tls.getAlpn().split(",")) {
-                alpnArray.add(a.trim());
-            }
-            tlsNode.set("alpn", alpnArray);
-        }
-
-        if (tls.getFingerprint() != null && !tls.getFingerprint().isEmpty()) {
-            ObjectNode utls = mapper.createObjectNode();
-            utls.put("enabled", true);
-            utls.put("fingerprint", tls.getFingerprint());
-            tlsNode.set("utls", utls);
-        }
-
-        if (tls.isAllowInsecure()) {
-            tlsNode.put("insecure", true);
-        }
-
-        if (tls.isReality()) {
-            ObjectNode reality = mapper.createObjectNode();
-            reality.put("enabled", true);
-            if (tls.getRealityPublicKey() != null && !tls.getRealityPublicKey().isEmpty()) {
-                reality.put("public_key", tls.getRealityPublicKey());
-            }
-            if (tls.getRealityShortId() != null && !tls.getRealityShortId().isEmpty()) {
-                reality.put("short_id", tls.getRealityShortId());
-            }
-            tlsNode.set("reality", reality);
-        }
-
-        outbound.set("tls", tlsNode);
-    }
-
-    private void addTransportIfNeeded(ObjectNode outbound, TransportConfig transport) {
-        if (transport == null || transport.getType() == TransportType.TCP) {
-            return;
-        }
-
-        ObjectNode transportNode = mapper.createObjectNode();
-        transportNode.put("type", transport.getType().getValue());
-
-        if (transport.getPath() != null && !transport.getPath().isEmpty()) {
-            transportNode.put("path", transport.getPath());
-        }
-
-        if (transport.getHost() != null && !transport.getHost().isEmpty()) {
-            transportNode.put("host", transport.getHost());
-        }
-
-        if (transport.getServiceName() != null && !transport.getServiceName().isEmpty()) {
-            transportNode.put("service_name", transport.getServiceName());
-        }
-
-        if (transport.getHeaders() != null && !transport.getHeaders().isEmpty()) {
-            ObjectNode headersNode = mapper.createObjectNode();
-            for (Map.Entry<String, String> entry : transport.getHeaders().entrySet()) {
-                headersNode.put(entry.getKey(), entry.getValue());
-            }
-            transportNode.set("headers", headersNode);
-        }
-
-        outbound.set("transport", transportNode);
     }
 
     ObjectNode buildRoute(RoutingConfig routingConfig) {

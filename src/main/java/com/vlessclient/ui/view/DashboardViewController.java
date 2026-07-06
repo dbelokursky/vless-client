@@ -4,7 +4,6 @@ import com.vlessclient.app.I18n;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ConnectionState;
-import com.vlessclient.model.HealthCheckTarget;
 import com.vlessclient.model.ProxyMode;
 import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.ServerConfig;
@@ -16,33 +15,26 @@ import com.vlessclient.service.SingBoxConfigGenerator;
 import com.vlessclient.service.SingBoxEngine;
 import com.vlessclient.service.SingBoxInstaller;
 import com.vlessclient.service.TrafficMonitor;
+import com.vlessclient.ui.view.dashboard.AddHealthTargetDialog;
+import com.vlessclient.ui.view.dashboard.HealthCheckCoordinator;
+import com.vlessclient.ui.view.dashboard.LatencyTestSession;
+import com.vlessclient.ui.view.dashboard.TrafficDisplayBinder;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.fxml.FXML;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
-import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
-import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
-import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
@@ -90,24 +82,12 @@ public class DashboardViewController {
 
     private ServerConfig activeServer;
     private SingBoxEngine singBoxEngine;
-    private TrafficMonitor trafficMonitor;
-    private LatencyTester latencyTester;
-    private ServiceReachabilityChecker reachabilityChecker;
 
-    private javafx.animation.Timeline latencyTimeline;
-    private volatile boolean latencyInFlight;
-
-    // Health-check / auto-reconnect state. All mutated only on the FX thread.
-    private javafx.animation.PauseTransition reconnectDelay;
-    // Schedules the next periodic reachability probe while the tunnel is up.
-    private javafx.animation.PauseTransition periodicCheckDelay;
-    private volatile boolean healthCheckInFlight;
-    private int healthGeneration;
-    private int reconnectAttempt;
-    // True while we are tearing down and restarting the tunnel ourselves, so
-    // the self-inflicted DISCONNECTED/ERROR transition is not mistaken for a
-    // user disconnect that should cancel the health loop.
-    private boolean suppressDisconnectHandling;
+    // Extracted Dashboard collaborators; the controller stays the FXML
+    // endpoint and hands each one the few controls it drives.
+    private TrafficDisplayBinder trafficDisplay;
+    private LatencyTestSession latencySession;
+    private HealthCheckCoordinator healthChecks;
 
     /**
      * Wires up services, the connection-state listener, traffic/latency
@@ -123,6 +103,7 @@ public class DashboardViewController {
             singBoxEngine = null;
         }
 
+        TrafficMonitor trafficMonitor;
         try {
             trafficMonitor = ServiceLocator.get(TrafficMonitor.class);
         } catch (IllegalArgumentException e) {
@@ -130,6 +111,7 @@ public class DashboardViewController {
             trafficMonitor = null;
         }
 
+        LatencyTester latencyTester;
         try {
             latencyTester = ServiceLocator.get(LatencyTester.class);
         } catch (IllegalArgumentException e) {
@@ -137,6 +119,7 @@ public class DashboardViewController {
             latencyTester = null;
         }
 
+        ServiceReachabilityChecker reachabilityChecker;
         try {
             reachabilityChecker = ServiceLocator.get(ServiceReachabilityChecker.class);
         } catch (IllegalArgumentException e) {
@@ -144,11 +127,23 @@ public class DashboardViewController {
             reachabilityChecker = null;
         }
 
+        trafficDisplay = new TrafficDisplayBinder(trafficMonitor,
+                uploadSpeedLabel, downloadSpeedLabel, totalUploadLabel, totalDownloadLabel,
+                uploadSparkline, downloadSparkline);
+        latencySession = new LatencyTestSession(latencyTester, testLatencyButton,
+                latencyResultList);
+        // The engine is supplied lazily because onRetryInstallClicked can swap
+        // in a new SingBoxEngine after an in-app install.
+        healthChecks = new HealthCheckCoordinator(
+                new HealthCheckCoordinator.Controls(healthCard, healthSummaryLabel,
+                        serviceStatusList, reconnectBanner, reconnectBannerLabel),
+                reachabilityChecker, () -> singBoxEngine, this::connect, this::disconnect);
+
         initProxyModeCombo();
-        initSparklines();
+        trafficDisplay.initSparklines();
 
         if (trafficMonitor != null) {
-            bindTrafficLabels();
+            trafficDisplay.bindLabels();
         }
 
         try {
@@ -164,8 +159,8 @@ public class DashboardViewController {
             singBoxEngine.connectionStateProperty().addListener(
                     (obs, oldState, newState) -> {
                         updateUi(newState);
-                        handleTrafficMonitor(newState);
-                        handleHealthCheck(newState);
+                        trafficDisplay.onConnectionStateChanged(newState);
+                        healthChecks.onConnectionStateChanged(newState);
                     });
 
             singBoxEngine.errorMessageProperty().addListener(
@@ -177,8 +172,8 @@ public class DashboardViewController {
 
             ConnectionState current = singBoxEngine.connectionStateProperty().get();
             updateUi(current);
-            handleTrafficMonitor(current);
-            handleHealthCheck(current);
+            trafficDisplay.onConnectionStateChanged(current);
+            healthChecks.onConnectionStateChanged(current);
         } else {
             connectionState.addListener((obs, oldState, newState) -> updateUi(newState));
             updateUi(ConnectionState.DISCONNECTED);
@@ -230,8 +225,8 @@ public class DashboardViewController {
                 singBoxEngine.connectionStateProperty().addListener(
                         (obs, oldState, newState) -> {
                             updateUi(newState);
-                            handleTrafficMonitor(newState);
-                            handleHealthCheck(newState);
+                            trafficDisplay.onConnectionStateChanged(newState);
+                            healthChecks.onConnectionStateChanged(newState);
                         });
                 singBoxEngine.errorMessageProperty().addListener(
                         (obs, oldMsg, newMsg) -> {
@@ -246,17 +241,6 @@ public class DashboardViewController {
             refreshSingBoxMissingBanner();
             refreshConnectButtonAvailability();
         });
-    }
-
-    private void initSparklines() {
-        if (uploadSparkline != null) {
-            uploadSparkline.setLineColor(Color.web("#ef6c00"));
-            uploadSparkline.setFillColor(Color.web("#ef6c00", 0.18));
-        }
-        if (downloadSparkline != null) {
-            downloadSparkline.setLineColor(Color.web("#1565c0"));
-            downloadSparkline.setFillColor(Color.web("#1565c0", 0.18));
-        }
     }
 
     private void initProxyModeCombo() {
@@ -317,52 +301,6 @@ public class DashboardViewController {
         }
     }
 
-    private void bindTrafficLabels() {
-        trafficMonitor.uploadSpeedProperty().addListener((obs, oldVal, newVal) -> {
-            long v = newVal.longValue();
-            uploadSpeedLabel.setText(TrafficMonitor.formatSpeed(v));
-            if (uploadSparkline != null) {
-                uploadSparkline.addSample(v);
-            }
-        });
-
-        trafficMonitor.downloadSpeedProperty().addListener((obs, oldVal, newVal) -> {
-            long v = newVal.longValue();
-            downloadSpeedLabel.setText(TrafficMonitor.formatSpeed(v));
-            if (downloadSparkline != null) {
-                downloadSparkline.addSample(v);
-            }
-        });
-
-        trafficMonitor.totalUploadProperty().addListener((obs, oldVal, newVal) ->
-                totalUploadLabel.setText(TrafficMonitor.formatBytes(newVal.longValue())));
-
-        trafficMonitor.totalDownloadProperty().addListener((obs, oldVal, newVal) ->
-                totalDownloadLabel.setText(TrafficMonitor.formatBytes(newVal.longValue())));
-    }
-
-    private void handleTrafficMonitor(ConnectionState state) {
-        if (trafficMonitor == null) {
-            return;
-        }
-        if (state == ConnectionState.CONNECTED) {
-            try {
-                AppSettings settings = ServiceLocator.get(AppSettings.class);
-                trafficMonitor.start(settings.getClashApiPort());
-            } catch (IllegalArgumentException e) {
-                log.warn("Could not get AppSettings for TrafficMonitor");
-            }
-        } else if (state == ConnectionState.DISCONNECTED || state == ConnectionState.ERROR) {
-            trafficMonitor.stop();
-            if (uploadSparkline != null) {
-                uploadSparkline.clear();
-            }
-            if (downloadSparkline != null) {
-                downloadSparkline.clear();
-            }
-        }
-    }
-
     /**
      * Toggles connection state: connects if disconnected, disconnects if connected.
      * Used by keyboard shortcuts.
@@ -406,135 +344,7 @@ public class DashboardViewController {
 
     @FXML
     private void onTestLatencyClicked() {
-        if (latencyTester == null) {
-            showLatencyStatus(I18n.get("dashboard.latency.unavailable"));
-            return;
-        }
-
-        // Toggle: second click stops the running measurement loop.
-        if (latencyTimeline != null) {
-            stopLatencyLoop();
-            return;
-        }
-
-        try {
-            ConfigStore configStore = ServiceLocator.get(ConfigStore.class);
-            List<ServerConfig> servers = configStore.getServers();
-            if (servers.isEmpty()) {
-                showLatencyStatus(I18n.get("dashboard.no.servers"));
-                return;
-            }
-
-            startLatencyLoop(servers);
-        } catch (IllegalArgumentException e) {
-            showLatencyStatus(I18n.get("dashboard.no.servers"));
-        }
-    }
-
-    private void startLatencyLoop(List<ServerConfig> servers) {
-        testLatencyButton.setText(I18n.get("dashboard.stop"));
-        showLatencyStatus(I18n.get("dashboard.testing"));
-
-        // Fire once immediately so the user sees feedback within the first
-        // second, then every second afterwards.
-        tickLatency(servers);
-
-        latencyTimeline = new javafx.animation.Timeline(
-                new javafx.animation.KeyFrame(
-                        javafx.util.Duration.seconds(1),
-                        e -> tickLatency(servers))
-        );
-        latencyTimeline.setCycleCount(javafx.animation.Animation.INDEFINITE);
-        latencyTimeline.play();
-    }
-
-    private void stopLatencyLoop() {
-        if (latencyTimeline != null) {
-            latencyTimeline.stop();
-            latencyTimeline = null;
-        }
-        testLatencyButton.setText(I18n.get("button.test.latency"));
-        latencyInFlight = false;
-    }
-
-    private void tickLatency(List<ServerConfig> servers) {
-        if (latencyInFlight || latencyTester == null) {
-            return;
-        }
-        latencyInFlight = true;
-        latencyTester.testAll(servers).whenComplete((results, err) ->
-                Platform.runLater(() -> {
-                    latencyInFlight = false;
-                    // A tick can be outstanding for seconds (5s connect
-                    // timeout). If the user pressed Stop meanwhile, drop the
-                    // late result instead of popping the list back into view.
-                    if (latencyTimeline == null) {
-                        return;
-                    }
-                    if (err != null) {
-                        showLatencyStatus(I18n.get("dashboard.test.failed"));
-                        return;
-                    }
-                    displayLatencyResults(results, servers);
-                }));
-    }
-
-    private void displayLatencyResults(Map<String, Long> results, List<ServerConfig> servers) {
-        if (results.isEmpty()) {
-            showLatencyStatus(I18n.get("dashboard.no.results"));
-            return;
-        }
-
-        latencyResultList.getChildren().clear();
-        for (ServerConfig server : servers) {
-            Long latency = results.get(server.getId());
-            if (latency == null) {
-                continue;
-            }
-            String name = server.getName() != null ? server.getName() : server.getAddress();
-            latencyResultList.getChildren().add(buildLatencyRow(name, latency));
-        }
-        if (latencyResultList.getChildren().isEmpty()) {
-            showLatencyStatus(I18n.get("dashboard.no.results"));
-            return;
-        }
-        setLatencyListVisible(true);
-    }
-
-    /** One latency row: green dot + name + "NNN ms", or red dot + "timeout". */
-    private HBox buildLatencyRow(String name, long latency) {
-        boolean ok = latency >= 0;
-        HBox row = new HBox(8);
-        row.setAlignment(Pos.CENTER_LEFT);
-
-        Circle dot = new Circle(5);
-        dot.getStyleClass().setAll(ok ? "status-circle-connected" : "status-circle-error");
-
-        Label nameLabel = new Label(name);
-        nameLabel.getStyleClass().setAll("service-name");
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        Label result =
-                new Label(ok ? latency + " ms" : I18n.get("dashboard.latency.timeout"));
-        result.getStyleClass().setAll(ok ? "service-ok" : "service-fail");
-
-        row.getChildren().addAll(dot, nameLabel, spacer, result);
-        return row;
-    }
-
-    /** Shows a single muted status line (Testing…, No results, errors). */
-    private void showLatencyStatus(String text) {
-        Label status = new Label(text);
-        status.getStyleClass().setAll("service-pending");
-        latencyResultList.getChildren().setAll(status);
-        setLatencyListVisible(true);
-    }
-
-    private void setLatencyListVisible(boolean visible) {
-        latencyResultList.setVisible(visible);
-        latencyResultList.setManaged(visible);
+        latencySession.toggle();
     }
 
     /**
@@ -627,468 +437,22 @@ public class DashboardViewController {
     }
 
     // ===== Service availability / auto-reconnect =====
-
-    /**
-     * Reacts to connection-state changes for the health-check feature.
-     * On CONNECTED we verify the tunnel actually carries traffic; on a
-     * user-initiated DISCONNECTED/ERROR we tear the health loop down. A
-     * self-inflicted transition during our own auto-reconnect restart is
-     * ignored via {@link #suppressDisconnectHandling}.
-     */
-    private void handleHealthCheck(ConnectionState state) {
-        if (healthCard == null) {
-            return;
-        }
-        if (state == ConnectionState.CONNECTED) {
-            runReachabilityCheck();
-        } else if (state == ConnectionState.DISCONNECTED || state == ConnectionState.ERROR) {
-            if (suppressDisconnectHandling) {
-                return;
-            }
-            cancelHealthLoop();
-        }
-    }
-
-    /**
-     * Probes the configured services through the local proxy and renders the
-     * results. Skips silently when the feature is disabled or prerequisites
-     * are missing. Stale results (a newer check started, or the loop was
-     * cancelled) are dropped via a generation token.
-     */
-    private void runReachabilityCheck() {
-        // A check is starting now, so drop any pending periodic re-check; a new
-        // one is scheduled once this probe completes.
-        cancelPeriodicCheck();
-        if (reachabilityChecker == null || singBoxEngine == null) {
-            setHealthCardVisible(false);
-            return;
-        }
-        AppSettings settings;
-        try {
-            settings = ServiceLocator.get(AppSettings.class);
-        } catch (IllegalArgumentException e) {
-            return;
-        }
-        if (!settings.isHealthCheckEnabled()) {
-            setHealthCardVisible(false);
-            return;
-        }
-        List<HealthCheckTarget> targets = settings.getHealthCheckTargets();
-        if (targets == null || targets.isEmpty()) {
-            // Keep the card (and its "+" button) visible: hiding it would
-            // leave no way to add a target back after removing the last one.
-            setHealthCardVisible(true);
-            if (serviceStatusList != null) {
-                serviceStatusList.getChildren().clear();
-            }
-            healthSummaryLabel.setText(I18n.get("health.no.targets"));
-            return;
-        }
-        if (healthCheckInFlight) {
-            return;
-        }
-
-        setHealthCardVisible(true);
-        renderPendingRows(targets);
-        healthSummaryLabel.setText(I18n.get("dashboard.health.checking"));
-
-        healthCheckInFlight = true;
-        final int gen = ++healthGeneration;
-        final int httpPort = settings.getHttpPort();
-
-        reachabilityChecker.checkAll(targets, httpPort).whenComplete((results, err) ->
-                Platform.runLater(() -> {
-                    healthCheckInFlight = false;
-                    if (gen != healthGeneration) {
-                        return;   // superseded by a newer check or cancelled
-                    }
-                    if (singBoxEngine.connectionStateProperty().get()
-                            != ConnectionState.CONNECTED) {
-                        return;   // no longer connected
-                    }
-                    if (err != null) {
-                        log.warn("Reachability check failed", err);
-                        healthSummaryLabel.setText(I18n.get("dashboard.health.failed"));
-                        return;
-                    }
-                    renderResultRows(results);
-                    evaluateReconnect(results, settings);
-                }));
-    }
-
-    private void evaluateReconnect(List<ServiceReachabilityChecker.ProbeResult> results,
-                                   AppSettings settings) {
-        boolean broken = settings.isHealthCheckEnabled()
-                && settings.isHealthCheckAutoReconnect()
-                && ServiceReachabilityChecker.allUnreachable(results);
-        if (broken) {
-            scheduleReconnect(settings);
-        } else {
-            reconnectAttempt = 0;
-            hideReconnectBanner();
-            // Keep monitoring: re-probe after the configured interval. When the
-            // reconnect path runs instead, the restart itself drives the next
-            // check, so we don't double-schedule here.
-            schedulePeriodicCheck(settings);
-        }
-    }
-
-    /**
-     * Schedules the next reachability probe {@code health_check_interval_seconds}
-     * from now, so the tunnel keeps being monitored while connected rather than
-     * only at connect time. No-op when the feature is disabled or the tunnel is
-     * no longer up.
-     */
-    private void schedulePeriodicCheck(AppSettings settings) {
-        cancelPeriodicCheck();
-        if (!settings.isHealthCheckEnabled()) {
-            return;
-        }
-        if (singBoxEngine == null
-                || singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
-            return;
-        }
-        int seconds = Math.max(1, settings.getHealthCheckIntervalSeconds());
-        periodicCheckDelay = new javafx.animation.PauseTransition(
-                javafx.util.Duration.seconds(seconds));
-        periodicCheckDelay.setOnFinished(e -> {
-            periodicCheckDelay = null;
-            runReachabilityCheck();
-        });
-        periodicCheckDelay.play();
-    }
-
-    private void cancelPeriodicCheck() {
-        if (periodicCheckDelay != null) {
-            periodicCheckDelay.stop();
-            periodicCheckDelay = null;
-        }
-    }
-
-    /**
-     * Starts the (cancelable) countdown to the next reconnect. No-op if a
-     * countdown is already running. The loop is unbounded by design — it
-     * repeats every {@code health_check_delay_seconds} until a service becomes
-     * reachable or the user disconnects/cancels.
-     */
-    private void scheduleReconnect(AppSettings settings) {
-        if (reconnectDelay != null) {
-            return;
-        }
-        int seconds = Math.max(1, settings.getHealthCheckDelaySeconds());
-        reconnectAttempt++;
-        showReconnectBanner(I18n.get("dashboard.reconnect.banner",
-                String.valueOf(seconds), String.valueOf(reconnectAttempt)));
-        reconnectDelay = new javafx.animation.PauseTransition(
-                javafx.util.Duration.seconds(seconds));
-        reconnectDelay.setOnFinished(e -> performReconnect());
-        reconnectDelay.play();
-    }
-
-    /**
-     * Tears down and re-establishes the tunnel. The DISCONNECTED that our own
-     * stop() produces is suppressed so it is not treated as a user disconnect;
-     * a short gap lets the old process fully exit before reconnecting. The
-     * subsequent CONNECTED drives the next reachability check, continuing the
-     * loop.
-     */
-    private void performReconnect() {
-        reconnectDelay = null;
-        if (singBoxEngine == null
-                || singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
-            return;   // user disconnected or state changed during the wait
-        }
-        log.info("Auto-reconnect (attempt {}): all services unreachable, restarting tunnel",
-                reconnectAttempt);
-        hideReconnectBanner();
-        suppressDisconnectHandling = true;
-        disconnect();
-        javafx.animation.PauseTransition gap =
-                new javafx.animation.PauseTransition(javafx.util.Duration.millis(700));
-        gap.setOnFinished(e -> {
-            suppressDisconnectHandling = false;
-            connect();
-        });
-        gap.play();
-    }
-
-    /**
-     * Stops the health loop entirely: cancels any pending reconnect, drops any
-     * in-flight probe, and hides the card. Invoked on a genuine (user or crash)
-     * disconnect.
-     */
-    private void cancelHealthLoop() {
-        if (reconnectDelay != null) {
-            reconnectDelay.stop();
-            reconnectDelay = null;
-        }
-        cancelPeriodicCheck();
-        reconnectAttempt = 0;
-        healthGeneration++;            // invalidate any in-flight probe result
-        healthCheckInFlight = false;
-        hideReconnectBanner();
-        if (serviceStatusList != null) {
-            serviceStatusList.getChildren().clear();
-        }
-        if (healthSummaryLabel != null) {
-            healthSummaryLabel.setText("—");
-        }
-        setHealthCardVisible(false);
-    }
-
-    private void renderPendingRows(List<HealthCheckTarget> targets) {
-        if (serviceStatusList == null) {
-            return;
-        }
-        serviceStatusList.getChildren().clear();
-        for (HealthCheckTarget t : targets) {
-            String name = t.getName() != null && !t.getName().isBlank() ? t.getName() : t.getUrl();
-            serviceStatusList.getChildren().add(buildServiceRow(name, t.getUrl(),
-                    "status-circle-connecting", I18n.get("dashboard.health.checking"),
-                    "service-pending"));
-        }
-    }
-
-    private void renderResultRows(List<ServiceReachabilityChecker.ProbeResult> results) {
-        if (serviceStatusList == null) {
-            return;
-        }
-        serviceStatusList.getChildren().clear();
-        int reachable = 0;
-        for (ServiceReachabilityChecker.ProbeResult r : results) {
-            boolean ok = r.reachable();
-            if (ok) {
-                reachable++;
-            }
-            String dotClass = ok ? "status-circle-connected" : "status-circle-error";
-            String resultText =
-                    ok ? r.latencyMs() + " ms" : I18n.get("dashboard.health.unreachable");
-            String resultClass = ok ? "service-ok" : "service-fail";
-            serviceStatusList.getChildren().add(
-                    buildServiceRow(r.name(), r.url(), dotClass, resultText, resultClass));
-        }
-        healthSummaryLabel.setText(summarize(reachable, results.size()));
-    }
-
-    private static String summarize(int reachable, int total) {
-        if (reachable == total) {
-            return I18n.get("dashboard.health.all.reachable");
-        }
-        if (reachable == 0) {
-            return I18n.get("dashboard.health.all.unreachable");
-        }
-        return I18n.get("dashboard.health.some.reachable", reachable, total);
-    }
-
-    private HBox buildServiceRow(String name, String url, String dotStyleClass,
-                                 String resultText, String resultStyleClass) {
-        HBox row = new HBox(8);
-        row.setAlignment(Pos.CENTER_LEFT);
-
-        Circle dot = new Circle(5);
-        dot.getStyleClass().setAll(dotStyleClass);
-
-        Label nameLabel = new Label(name);
-        nameLabel.getStyleClass().setAll("service-name");
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        Label resultLabel = new Label(resultText);
-        resultLabel.getStyleClass().setAll(resultStyleClass);
-
-        row.getChildren().addAll(dot, nameLabel, spacer, resultLabel);
-
-        if (url != null && !url.isBlank()) {
-            Button remove = new Button("✕");
-            remove.getStyleClass().setAll("icon-button");
-            remove.setFocusTraversable(false);
-            remove.setTooltip(new Tooltip(I18n.get("health.target.remove")));
-            remove.setOnAction(e -> removeHealthTarget(url));
-            row.getChildren().add(remove);
-        }
-        return row;
-    }
-
-    // ===== health-target list editing =====
+    // The probe/reconnect loop lives in HealthCheckCoordinator; only the FXML
+    // entry points remain here.
 
     @FXML
     private void onAddTargetClicked() {
-        Dialog<HealthCheckTarget> dialog = new Dialog<>();
-        dialog.setTitle(I18n.get("health.target.add.title"));
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-
-        TextField nameField = new TextField();
-        nameField.setPromptText(I18n.get("health.target.name"));
-        TextField urlField = new TextField();
-        urlField.setPromptText("https://example.com  ·  1.1.1.1  ·  1.1.1.1:53");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(8);
-        grid.setVgap(8);
-        grid.setPadding(new Insets(12));
-        grid.add(new Label(I18n.get("health.target.name")), 0, 0);
-        grid.add(nameField, 1, 0);
-        grid.add(new Label(I18n.get("health.target.target")), 0, 1);
-        grid.add(urlField, 1, 1);
-        dialog.getDialogPane().setContent(grid);
-
-        var okButton = dialog.getDialogPane().lookupButton(ButtonType.OK);
-        okButton.setDisable(true);
-        urlField.textProperty().addListener((obs, o, n) ->
-                okButton.setDisable(normalizeTarget(n) == null));
-
-        dialog.setResultConverter(button -> {
-            if (button != ButtonType.OK) {
-                return null;
-            }
-            ParsedTarget parsed = normalizeTarget(urlField.getText());
-            if (parsed == null) {
-                return null;
-            }
-            String name = nameField.getText() != null && !nameField.getText().isBlank()
-                    ? nameField.getText().trim()
-                    : parsed.displayHost();
-            return new HealthCheckTarget(name, parsed.stored());
-        });
-
-        Platform.runLater(urlField::requestFocus);
-        dialog.showAndWait().ifPresent(this::addHealthTarget);
-    }
-
-    /** A validated target: {@code stored} is persisted, {@code displayHost} names it. */
-    private record ParsedTarget(String stored, String displayHost) {
-    }
-
-    /**
-     * Accepts either an absolute http(s) URL (probed over HTTP) or a bare
-     * IP / host, optionally with {@code :port} (probed by a TCP connect
-     * through the tunnel). Returns null for anything else.
-     */
-    private static ParsedTarget normalizeTarget(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        String trimmed = raw.trim();
-        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            try {
-                URI uri = new URI(trimmed);
-                if (uri.getHost() == null || uri.getHost().isBlank()) {
-                    return null;
-                }
-                return new ParsedTarget(uri.toString(), uri.getHost());
-            } catch (URISyntaxException e) {
-                return null;
-            }
-        }
-        ServiceReachabilityChecker.HostPort hp =
-                ServiceReachabilityChecker.parseHostPort(trimmed);
-        return hp == null ? null : new ParsedTarget(trimmed, hp.host());
-    }
-
-    private void addHealthTarget(HealthCheckTarget target) {
-        AppSettings settings = findSettings();
-        if (settings == null) {
-            return;
-        }
-        // Silently ignore an exact-URL duplicate — probing the same URL
-        // twice adds noise, not information.
-        boolean duplicate = settings.getHealthCheckTargets().stream()
-                .anyMatch(t -> target.getUrl().equals(t.getUrl()));
-        if (!duplicate) {
-            settings.getHealthCheckTargets().add(target);
-            saveSettingsQuietly(settings);
-        }
-        restartReachabilityCheck();
-    }
-
-    private void removeHealthTarget(String url) {
-        AppSettings settings = findSettings();
-        if (settings == null) {
-            return;
-        }
-        settings.getHealthCheckTargets().removeIf(t -> url.equals(t.getUrl()));
-        saveSettingsQuietly(settings);
-        restartReachabilityCheck();
-    }
-
-    private AppSettings findSettings() {
-        try {
-            return ServiceLocator.get(AppSettings.class);
-        } catch (IllegalArgumentException e) {
-            log.warn("AppSettings not available for health-target editing");
-            return null;
-        }
-    }
-
-    private void saveSettingsQuietly(AppSettings settings) {
-        try {
-            ServiceLocator.get(ConfigStore.class).saveSettings(settings);
-        } catch (IllegalArgumentException e) {
-            log.warn("ConfigStore not available; health-target change not persisted");
-        }
-    }
-
-    /** Re-probes with the edited list, superseding any in-flight check. */
-    private void restartReachabilityCheck() {
-        if (singBoxEngine == null
-                || singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
-            return;
-        }
-        healthGeneration++;
-        healthCheckInFlight = false;
-        runReachabilityCheck();
-    }
-
-    private void showReconnectBanner(String text) {
-        if (reconnectBanner == null) {
-            return;
-        }
-        if (reconnectBannerLabel != null) {
-            reconnectBannerLabel.setText(text);
-        }
-        reconnectBanner.setVisible(true);
-        reconnectBanner.setManaged(true);
-    }
-
-    private void hideReconnectBanner() {
-        if (reconnectBanner == null) {
-            return;
-        }
-        reconnectBanner.setVisible(false);
-        reconnectBanner.setManaged(false);
-    }
-
-    private void setHealthCardVisible(boolean visible) {
-        if (healthCard == null) {
-            return;
-        }
-        healthCard.setVisible(visible);
-        healthCard.setManaged(visible);
+        new AddHealthTargetDialog().showAndWait().ifPresent(healthChecks::addTarget);
     }
 
     @FXML
     private void onRecheckClicked() {
-        if (singBoxEngine == null
-                || singBoxEngine.connectionStateProperty().get() != ConnectionState.CONNECTED) {
-            return;
-        }
-        // A manual re-check supersedes any pending auto-reconnect countdown.
-        if (reconnectDelay != null) {
-            reconnectDelay.stop();
-            reconnectDelay = null;
-        }
-        runReachabilityCheck();
+        healthChecks.recheck();
     }
 
     @FXML
     private void onCancelReconnectClicked() {
-        if (reconnectDelay != null) {
-            reconnectDelay.stop();
-            reconnectDelay = null;
-        }
-        reconnectAttempt = 0;
-        hideReconnectBanner();
+        healthChecks.cancelReconnectCountdown();
     }
 
     private ServerConfig findActiveServer() {
