@@ -258,16 +258,19 @@
                                 <rule>
                                     <!-- Floor, not target. Coverage differs by
                                          OS (some TestFX/UI tests are skipped
-                                         off-macOS): at introduction (2026-07)
-                                         macOS measured 54.6%, Windows 46% —
-                                         the floor must clear the lowest
-                                         platform. Raise it as coverage grows. -->
+                                         off-macOS), so the floor must clear
+                                         the lowest platform with ~5pp margin.
+                                         History: 2026-07 introduction, macOS
+                                         54.6% / Windows 46%; after the parser,
+                                         dashboard and i18n test additions
+                                         macOS measures 59.3%. Raise this as
+                                         coverage grows. -->
                                     <element>BUNDLE</element>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.40</minimum>
+                                            <minimum>0.45</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

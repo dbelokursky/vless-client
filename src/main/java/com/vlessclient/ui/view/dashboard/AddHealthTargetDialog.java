@@ -68,15 +68,16 @@ public final class AddHealthTargetDialog extends Dialog<HealthCheckTarget> {
     }
 
     /** A validated target: {@code stored} is persisted, {@code displayHost} names it. */
-    private record ParsedTarget(String stored, String displayHost) {
+    record ParsedTarget(String stored, String displayHost) {
     }
 
     /**
      * Accepts either an absolute http(s) URL (probed over HTTP) or a bare
      * IP / host, optionally with {@code :port} (probed by a TCP connect
      * through the tunnel). Returns null for anything else.
+     * Package-private for tests.
      */
-    private static ParsedTarget normalizeTarget(String raw) {
+    static ParsedTarget normalizeTarget(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
