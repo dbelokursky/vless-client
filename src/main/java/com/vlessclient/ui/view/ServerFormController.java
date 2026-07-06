@@ -1,5 +1,6 @@
 package com.vlessclient.ui.view;
 
+import com.vlessclient.app.I18n;
 import com.vlessclient.model.Protocol;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.TlsConfig;
@@ -267,10 +268,10 @@ public class ServerFormController {
         setNodeVisible(tlsSection, true);
         setNodeVisible(realitySection, true);
 
-        uuidLabel.setText("UUID *");
+        uuidLabel.setText(required("form.uuid"));
         uuidField.setPromptText("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx");
-        encryptionLabel.setText("Encryption");
-        flowLabel.setText("Flow");
+        encryptionLabel.setText(I18n.get("form.encryption"));
+        flowLabel.setText(I18n.get("form.flow"));
 
         // Reset encryption combo to VLESS defaults
         encryptionCombo.setItems(FXCollections.observableArrayList("none", "auto", "zero"));
@@ -297,17 +298,17 @@ public class ServerFormController {
             }
             case TROJAN -> {
                 // UUID label -> "Password", no Flow, no Reality
-                uuidLabel.setText("Password *");
-                uuidField.setPromptText("password");
+                uuidLabel.setText(required("form.password"));
+                uuidField.setPromptText(I18n.get("form.prompt.password"));
                 setNodeVisible(flowBox, false);
                 setNodeVisible(realitySection, false);
                 setNodeVisible(encryptionBox, false);
             }
             case SHADOWSOCKS -> {
                 // UUID -> "Password", Encryption -> "Method" with SS ciphers, no Transport, no TLS
-                uuidLabel.setText("Password *");
-                uuidField.setPromptText("password");
-                encryptionLabel.setText("Method");
+                uuidLabel.setText(required("form.password"));
+                uuidField.setPromptText(I18n.get("form.prompt.password"));
+                encryptionLabel.setText(I18n.get("form.method"));
                 encryptionCombo.setItems(FXCollections.observableArrayList(
                         "aes-256-gcm",
                         "chacha20-ietf-poly1305",
@@ -323,10 +324,10 @@ public class ServerFormController {
             case HYSTERIA2 -> {
                 // UUID -> "Password", TLS always on (no checkbox), no Transport
                 // Flow field used for "Obfuscation Password"
-                uuidLabel.setText("Password *");
-                uuidField.setPromptText("password");
+                uuidLabel.setText(required("form.password"));
+                uuidField.setPromptText(I18n.get("form.prompt.password"));
                 setNodeVisible(encryptionBox, false);
-                flowLabel.setText("Obfuscation Password");
+                flowLabel.setText(I18n.get("form.obfuscation.password"));
                 flowCombo.setItems(FXCollections.observableArrayList(""));
                 flowCombo.setEditable(true);
                 setNodeVisible(transportSeparator, false);
@@ -339,12 +340,12 @@ public class ServerFormController {
             case WIREGUARD -> {
                 // UUID -> "Private Key", Encryption -> "Peer Public Key", Flow -> "Local Address"
                 // No Transport, no TLS
-                uuidLabel.setText("Private Key *");
-                uuidField.setPromptText("private key");
-                encryptionLabel.setText("Peer Public Key");
+                uuidLabel.setText(required("form.private.key"));
+                uuidField.setPromptText(I18n.get("form.prompt.private.key"));
+                encryptionLabel.setText(I18n.get("form.peer.public.key"));
                 encryptionCombo.setItems(FXCollections.observableArrayList(""));
                 encryptionCombo.setEditable(true);
-                flowLabel.setText("Local Address");
+                flowLabel.setText(I18n.get("form.local.address"));
                 flowCombo.setItems(FXCollections.observableArrayList(""));
                 flowCombo.setEditable(true);
                 setNodeVisible(transportSeparator, false);
@@ -425,6 +426,11 @@ public class ServerFormController {
             case "HTTP2" -> TransportType.HTTP2;
             default -> TransportType.TCP;
         };
+    }
+
+    /** Returns the localized text for the given key with the required-field marker appended. */
+    private static String required(String key) {
+        return I18n.get(key) + " *";
     }
 
     private void setNodeVisible(javafx.scene.Node node, boolean visible) {

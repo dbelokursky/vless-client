@@ -1,5 +1,6 @@
 package com.vlessclient.ui.view;
 
+import com.vlessclient.app.I18n;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.RoutingConfig;
 import com.vlessclient.model.RoutingRule;
@@ -167,7 +168,7 @@ public class RoutingViewController {
 
         // Brief button feedback
         String originalText = saveBypassButton.getText();
-        saveBypassButton.setText("Saved");
+        saveBypassButton.setText(I18n.get("routing.bypass.saved"));
         saveBypassButton.setDisable(true);
         Thread.startVirtualThread(() -> {
             try {
@@ -185,8 +186,8 @@ public class RoutingViewController {
     @FXML
     private void onAddRuleClicked() {
         Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Add Routing Rule");
-        dialog.setHeaderText("Create a new routing rule");
+        dialog.setTitle(I18n.get("routing.rule.add.title"));
+        dialog.setHeaderText(I18n.get("routing.rule.add.header"));
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -212,7 +213,7 @@ public class RoutingViewController {
         });
 
         TextField valueField = new TextField();
-        valueField.setPromptText("e.g., google.com, cn, 10.0.0.0/8");
+        valueField.setPromptText(I18n.get("routing.rule.value.prompt"));
         valueField.setPrefWidth(300);
 
         ComboBox<RoutingRule.RuleAction> actionCombo = new ComboBox<>();
@@ -233,11 +234,11 @@ public class RoutingViewController {
             }
         });
 
-        grid.add(new Label("Type:"), 0, 0);
+        grid.add(new Label(I18n.get("form.type") + ":"), 0, 0);
         grid.add(typeCombo, 1, 0);
-        grid.add(new Label("Value:"), 0, 1);
+        grid.add(new Label(I18n.get("routing.rule.value") + ":"), 0, 1);
         grid.add(valueField, 1, 1);
-        grid.add(new Label("Action:"), 0, 2);
+        grid.add(new Label(I18n.get("routing.rule.action") + ":"), 0, 2);
         grid.add(actionCombo, 1, 2);
 
         dialog.getDialogPane().setContent(grid);
@@ -250,8 +251,9 @@ public class RoutingViewController {
             String value = valueField.getText().trim();
             if (value.isEmpty()) {
                 Alert alert = new Alert(Alert.AlertType.WARNING);
-                alert.setTitle("Invalid Input");
-                alert.setHeaderText("Value is required");
+                alert.setTitle(I18n.get("routing.rule.invalid.title"));
+                alert.setHeaderText(
+                        I18n.get("error.field.required", I18n.get("routing.rule.value")));
                 alert.showAndWait();
                 return;
             }
@@ -319,7 +321,9 @@ public class RoutingViewController {
                 }
             }
         }
-        bypassCountLabel.setText(count == 1 ? "1 entry" : count + " entries");
+        bypassCountLabel.setText(count == 1
+                ? I18n.get("routing.bypass.count.one")
+                : I18n.get("routing.bypass.count.many", String.valueOf(count)));
     }
 
     private String presetToDisplayName(String preset) {
@@ -374,7 +378,7 @@ public class RoutingViewController {
             Label actionBadge = new Label(formatAction(rule.getAction()));
             actionBadge.getStyleClass().add("protocol-badge");
 
-            Button deleteBtn = new Button("Delete");
+            Button deleteBtn = new Button(I18n.get("button.delete"));
             deleteBtn.getStyleClass().add("secondary-button");
             deleteBtn.setOnAction(e -> deleteRule(rule));
 

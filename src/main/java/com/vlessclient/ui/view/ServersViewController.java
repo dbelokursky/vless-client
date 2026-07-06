@@ -1,5 +1,6 @@
 package com.vlessclient.ui.view;
 
+import com.vlessclient.app.I18n;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.service.ConfigStore;
@@ -96,9 +97,9 @@ public class ServersViewController {
     @FXML
     private void onImportLinkClicked() {
         TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Import Share Link");
-        dialog.setHeaderText("Paste a share link (e.g. vless://...)");
-        dialog.setContentText("Link:");
+        dialog.setTitle(I18n.get("dialog.import.link"));
+        dialog.setHeaderText(I18n.get("servers.import.header"));
+        dialog.setContentText(I18n.get("servers.import.label"));
         dialog.getDialogPane().setPrefWidth(500);
 
         Optional<String> result = dialog.showAndWait();
@@ -114,8 +115,8 @@ public class ServersViewController {
             } catch (Exception e) {
                 log.error("Failed to parse share link", e);
                 Alert alert = new Alert(Alert.AlertType.ERROR);
-                alert.setTitle("Import Error");
-                alert.setHeaderText("Failed to parse share link");
+                alert.setTitle(I18n.get("servers.import.error.title"));
+                alert.setHeaderText(I18n.get("servers.import.error.header"));
                 alert.setContentText(e.getMessage());
                 alert.showAndWait();
             }
@@ -130,7 +131,9 @@ public class ServersViewController {
 
             Stage dialog = new Stage();
             dialog.initModality(Modality.APPLICATION_MODAL);
-            dialog.setTitle(existingServer == null ? "Add Server" : "Edit Server");
+            dialog.setTitle(existingServer == null
+                    ? I18n.get("dialog.add.server")
+                    : I18n.get("dialog.edit.server"));
             dialog.setMinWidth(500);
             dialog.setMinHeight(600);
 
@@ -165,9 +168,9 @@ public class ServersViewController {
 
     private void deleteServer(ServerConfig server) {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-        confirm.setTitle("Delete Server");
-        confirm.setHeaderText("Delete " + server.getName() + "?");
-        confirm.setContentText("This action cannot be undone.");
+        confirm.setTitle(I18n.get("dialog.delete.server"));
+        confirm.setHeaderText(I18n.get("servers.delete.header", server.getName()));
+        confirm.setContentText(I18n.get("servers.delete.warning"));
 
         Optional<ButtonType> result = confirm.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
@@ -192,8 +195,8 @@ public class ServersViewController {
         } catch (Exception e) {
             log.error("Failed to export share link", e);
             Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Export Error");
-            alert.setHeaderText("Failed to generate share link");
+            alert.setTitle(I18n.get("servers.export.error.title"));
+            alert.setHeaderText(I18n.get("servers.export.error.header"));
             alert.setContentText(e.getMessage());
             alert.showAndWait();
         }
@@ -229,7 +232,8 @@ public class ServersViewController {
             row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
             VBox info = new VBox(2);
-            Label nameLabel = new Label(server.getName() != null ? server.getName() : "Unnamed");
+            Label nameLabel = new Label(
+                    server.getName() != null ? server.getName() : I18n.get("servers.unnamed"));
             nameLabel.getStyleClass().add("server-name");
 
             String addressText = server.getAddress() + ":" + server.getPort();
@@ -249,22 +253,22 @@ public class ServersViewController {
             row.getChildren().addAll(info, spacer, protocolBadge);
 
             if (server.isActive()) {
-                Label activeBadge = new Label("ACTIVE");
+                Label activeBadge = new Label(I18n.get("servers.active.badge"));
                 activeBadge.getStyleClass().add("active-badge");
                 row.getChildren().add(activeBadge);
             }
 
             // Context menu for right-click
-            MenuItem editItem = new MenuItem("Edit");
+            MenuItem editItem = new MenuItem(I18n.get("servers.menu.edit"));
             editItem.setOnAction(e -> editServer(server));
 
-            MenuItem deleteItem = new MenuItem("Delete");
+            MenuItem deleteItem = new MenuItem(I18n.get("button.delete"));
             deleteItem.setOnAction(e -> deleteServer(server));
 
-            MenuItem duplicateItem = new MenuItem("Duplicate");
+            MenuItem duplicateItem = new MenuItem(I18n.get("button.duplicate"));
             duplicateItem.setOnAction(e -> duplicateServer(server));
 
-            MenuItem copyLinkItem = new MenuItem("Copy Share Link");
+            MenuItem copyLinkItem = new MenuItem(I18n.get("button.copy.share.link"));
             copyLinkItem.setOnAction(e -> copyShareLink(server));
 
             ContextMenu contextMenu = new ContextMenu();
