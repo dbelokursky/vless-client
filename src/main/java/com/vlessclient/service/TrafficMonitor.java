@@ -51,6 +51,12 @@ public class TrafficMonitor {
     private final Object lifecycleLock = new Object();
     private volatile Thread sseThread;
 
+    // One client for the monitor's lifetime: the reconnect back-off loop can
+    // make many attempts, and each HttpClient owns its own executor/selector.
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
+
     public ReadOnlyLongProperty uploadSpeedProperty() {
         return uploadSpeed;
     }
@@ -153,16 +159,12 @@ public class TrafficMonitor {
     }
 
     private void streamOnce(int clashApiPort) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
-
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:" + clashApiPort + "/traffic"))
                 .GET()
                 .build();
 
-        HttpResponse<java.io.InputStream> response = client.send(request,
+        HttpResponse<java.io.InputStream> response = httpClient.send(request,
                 HttpResponse.BodyHandlers.ofInputStream());
 
         if (response.statusCode() != 200) {
