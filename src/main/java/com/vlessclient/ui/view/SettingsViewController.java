@@ -384,7 +384,10 @@ public class SettingsViewController {
 
     private void initAboutSection() {
         appVersionValue.setText(AppVersion.VERSION);
-        singboxVersionValue.setText(detectSingBoxVersion());
+        // detectSingBoxVersion() spawns a process and waits for it — keep
+        // that off the FX thread so opening Settings never stalls.
+        singboxVersionValue.setText(I18n.get("settings.core.checking"));
+        refreshSingBoxVersionAsync();
         initUpdatesSection();
     }
 

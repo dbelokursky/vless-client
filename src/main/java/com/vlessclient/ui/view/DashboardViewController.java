@@ -206,7 +206,7 @@ public class DashboardViewController {
         content.putString(SingBoxInstaller.brewInstallCommand());
         Clipboard.getSystemClipboard().setContent(content);
         if (copyBrewButton != null) {
-            copyBrewButton.setText("Copied!");
+            copyBrewButton.setText(I18n.get("dashboard.copied"));
         }
     }
 
@@ -216,7 +216,8 @@ public class DashboardViewController {
         try {
             installer = ServiceLocator.get(SingBoxInstaller.class);
         } catch (IllegalArgumentException e) {
-            showError("Installer unavailable", "Installer service is not registered.");
+            showError(I18n.get("dashboard.error.installer.title"),
+                    I18n.get("dashboard.error.installer.body"));
             return;
         }
 
@@ -299,14 +300,14 @@ public class DashboardViewController {
 
     private String formatProxyMode(ProxyMode mode) {
         return switch (mode) {
-            case SYSTEM_PROXY -> "System Proxy";
-            case TUN -> "TUN";
+            case SYSTEM_PROXY -> I18n.get("settings.proxy.system");
+            case TUN -> I18n.get("settings.proxy.tun");
         };
     }
 
     private void updateProxyModeWarning(ProxyMode mode) {
         if (mode == ProxyMode.TUN) {
-            proxyModeWarning.setText("TUN mode requires administrator privileges");
+            proxyModeWarning.setText(I18n.get("settings.tun.warning"));
             proxyModeWarning.setVisible(true);
             proxyModeWarning.setManaged(true);
         } else {
@@ -382,8 +383,8 @@ public class DashboardViewController {
         }
 
         if (singBoxEngine == null) {
-            showError("sing-box binary not found",
-                    "sing-box binary not found. Please install sing-box or reinstall the app.");
+            showError(I18n.get("error.singbox.not.found"),
+                    I18n.get("dashboard.error.singbox.body"));
             return;
         }
 
@@ -394,7 +395,7 @@ public class DashboardViewController {
         log.error("{}: {}", header, message);
         try {
             Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Error");
+            alert.setTitle(I18n.get("dialog.error"));
             alert.setHeaderText(header);
             alert.setContentText(message);
             alert.showAndWait();
@@ -406,7 +407,7 @@ public class DashboardViewController {
     @FXML
     private void onTestLatencyClicked() {
         if (latencyTester == null) {
-            showLatencyStatus("Latency tester unavailable");
+            showLatencyStatus(I18n.get("dashboard.latency.unavailable"));
             return;
         }
 
@@ -420,19 +421,19 @@ public class DashboardViewController {
             ConfigStore configStore = ServiceLocator.get(ConfigStore.class);
             List<ServerConfig> servers = configStore.getServers();
             if (servers.isEmpty()) {
-                showLatencyStatus("No servers configured");
+                showLatencyStatus(I18n.get("dashboard.no.servers"));
                 return;
             }
 
             startLatencyLoop(servers);
         } catch (IllegalArgumentException e) {
-            showLatencyStatus("No servers configured");
+            showLatencyStatus(I18n.get("dashboard.no.servers"));
         }
     }
 
     private void startLatencyLoop(List<ServerConfig> servers) {
-        testLatencyButton.setText("Stop");
-        showLatencyStatus("Testing…");
+        testLatencyButton.setText(I18n.get("dashboard.stop"));
+        showLatencyStatus(I18n.get("dashboard.testing"));
 
         // Fire once immediately so the user sees feedback within the first
         // second, then every second afterwards.
@@ -452,7 +453,7 @@ public class DashboardViewController {
             latencyTimeline.stop();
             latencyTimeline = null;
         }
-        testLatencyButton.setText("Test Latency");
+        testLatencyButton.setText(I18n.get("button.test.latency"));
         latencyInFlight = false;
     }
 
@@ -471,7 +472,7 @@ public class DashboardViewController {
                         return;
                     }
                     if (err != null) {
-                        showLatencyStatus("Test failed");
+                        showLatencyStatus(I18n.get("dashboard.test.failed"));
                         return;
                     }
                     displayLatencyResults(results, servers);
@@ -480,7 +481,7 @@ public class DashboardViewController {
 
     private void displayLatencyResults(Map<String, Long> results, List<ServerConfig> servers) {
         if (results.isEmpty()) {
-            showLatencyStatus("No results");
+            showLatencyStatus(I18n.get("dashboard.no.results"));
             return;
         }
 
@@ -494,7 +495,7 @@ public class DashboardViewController {
             latencyResultList.getChildren().add(buildLatencyRow(name, latency));
         }
         if (latencyResultList.getChildren().isEmpty()) {
-            showLatencyStatus("No results");
+            showLatencyStatus(I18n.get("dashboard.no.results"));
             return;
         }
         setLatencyListVisible(true);
@@ -515,7 +516,8 @@ public class DashboardViewController {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Label result = new Label(ok ? latency + " ms" : "timeout");
+        Label result =
+                new Label(ok ? latency + " ms" : I18n.get("dashboard.latency.timeout"));
         result.getStyleClass().setAll(ok ? "service-ok" : "service-fail");
 
         row.getChildren().addAll(dot, nameLabel, spacer, result);
@@ -570,15 +572,15 @@ public class DashboardViewController {
 
         if (activeServer == null) {
             log.warn("No active server selected");
-            statusLabel.setText("No server selected");
-            showError("No active server",
-                    "No server is selected. Please add a server and mark it active.");
+            statusLabel.setText(I18n.get("dashboard.no.server"));
+            showError(I18n.get("dashboard.error.no.active.title"),
+                    I18n.get("dashboard.error.no.active.body"));
             return;
         }
 
         if (singBoxEngine == null) {
-            showError("sing-box binary not found",
-                    "sing-box binary not found. Please install sing-box or reinstall the app.");
+            showError(I18n.get("error.singbox.not.found"),
+                    I18n.get("dashboard.error.singbox.body"));
             return;
         }
 
@@ -589,8 +591,8 @@ public class DashboardViewController {
                     ServiceLocator.get(SingBoxConfigGenerator.class);
             AppSettings settings = ServiceLocator.get(AppSettings.class);
             if (configGenerator == null || settings == null) {
-                showError("Configuration unavailable",
-                        "Required services are not available. Please restart the app.");
+                showError(I18n.get("dashboard.error.config.title"),
+                        I18n.get("dashboard.error.config.body"));
                 return;
             }
             RoutingConfig routingConfig = null;
@@ -603,12 +605,12 @@ public class DashboardViewController {
             singBoxEngine.start(configJson, settings.getProxyMode());
         } catch (IllegalArgumentException e) {
             log.error("Service unavailable during connect", e);
-            showError("Service unavailable",
-                    "Required services are not available: " + e.getMessage());
+            showError(I18n.get("dashboard.error.service.title"),
+                    I18n.get("dashboard.error.service.body", e.getMessage()));
         } catch (IOException e) {
             log.error("Failed to start sing-box", e);
-            statusLabel.setText("Failed to start: " + e.getMessage());
-            showError("Failed to start sing-box", e.getMessage());
+            statusLabel.setText(I18n.get("error.connection.failed", e.getMessage()));
+            showError(I18n.get("dashboard.error.start.title"), e.getMessage());
         } catch (IllegalStateException e) {
             log.warn("sing-box already running: {}", e.getMessage());
         }
@@ -688,7 +690,7 @@ public class DashboardViewController {
 
         setHealthCardVisible(true);
         renderPendingRows(targets);
-        healthSummaryLabel.setText("Checking…");
+        healthSummaryLabel.setText(I18n.get("dashboard.health.checking"));
 
         healthCheckInFlight = true;
         final int gen = ++healthGeneration;
@@ -706,7 +708,7 @@ public class DashboardViewController {
                     }
                     if (err != null) {
                         log.warn("Reachability check failed", err);
-                        healthSummaryLabel.setText("Check failed");
+                        healthSummaryLabel.setText(I18n.get("dashboard.health.failed"));
                         return;
                     }
                     renderResultRows(results);
@@ -775,8 +777,8 @@ public class DashboardViewController {
         }
         int seconds = Math.max(1, settings.getHealthCheckDelaySeconds());
         reconnectAttempt++;
-        showReconnectBanner("All services unreachable — reconnecting in " + seconds
-                + "s… (attempt " + reconnectAttempt + ")");
+        showReconnectBanner(I18n.get("dashboard.reconnect.banner",
+                String.valueOf(seconds), String.valueOf(reconnectAttempt)));
         reconnectDelay = new javafx.animation.PauseTransition(
                 javafx.util.Duration.seconds(seconds));
         reconnectDelay.setOnFinished(e -> performReconnect());
@@ -842,7 +844,8 @@ public class DashboardViewController {
         for (HealthCheckTarget t : targets) {
             String name = t.getName() != null && !t.getName().isBlank() ? t.getName() : t.getUrl();
             serviceStatusList.getChildren().add(buildServiceRow(name, t.getUrl(),
-                    "status-circle-connecting", "Checking…", "service-pending"));
+                    "status-circle-connecting", I18n.get("dashboard.health.checking"),
+                    "service-pending"));
         }
     }
 
@@ -858,7 +861,8 @@ public class DashboardViewController {
                 reachable++;
             }
             String dotClass = ok ? "status-circle-connected" : "status-circle-error";
-            String resultText = ok ? r.latencyMs() + " ms" : "Unreachable";
+            String resultText =
+                    ok ? r.latencyMs() + " ms" : I18n.get("dashboard.health.unreachable");
             String resultClass = ok ? "service-ok" : "service-fail";
             serviceStatusList.getChildren().add(
                     buildServiceRow(r.name(), r.url(), dotClass, resultText, resultClass));
@@ -868,12 +872,12 @@ public class DashboardViewController {
 
     private static String summarize(int reachable, int total) {
         if (reachable == total) {
-            return "All reachable";
+            return I18n.get("dashboard.health.all.reachable");
         }
         if (reachable == 0) {
-            return "All unreachable";
+            return I18n.get("dashboard.health.all.unreachable");
         }
-        return reachable + "/" + total + " reachable";
+        return I18n.get("dashboard.health.some.reachable", reachable, total);
     }
 
     private HBox buildServiceRow(String name, String url, String dotStyleClass,
@@ -1113,7 +1117,7 @@ public class DashboardViewController {
             List<ServerConfig> servers = configStore != null ? configStore.getServers() : null;
             if (servers == null || servers.isEmpty()) {
                 connectButton.setDisable(true);
-                connectButton.setTooltip(new Tooltip("No servers configured"));
+                connectButton.setTooltip(new Tooltip(I18n.get("dashboard.no.servers")));
             } else {
                 connectButton.setDisable(false);
                 connectButton.setTooltip(null);
@@ -1131,14 +1135,14 @@ public class DashboardViewController {
                 statusCircle.getStyleClass().setAll("status-circle-connected");
                 haloClass = "status-halo-connected";
                 if (statusTitle != null) {
-                    statusTitle.setText("Connected");
+                    statusTitle.setText(I18n.get("state.connected"));
                     statusTitle.getStyleClass().setAll("status-title", "status-title-connected");
                 }
                 statusLabel.setText(activeServer != null
-                        ? "Routing traffic through " + activeServer.getName()
-                        : "Routing traffic");
+                        ? I18n.get("dashboard.status.routing.through", activeServer.getName())
+                        : I18n.get("dashboard.status.routing"));
                 statusLabel.getStyleClass().setAll("status-subtitle");
-                connectButton.setText("Disconnect");
+                connectButton.setText(I18n.get("button.disconnect"));
                 connectButton.setDisable(false);
                 connectButton.getStyleClass().removeAll("connect-button");
                 connectButton.getStyleClass().add("disconnect-button");
@@ -1148,12 +1152,12 @@ public class DashboardViewController {
                 statusCircle.getStyleClass().setAll("status-circle-connecting");
                 haloClass = "status-halo-connecting";
                 if (statusTitle != null) {
-                    statusTitle.setText("Connecting…");
+                    statusTitle.setText(I18n.get("state.connecting"));
                     statusTitle.getStyleClass().setAll("status-title", "status-title-connecting");
                 }
-                statusLabel.setText("Establishing tunnel, please wait");
+                statusLabel.setText(I18n.get("dashboard.status.establishing"));
                 statusLabel.getStyleClass().setAll("status-subtitle");
-                connectButton.setText("Cancel");
+                connectButton.setText(I18n.get("button.cancel"));
                 connectButton.setDisable(false);
             }
             case ERROR -> {
@@ -1161,14 +1165,14 @@ public class DashboardViewController {
                 statusCircle.getStyleClass().setAll("status-circle-error");
                 haloClass = "status-halo-error";
                 if (statusTitle != null) {
-                    statusTitle.setText("Connection error");
+                    statusTitle.setText(I18n.get("state.error"));
                     statusTitle.getStyleClass().setAll("status-title", "status-title-error");
                 }
                 if (!statusLabel.getText().startsWith("Process exited")) {
-                    statusLabel.setText("Check Logs for details");
+                    statusLabel.setText(I18n.get("dashboard.status.check.logs"));
                 }
                 statusLabel.getStyleClass().setAll("status-subtitle", "status-subtitle-error");
-                connectButton.setText("Retry");
+                connectButton.setText(I18n.get("button.retry"));
                 connectButton.setDisable(false);
                 connectButton.getStyleClass().removeAll("disconnect-button");
                 connectButton.getStyleClass().add("connect-button");
@@ -1178,14 +1182,14 @@ public class DashboardViewController {
                 statusCircle.getStyleClass().setAll("status-circle-disconnected");
                 haloClass = "status-halo-disconnected";
                 if (statusTitle != null) {
-                    statusTitle.setText("Disconnected");
+                    statusTitle.setText(I18n.get("state.disconnected"));
                     statusTitle.getStyleClass().setAll("status-title", "status-title-disconnected");
                 }
                 statusLabel.setText(activeServer != null
-                        ? "Ready to connect to " + activeServer.getName()
-                        : "Add a server to get started");
+                        ? I18n.get("dashboard.status.ready", activeServer.getName())
+                        : I18n.get("dashboard.status.add.server"));
                 statusLabel.getStyleClass().setAll("status-subtitle");
-                connectButton.setText("Connect");
+                connectButton.setText(I18n.get("button.connect"));
                 connectButton.setDisable(false);
                 connectButton.getStyleClass().removeAll("disconnect-button");
                 connectButton.getStyleClass().add("connect-button");
@@ -1221,7 +1225,7 @@ public class DashboardViewController {
         if (server != null) {
             serverNameLabel.setText(server.getName());
         } else {
-            serverNameLabel.setText("No server selected");
+            serverNameLabel.setText(I18n.get("dashboard.no.server"));
         }
     }
 

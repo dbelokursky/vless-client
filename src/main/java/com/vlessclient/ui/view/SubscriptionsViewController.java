@@ -1,5 +1,6 @@
 package com.vlessclient.ui.view;
 
+import com.vlessclient.app.I18n;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.Subscription;
 import com.vlessclient.service.SubscriptionService;
@@ -73,23 +74,23 @@ public class SubscriptionsViewController {
     @FXML
     private void onAddSubscriptionClicked() {
         Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Add Subscription");
-        dialog.setHeaderText("Enter subscription details");
+        dialog.setTitle(I18n.get("button.add.subscription"));
+        dialog.setHeaderText(I18n.get("subscriptions.add.header"));
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
 
         TextField nameField = new TextField();
-        nameField.setPromptText("My Subscription");
+        nameField.setPromptText(I18n.get("subscriptions.name.prompt"));
         nameField.setPrefWidth(350);
         TextField urlField = new TextField();
         urlField.setPromptText("https://example.com/subscribe/...");
         urlField.setPrefWidth(350);
 
-        grid.add(new Label("Name:"), 0, 0);
+        grid.add(new Label(I18n.get("subscriptions.name.label")), 0, 0);
         grid.add(nameField, 1, 0);
-        grid.add(new Label("URL:"), 0, 1);
+        grid.add(new Label(I18n.get("subscriptions.url.label")), 0, 1);
         grid.add(urlField, 1, 1);
 
         dialog.getDialogPane().setContent(grid);
@@ -103,8 +104,8 @@ public class SubscriptionsViewController {
             String url = urlField.getText().trim();
             if (name.isEmpty() || url.isEmpty()) {
                 Alert alert = new Alert(Alert.AlertType.WARNING);
-                alert.setTitle("Invalid Input");
-                alert.setHeaderText("Name and URL are required");
+                alert.setTitle(I18n.get("subscriptions.invalid.input"));
+                alert.setHeaderText(I18n.get("subscriptions.name.url.required"));
                 alert.showAndWait();
                 return;
             }
@@ -116,8 +117,8 @@ public class SubscriptionsViewController {
                     log.error("Failed to add subscription", e);
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.ERROR);
-                        alert.setTitle("Error");
-                        alert.setHeaderText("Failed to add subscription");
+                        alert.setTitle(I18n.get("dialog.error"));
+                        alert.setHeaderText(I18n.get("subscriptions.add.failed"));
                         alert.setContentText(e.getMessage());
                         alert.showAndWait();
                     });
@@ -143,10 +144,10 @@ public class SubscriptionsViewController {
 
     private void deleteSubscription(Subscription sub) {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-        confirm.setTitle("Delete Subscription");
-        confirm.setHeaderText("Delete '" + sub.getName() + "'?");
-        confirm.setContentText("This will also remove all "
-                + sub.getServerIds().size() + " servers from this subscription.");
+        confirm.setTitle(I18n.get("subscriptions.delete.title"));
+        confirm.setHeaderText(I18n.get("subscriptions.delete.confirm", sub.getName()));
+        confirm.setContentText(I18n.get("subscriptions.delete.content",
+                String.valueOf(sub.getServerIds().size())));
 
         Optional<ButtonType> result = confirm.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
@@ -181,11 +182,13 @@ public class SubscriptionsViewController {
             urlLabel.getStyleClass().add("server-address");
 
             int serverCount = sub.getServerIds().size();
-            String servers = serverCount + (serverCount == 1 ? " server" : " servers");
+            String servers = serverCount == 1
+                    ? I18n.get("subscriptions.servers.one", String.valueOf(serverCount))
+                    : I18n.get("subscriptions.servers.many", String.valueOf(serverCount));
             String refresh = sub.getLastRefreshedAt() > 0
-                    ? "refreshed " + TIME_FORMAT.format(
-                            Instant.ofEpochMilli(sub.getLastRefreshedAt()))
-                    : "never refreshed";
+                    ? I18n.get("subscriptions.refreshed", TIME_FORMAT.format(
+                            Instant.ofEpochMilli(sub.getLastRefreshedAt())))
+                    : I18n.get("subscriptions.never.refreshed");
             Label statusLabel = new Label(servers + " · " + refresh);
             statusLabel.getStyleClass().add("server-address");
 
@@ -195,11 +198,11 @@ public class SubscriptionsViewController {
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);
 
-            Button refreshBtn = new Button("Refresh");
+            Button refreshBtn = new Button(I18n.get("button.refresh"));
             refreshBtn.getStyleClass().add("secondary-button");
             refreshBtn.setOnAction(e -> refreshSubscription(sub));
 
-            Button deleteBtn = new Button("Delete");
+            Button deleteBtn = new Button(I18n.get("button.delete"));
             deleteBtn.getStyleClass().add("secondary-button");
             deleteBtn.setOnAction(e -> deleteSubscription(sub));
 

@@ -1,5 +1,6 @@
 package com.vlessclient.ui.view;
 
+import com.vlessclient.app.I18n;
 import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.service.LogLineFormatter;
 import com.vlessclient.service.SingBoxEngine;
@@ -72,14 +73,14 @@ public class LogsViewController {
         logLevelFilter.setItems(FXCollections.observableArrayList(
                 "All", "Info", "Warn", "Error", "Debug"));
         logLevelFilter.getSelectionModel().select("All");
-        logLevelFilter.setTooltip(new Tooltip("Filter by level"));
+        logLevelFilter.setTooltip(new Tooltip(I18n.get("logs.filter.tooltip")));
 
         // Compact icon buttons keep the toolbar from overflowing on a narrow
         // window; tooltips preserve discoverability without the text labels.
         downloadButton.setGraphic(Icons.download(16));
-        downloadButton.setTooltip(new Tooltip("Download log"));
+        downloadButton.setTooltip(new Tooltip(I18n.get("logs.download.tooltip")));
         clearButton.setGraphic(Icons.clear(16));
-        clearButton.setTooltip(new Tooltip("Clear logs"));
+        clearButton.setTooltip(new Tooltip(I18n.get("logs.clear.tooltip")));
 
         SingBoxEngine engine = null;
         try {
@@ -114,14 +115,14 @@ public class LogsViewController {
         });
 
         // Right-click context menu with Copy / Copy All / Clear
-        MenuItem copyItem = new MenuItem("Copy");
+        MenuItem copyItem = new MenuItem(I18n.get("logs.copy"));
         copyItem.setAccelerator(copyCombo);
         copyItem.setOnAction(e -> copySelection());
-        MenuItem copyAllItem = new MenuItem("Copy All");
+        MenuItem copyAllItem = new MenuItem(I18n.get("logs.copy.all"));
         copyAllItem.setOnAction(e -> copyAll());
-        MenuItem selectAllItem = new MenuItem("Select All");
+        MenuItem selectAllItem = new MenuItem(I18n.get("logs.select.all"));
         selectAllItem.setOnAction(e -> logListView.getSelectionModel().selectAll());
-        MenuItem clearItem = new MenuItem("Clear");
+        MenuItem clearItem = new MenuItem(I18n.get("button.clear"));
         clearItem.setOnAction(e -> sourceLogLines.clear());
         ContextMenu contextMenu = new ContextMenu();
         contextMenu.getItems().addAll(copyItem, copyAllItem, selectAllItem, clearItem);
@@ -215,7 +216,7 @@ public class LogsViewController {
             return;
         }
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Save Log");
+        chooser.setTitle(I18n.get("logs.save.title"));
         String stamp = LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
         chooser.setInitialFileName("vless-log-" + stamp + ".txt");
@@ -243,8 +244,8 @@ public class LogsViewController {
         } catch (IOException e) {
             log.error("Failed to save log to {}", file, e);
             Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Error");
-            alert.setHeaderText("Could not save log file");
+            alert.setTitle(I18n.get("dialog.error"));
+            alert.setHeaderText(I18n.get("logs.save.failed"));
             alert.setContentText(e.getMessage());
             alert.initOwner(owner);
             alert.showAndWait();
