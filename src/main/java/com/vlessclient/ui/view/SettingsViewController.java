@@ -68,6 +68,7 @@ public class SettingsViewController {
     @FXML private TextField healthCheckReconnectDelayField;
     @FXML private ComboBox<ProxyMode> proxyModeCombo;
     @FXML private CheckBox systemProxyAutoConfigCheck;
+    @FXML private CheckBox storeSecretsCheck;
     @FXML private TextField proxyDnsField;
     @FXML private TextField directDnsField;
     @FXML private TextField tunInterfaceNameField;
@@ -161,6 +162,12 @@ public class SettingsViewController {
         tunInterfaceNameField.setText(settings.getTunInterfaceName());
         tunInterfaceNameField.textProperty().addListener((obs, oldVal, newVal) -> {
             settings.setTunInterfaceName(newVal == null ? "" : newVal.trim());
+            saveSettings(settings);
+        });
+
+        storeSecretsCheck.setSelected(settings.isStoreSecretsSecurely());
+        storeSecretsCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            settings.setStoreSecretsSecurely(newVal);
             saveSettings(settings);
         });
 
@@ -391,6 +398,7 @@ public class SettingsViewController {
         proxyModeLabel.textProperty().bind(I18n.binding("settings.proxy.mode"));
         systemProxyAutoConfigCheck.textProperty()
                 .bind(I18n.binding("settings.proxy.autoconfig"));
+        storeSecretsCheck.textProperty().bind(I18n.binding("settings.store.secrets"));
         healthCheckLabel.textProperty().bind(I18n.binding("settings.health.check"));
         healthCheckEnabledCheck.textProperty().bind(I18n.binding("settings.health.check.enabled"));
         healthCheckAutoReconnectCheck.textProperty()

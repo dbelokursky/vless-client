@@ -86,6 +86,12 @@ public class AppSettings {
     @JsonProperty("health_check_targets")
     private List<HealthCheckTarget> healthCheckTargets = defaultHealthCheckTargets();
 
+    // Seal server credentials (Keychain / DPAPI / Secret Service) instead of
+    // writing them into servers.json as plaintext. On platforms without a
+    // usable backend the app silently keeps writing plaintext.
+    @JsonProperty("store_secrets_securely")
+    private boolean storeSecretsSecurely = true;
+
     public AppSettings() {
     }
 
@@ -223,6 +229,14 @@ public class AppSettings {
 
     public void setHealthCheckAutoReconnect(boolean healthCheckAutoReconnect) {
         this.healthCheckAutoReconnect = healthCheckAutoReconnect;
+    }
+
+    public boolean isStoreSecretsSecurely() {
+        return storeSecretsSecurely;
+    }
+
+    public void setStoreSecretsSecurely(boolean storeSecretsSecurely) {
+        this.storeSecretsSecurely = storeSecretsSecurely;
     }
 
     public int getHealthCheckIntervalSeconds() {

@@ -148,6 +148,9 @@
                 <TextField fx:id="tunIpv4Field" styleClass="form-field" prefWidth="200"
                            promptText="172.19.0.1/30"/>
             </HBox>
+
+            <CheckBox fx:id="storeSecretsCheck" text="Store credentials in the system keychain"
+                      styleClass="form-checkbox"/>
         </VBox>
 
         <!-- About Section -->
