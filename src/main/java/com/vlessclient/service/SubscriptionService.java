@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.Subscription;
+import com.vlessclient.platform.PlatformPaths;
 import com.vlessclient.platform.SecretSealer;
 import com.vlessclient.platform.SecretSealers;
 import java.io.IOException;
@@ -57,13 +58,46 @@ public class SubscriptionService {
      */
     public SubscriptionService(ConfigStore configStore, ShareLinkParser shareLinkParser) {
         this(configStore, shareLinkParser,
-                Path.of(System.getProperty("user.home"),
-                        "Library", "Application Support", "VlessClient"),
+                migrateLegacyDataDir(PlatformPaths.current().dataDir(), legacyMacDataDir()),
                 HttpClient.newBuilder()
                         .connectTimeout(Duration.ofSeconds(15))
                         .followRedirects(HttpClient.Redirect.NORMAL)
                         .build(),
                 SecretSealers.forCurrentPlatform());
+    }
+
+    /** The pre-port location: subscriptions.json used to be written mac-style on every OS. */
+    private static Path legacyMacDataDir() {
+        return Path.of(System.getProperty("user.home"),
+                "Library", "Application Support", "VlessClient");
+    }
+
+    /**
+     * One-time migration for the Windows/Linux ports: earlier builds wrote
+     * {@code subscriptions.json} under the macOS-style path on every OS. If
+     * the platform-correct location has no file yet but the legacy one does,
+     * move it over; an existing platform file always wins. Never throws —
+     * on failure the legacy file stays put for manual recovery.
+     */
+    static Path migrateLegacyDataDir(Path platformDir, Path legacyDir) {
+        if (platformDir.equals(legacyDir)) {
+            return platformDir;
+        }
+        Path platformFile = platformDir.resolve(SUBSCRIPTIONS_FILE);
+        Path legacyFile = legacyDir.resolve(SUBSCRIPTIONS_FILE);
+        if (Files.exists(platformFile) || !Files.exists(legacyFile)) {
+            return platformDir;
+        }
+        try {
+            Files.createDirectories(platformDir);
+            Files.move(legacyFile, platformFile);
+            log.info("Migrated subscriptions from legacy path {} to {}",
+                    legacyFile, platformFile);
+        } catch (IOException e) {
+            log.warn("Could not migrate legacy subscriptions file from {}; "
+                    + "continuing with {}", legacyFile, platformDir, e);
+        }
+        return platformDir;
     }
 
     /**
