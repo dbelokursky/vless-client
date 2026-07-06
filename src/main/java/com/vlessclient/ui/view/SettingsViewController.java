@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
  * Controller for the Settings view.
  * Manages theme, language, proxy, and other application settings.
  */
-public class SettingsViewController {
+public class SettingsViewController implements ViewShownAware {
 
     private static final Logger log = LoggerFactory.getLogger(SettingsViewController.class);
 
@@ -91,6 +91,7 @@ public class SettingsViewController {
     private ConfigStore configStore;
     private ThemeManager themeManager;
     private Autostart autostart;
+    private UpdatesSection updatesSection;
     private boolean suppressLaunchAtLoginListener;
 
     /**
@@ -369,7 +370,7 @@ public class SettingsViewController {
      */
     private void initAboutSection() {
         appVersionValue.setText(AppVersion.VERSION);
-        new UpdatesSection(new UpdatesSection.Controls(
+        updatesSection = new UpdatesSection(new UpdatesSection.Controls(
                 singboxVersionValue,
                 coreUpdateStatusLabel,
                 coreUpdateProgress,
@@ -381,7 +382,16 @@ public class SettingsViewController {
                 appUpdateRow,
                 appUpdateDot,
                 appUpdateDetail,
-                downloadAppButton), configStore).init();
+                downloadAppButton), configStore);
+        updatesSection.init();
+    }
+
+    /** The cached view is re-shown, not re-initialized: refresh stale rows. */
+    @Override
+    public void onViewShown() {
+        if (updatesSection != null) {
+            updatesSection.refreshOnOpen();
+        }
     }
 
     private void bindLabels() {

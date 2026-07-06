@@ -41,6 +41,9 @@ public final class UpdatesSection {
     /** Re-check for a new core at most once a day when Settings is opened. */
     private static final long CORE_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000;
 
+    /** Re-check for a new app release at most this often on Settings opens. */
+    private static final long OPEN_REFRESH_THROTTLE_MS = 5L * 60 * 1000;
+
     /**
      * The FXML-injected controls this section drives. They remain owned (and
      * declared) by the Settings controller; this record just carries them.
@@ -84,6 +87,8 @@ public final class UpdatesSection {
     private boolean coreOperationInFlight;
     /** Set when Update was clicked on a persisted version with no URL yet. */
     private boolean installAfterCheck;
+    /** When the last open-triggered app check started; 0 = never. */
+    private long lastOpenRefreshMs;
 
     /**
      * Creates the section over the given controls; nothing is wired until
@@ -127,6 +132,26 @@ public final class UpdatesSection {
         if (updateManager == null && !coreCheckEnabled) {
             checkCoreUpdateButton.setVisible(false);
             checkCoreUpdateButton.setManaged(false);
+        }
+    }
+
+    /**
+     * Refreshes both update rows when the Settings view becomes visible
+     * again. The view is cached, so {@link #init()} runs once per app run —
+     * without this hook the rows keep showing the verdict of a check made
+     * before a release. The app row re-checks at most every 5 minutes; the
+     * core row follows its own daily staleness rule, as in {@code init()}.
+     * Checks are quiet: failures leave the last verdict in place.
+     */
+    public void refreshOnOpen() {
+        long now = System.currentTimeMillis();
+        if (updateManager != null && now - lastOpenRefreshMs > OPEN_REFRESH_THROTTLE_MS) {
+            lastOpenRefreshMs = now;
+            runAppCheck();
+        }
+        if (coreCheckEnabled
+                && now - coreUpdateService.lastCheckEpochMs() > CORE_CHECK_INTERVAL_MS) {
+            runCoreCheck(true);
         }
     }
 
