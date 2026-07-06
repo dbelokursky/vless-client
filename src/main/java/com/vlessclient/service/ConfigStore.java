@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.platform.PlatformPaths;
+import com.vlessclient.platform.SecretSealer;
+import com.vlessclient.platform.SecretSealers;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,6 +34,7 @@ public class ConfigStore {
     private final Path dataDir;
     private final ObjectMapper objectMapper;
     private final ObservableList<ServerConfig> servers;
+    private final SecretSealer sealer;
     private AppSettings settings;
 
     public ConfigStore() {
@@ -39,7 +42,12 @@ public class ConfigStore {
     }
 
     ConfigStore(Path dataDir) {
+        this(dataDir, SecretSealers.forCurrentPlatform());
+    }
+
+    ConfigStore(Path dataDir, SecretSealer sealer) {
         this.dataDir = dataDir;
+        this.sealer = sealer;
         this.objectMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
         this.servers = FXCollections.observableArrayList();
         this.settings = new AppSettings();
@@ -84,6 +92,9 @@ public class ConfigStore {
         boolean removed = servers.removeIf(s -> s.getId().equals(serverId));
         if (removed) {
             saveServers();
+            // Off the caller's (usually FX) thread; a leftover entry is inert
+            // if this races or fails.
+            Thread.startVirtualThread(() -> sealer.delete(secretKey(serverId)));
         } else {
             log.warn("Server not found for removal: {}", serverId);
         }
@@ -148,10 +159,50 @@ public class ConfigStore {
     private synchronized void saveServers() {
         Path file = dataDir.resolve(SERVERS_FILE);
         try {
-            objectMapper.writeValue(file.toFile(), new ArrayList<>(servers));
+            objectMapper.writeValue(file.toFile(), serializableServers());
         } catch (IOException e) {
             log.error("Failed to save servers to {}", file, e);
         }
+    }
+
+    /**
+     * The on-disk view of the server list. In memory credentials stay
+     * plaintext; when secure storage is enabled and a backend is available,
+     * the persisted copies carry sealed values instead. A failed seal keeps
+     * the plaintext — a readable config always wins over a lost credential.
+     */
+    private List<ServerConfig> serializableServers() {
+        boolean sealing = settings.isStoreSecretsSecurely() && sealer.isAvailable();
+        List<ServerConfig> out = new ArrayList<>(servers.size());
+        for (ServerConfig live : servers) {
+            String uuid = live.getUuid();
+            if (!sealing || uuid == null || uuid.isBlank() || SecretSealer.isSealed(uuid)) {
+                out.add(live);
+                continue;
+            }
+            String sealed = sealer.seal(secretKey(live.getId()), uuid);
+            if (sealed == null) {
+                log.warn("Could not seal credential for server '{}'; keeping plaintext",
+                        live.getName());
+                out.add(live);
+                continue;
+            }
+            try {
+                ServerConfig copy = objectMapper.readValue(
+                        objectMapper.writeValueAsString(live), ServerConfig.class);
+                copy.setUuid(sealed);
+                out.add(copy);
+            } catch (IOException e) {
+                log.warn("Could not copy server '{}' for sealing; keeping plaintext",
+                        live.getName(), e);
+                out.add(live);
+            }
+        }
+        return out;
+    }
+
+    private static String secretKey(String serverId) {
+        return serverId + ".uuid";
     }
 
     private void ensureDataDir() {
@@ -171,11 +222,31 @@ public class ConfigStore {
         try {
             List<ServerConfig> loaded = objectMapper.readValue(
                     file.toFile(), new TypeReference<List<ServerConfig>>() {});
+            loaded.forEach(this::unsealInPlace);
             servers.addAll(loaded);
             log.info("Loaded {} servers from {}", servers.size(), file);
         } catch (IOException e) {
             log.error("Failed to load servers from {}", file, e);
         }
+    }
+
+    /**
+     * Restores the in-memory plaintext for a sealed credential. Untagged
+     * (legacy plaintext) values pass through. On failure the tag is kept so
+     * the entry stays visible and recovers if the backend entry reappears;
+     * connecting will fail until the credential is re-entered.
+     */
+    private void unsealInPlace(ServerConfig server) {
+        String stored = server.getUuid();
+        if (!SecretSealer.isSealed(stored)) {
+            return;
+        }
+        sealer.unseal(secretKey(server.getId()), stored).ifPresentOrElse(
+                server::setUuid,
+                () -> log.error(
+                        "Could not unseal the credential for server '{}' ({}); "
+                                + "re-enter it or restore the secret backend entry",
+                        server.getName(), server.getId()));
     }
 
     private void loadSettings() {
