@@ -80,6 +80,14 @@ class SingBoxEngineTest {
     }
 
     /**
+     * Generous await deadline: polling returns as soon as the state matches,
+     * so a large value costs nothing on success — it only buys headroom on
+     * slow shared CI runners, where wrapper teardown has been observed to
+     * exceed 5s (flaky tunMode failure on macos-latest, 2026-07).
+     */
+    private static final long AWAIT_STATE_TIMEOUT_MS = 15_000;
+
+    /**
      * Blocks up to timeoutMillis waiting for the engine's connection state
      * (as observed on the JavaFX thread) to equal the expected value.
      */
@@ -123,7 +131,7 @@ class SingBoxEngineTest {
         engine.stop();
 
         assertThat(engine.isRunning()).isFalse();
-        awaitConnectionState(engine, ConnectionState.DISCONNECTED, 2000);
+        awaitConnectionState(engine, ConnectionState.DISCONNECTED, AWAIT_STATE_TIMEOUT_MS);
     }
 
     @Test
@@ -150,7 +158,7 @@ class SingBoxEngineTest {
 
         engine.start(DUMMY_CONFIG, ProxyMode.SYSTEM_PROXY);
         try {
-            awaitConnectionState(engine, ConnectionState.CONNECTED, 5000);
+            awaitConnectionState(engine, ConnectionState.CONNECTED, AWAIT_STATE_TIMEOUT_MS);
         } finally {
             engine.stop();
         }
@@ -163,7 +171,7 @@ class SingBoxEngineTest {
 
         engine.start(DUMMY_CONFIG, ProxyMode.SYSTEM_PROXY);
 
-        awaitConnectionState(engine, ConnectionState.ERROR, 5000);
+        awaitConnectionState(engine, ConnectionState.ERROR, AWAIT_STATE_TIMEOUT_MS);
         assertThat(engine.errorMessageProperty().get()).contains("exited unexpectedly");
     }
 
@@ -200,7 +208,7 @@ class SingBoxEngineTest {
 
         engine.start(SET_SYSTEM_PROXY_CONFIG, ProxyMode.SYSTEM_PROXY);
 
-        awaitConnectionState(engine, ConnectionState.ERROR, 5000);
+        awaitConnectionState(engine, ConnectionState.ERROR, AWAIT_STATE_TIMEOUT_MS);
         long deadline = System.currentTimeMillis() + 5000;
         while (guardCalls.isEmpty() && System.currentTimeMillis() < deadline) {
             Thread.sleep(25);
@@ -250,7 +258,7 @@ class SingBoxEngineTest {
             engine.stop();
         }
 
-        awaitConnectionState(engine, ConnectionState.DISCONNECTED, 5000);
+        awaitConnectionState(engine, ConnectionState.DISCONNECTED, AWAIT_STATE_TIMEOUT_MS);
         assertThat(engine.isRunning()).isFalse();
         // The wrapper must have exited on its own after seeing the stop file
         // (exit 0) — a force-kill fallback would surface as a signal exit.
