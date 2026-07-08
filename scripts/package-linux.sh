@@ -63,6 +63,7 @@ jpackage \
     --vendor "VLESS Client" \
     --java-options "--enable-preview" \
     --java-options "-Dapp.version=${VERSION}" \
+    --java-options "-Djava.awt.headless=false" \
     --verbose
 
 echo "[package-linux] built: $(ls dist/*.deb) (app-version=${VERSION}, deb Version=${DEB_VERSION})"

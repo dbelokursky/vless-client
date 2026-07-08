@@ -126,8 +126,10 @@ public class VlessClientApp extends Application {
             } else {
                 log.warn("APP_QUIT_HANDLER not supported — Cmd+Q may leak JVM");
             }
-        } catch (Exception e) {
-            log.debug("Could not install Desktop quit handler: {}", e.getMessage());
+        } catch (Throwable e) {
+            // Throwable: a poisoned AWT Toolkit (headless=false, no display)
+            // surfaces as an Error here — must not abort startup.
+            log.debug("Could not install Desktop quit handler: {}", e.toString());
         }
     }
 
@@ -153,8 +155,29 @@ public class VlessClientApp extends Application {
             log.info("Dock icon installed");
         } catch (UnsupportedOperationException | SecurityException e) {
             log.debug("Dock icon not supported on this platform: {}", e.getMessage());
-        } catch (Exception e) {
-            log.warn("Failed to set Dock icon", e);
+        } catch (Throwable e) {
+            // Throwable, not Exception: with -Djava.awt.headless=false on a
+            // display-less/broken Linux host, the first AWT touch fails the
+            // Toolkit's static init with an ExceptionInInitializerError (an
+            // Error). Swallowing it keeps the app starting — just without a
+            // Dock icon. Found by the desktop-VM QA scenario.
+            log.warn("Failed to set Dock icon: {}", e.toString());
+        }
+    }
+
+    /**
+     * Whether an AWT system tray exists, defaulting to {@code false} if AWT
+     * can't answer. {@code SystemTray.isSupported()} triggers Toolkit init;
+     * with {@code -Djava.awt.headless=false} on a display-less/broken host
+     * that fails with an {@link Error} (poisoned Toolkit) — which must not
+     * abort startup, or the app never connects. Found by the desktop-VM QA.
+     */
+    private static boolean systemTraySupported() {
+        try {
+            return java.awt.SystemTray.isSupported();
+        } catch (Throwable e) {
+            log.warn("Could not query the system tray; assuming none: {}", e.toString());
+            return false;
         }
     }
 
@@ -193,7 +216,7 @@ public class VlessClientApp extends Application {
         // desktops with no system tray (notably stock GNOME) hiding would
         // strand the app with no way back, so there closing the window quits.
         Platform.setImplicitExit(false);
-        boolean trayAvailable = java.awt.SystemTray.isSupported();
+        boolean trayAvailable = systemTraySupported();
         primaryStage.setOnCloseRequest(event -> {
             if (trayAvailable) {
                 event.consume();
@@ -329,8 +352,11 @@ public class VlessClientApp extends Application {
             trayIconService = new TrayIconService(engine, configStore, generator, stage);
             ServiceLocator.register(TrayIconService.class, trayIconService);
             trayIconService.install();
-        } catch (Exception e) {
-            log.warn("Failed to install tray icon service", e);
+        } catch (Throwable e) {
+            // Throwable: SystemTray.isSupported()/AWT can fail the Toolkit
+            // static init with an Error under headless=false without a
+            // display — the app must still run, just without a tray icon.
+            log.warn("Failed to install tray icon service: {}", e.toString());
         }
     }
 

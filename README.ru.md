@@ -371,6 +371,7 @@ scripts/
 ├── package-windows.ps1     # MSI (Windows)
 ├── package-linux.sh        # DEB (Linux)
 ├── linux-qa.sh             # Linux-QA одной командой в Docker (сборка+тесты+скриншот UI)
+├── linux-vm-qa.sh          # desktop-VM QA: TUN teardown, tray, GNOME proxy
 └── GenerateAppIcon.java    # генератор иконки приложения
 ```
 
