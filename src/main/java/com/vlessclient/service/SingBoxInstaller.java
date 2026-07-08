@@ -54,8 +54,8 @@ public class SingBoxInstaller {
      * SHA-256 checksums of the host OS's release archives, keyed by
      * architecture (arm64/amd64), from the same properties resource. Verified
      * after the runtime fallback download to protect against corruption or
-     * tampering. amd64 is always pinned; arm64 only where we ship it
-     * (currently darwin).
+     * tampering. amd64 is always pinned; arm64 where we ship it
+     * (darwin and linux).
      */
     private static final Map<String, String> EXPECTED_SHA256;
 

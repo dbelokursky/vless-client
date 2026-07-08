@@ -50,11 +50,19 @@ CACHE_DIR="${HOME}/.cache/vless-client-build/sing-box-${VERSION}"
 mkdir -p "${CACHE_DIR}" "${OUT_DIR}"
 
 # The build host decides which platform's binaries get bundled: a macOS host
-# bundles both darwin archs (universal DMG), a Linux host bundles linux-amd64.
-# Windows hosts use bundle-singbox.ps1 instead.
+# bundles both darwin archs (universal DMG), a Linux host bundles its own
+# architecture (amd64 or arm64). Windows hosts use bundle-singbox.ps1 instead.
 case "$(uname -s)" in
     Darwin) targets="darwin:arm64 darwin:amd64" ;;
-    Linux)  targets="linux:amd64" ;;
+    Linux)
+        case "$(uname -m)" in
+            aarch64|arm64) targets="linux:arm64" ;;
+            x86_64|amd64)  targets="linux:amd64" ;;
+            *)
+                echo "[bundle-singbox] unsupported Linux arch: $(uname -m)" >&2
+                exit 1
+                ;;
+        esac ;;
     *)
         echo "[bundle-singbox] unsupported build host: $(uname -s)" >&2
         exit 1

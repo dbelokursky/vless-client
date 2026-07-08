@@ -6,7 +6,7 @@
 #
 # Usage: scripts/bump-singbox.sh <version>       (e.g. 1.13.14)
 #
-# For each bundled asset (a darwin tar.gz per arch and the windows amd64 zip)
+# For each bundled asset (darwin and linux tar.gz per arch, windows amd64 zip)
 # the script downloads the release archive, computes its SHA-256 locally, and
 # cross-checks it against the digest published by the GitHub Releases API. The
 # two values travel different paths (CDN download vs API metadata), so a
@@ -95,6 +95,7 @@ process_asset darwin arm64 tar.gz
 process_asset darwin amd64 tar.gz
 process_asset windows amd64 zip
 process_asset linux amd64 tar.gz
+process_asset linux arm64 tar.gz
 
 # Sanity: the host-arch binary must actually run and report the version.
 host_arch=$(uname -m)
@@ -116,7 +117,7 @@ echo "[bump-singbox] binary check OK: ${reported}"
 tmp_props="$(mktemp)"
 {
     # Preserve everything except the managed keys, then append them in order.
-    grep -vE '^[[:space:]]*singbox\.(version|sha256\.(darwin-(arm64|amd64)|(windows|linux)-amd64))[[:space:]]*=' \
+    grep -vE '^[[:space:]]*singbox\.(version|sha256\.(darwin-(arm64|amd64)|windows-amd64|linux-(amd64|arm64)))[[:space:]]*=' \
         "${PROPS_FILE}"
     printf 'singbox.version=%s\n' "${VERSION}"
     for line in "${pinned_lines[@]}"; do
