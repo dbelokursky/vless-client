@@ -1,8 +1,10 @@
 package com.vlessclient.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.Protocol;
 import com.vlessclient.model.ServerConfig;
@@ -32,6 +34,13 @@ public class ConfigStore {
 
     private static final String SERVERS_FILE = "servers.json";
     private static final String SETTINGS_FILE = "settings.json";
+
+    /**
+     * Version stream of servers.json: v0 is the pre-envelope bare array,
+     * v1 wraps it as {@code {"config_version":1,"servers":[…]}}. Bump on the
+     * first incompatible change and dispatch a migration in loadServers().
+     */
+    static final int SERVERS_CONFIG_VERSION = 1;
 
     private final Path dataDir;
     private final ObjectMapper objectMapper;
@@ -168,7 +177,10 @@ public class ConfigStore {
     private synchronized void saveServers() {
         Path file = dataDir.resolve(SERVERS_FILE);
         try {
-            objectMapper.writeValue(file.toFile(), serializableServers());
+            ObjectNode envelope = objectMapper.createObjectNode();
+            envelope.put("config_version", SERVERS_CONFIG_VERSION);
+            envelope.set("servers", objectMapper.valueToTree(serializableServers()));
+            objectMapper.writeValue(file.toFile(), envelope);
         } catch (IOException e) {
             log.error("Failed to save servers to {}", file, e);
         }
@@ -249,13 +261,55 @@ public class ConfigStore {
             return;
         }
         try {
-            List<ServerConfig> loaded = objectMapper.readValue(
-                    file.toFile(), new TypeReference<List<ServerConfig>>() {});
+            JsonNode root = objectMapper.readTree(file.toFile());
+            JsonNode items;
+            if (root.isArray()) {
+                // v0: the pre-envelope bare array. Keep a one-time backup so
+                // downgrading past the envelope change stays possible, then
+                // the next save writes v1.
+                backupLegacyOnce(file);
+                items = root;
+                log.info("servers.json is the legacy (v0) array format; "
+                        + "it will be upgraded to v{} on the next save", SERVERS_CONFIG_VERSION);
+            } else {
+                int version = root.path("config_version").asInt(0);
+                if (version > SERVERS_CONFIG_VERSION) {
+                    // Newer app wrote it; read best-effort rather than drop
+                    // the user's servers on a downgrade.
+                    log.warn("servers.json has config_version {} (this build "
+                            + "understands {}); reading best-effort", version,
+                            SERVERS_CONFIG_VERSION);
+                }
+                // Future incompatible versions dispatch their migrations here.
+                items = root.path("servers");
+            }
+            if (!items.isArray()) {
+                log.error("servers.json has no readable server list; leaving list empty");
+                return;
+            }
+            List<ServerConfig> loaded = objectMapper.convertValue(
+                    items, new TypeReference<List<ServerConfig>>() {});
             loaded.forEach(this::unsealInPlace);
             servers.addAll(loaded);
             log.info("Loaded {} servers from {}", servers.size(), file);
         } catch (IOException e) {
             log.error("Failed to load servers from {}", file, e);
+        }
+    }
+
+    /**
+     * Copies a legacy pre-envelope file to {@code <name>.v0.bak} once.
+     * Package-private: {@link SubscriptionService} migrates the same way.
+     */
+    static void backupLegacyOnce(Path file) {
+        Path backup = file.resolveSibling(file.getFileName() + ".v0.bak");
+        if (Files.exists(backup)) {
+            return;
+        }
+        try {
+            Files.copy(file, backup);
+        } catch (IOException e) {
+            log.warn("Could not back up legacy {} to {}", file.getFileName(), backup, e);
         }
     }
 
@@ -291,6 +345,14 @@ public class ConfigStore {
         }
         try {
             this.settings = objectMapper.readValue(file.toFile(), AppSettings.class);
+            if (settings.getConfigVersion() > AppSettings.CURRENT_CONFIG_VERSION) {
+                log.warn("settings.json has config_version {} (this build "
+                        + "understands {}); reading best-effort",
+                        settings.getConfigVersion(), AppSettings.CURRENT_CONFIG_VERSION);
+            }
+            // Future incompatible versions dispatch their migrations here;
+            // saving always stamps the version this build writes.
+            settings.setConfigVersion(AppSettings.CURRENT_CONFIG_VERSION);
             log.info("Loaded settings from {}", file);
         } catch (IOException e) {
             log.error("Failed to load settings from {}", file, e);

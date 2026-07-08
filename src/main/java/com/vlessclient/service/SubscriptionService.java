@@ -1,8 +1,10 @@
 package com.vlessclient.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vlessclient.model.ServerConfig;
 import com.vlessclient.model.Subscription;
 import com.vlessclient.platform.PlatformPaths;
@@ -39,6 +41,12 @@ public class SubscriptionService {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionService.class);
     private static final String SUBSCRIPTIONS_FILE = "subscriptions.json";
+
+    /**
+     * Version stream of subscriptions.json: v0 is the pre-envelope bare
+     * array, v1 wraps it as {@code {"config_version":1,"subscriptions":[…]}}.
+     */
+    static final int SUBSCRIPTIONS_CONFIG_VERSION = 1;
 
     private final Path dataDir;
     private final ObjectMapper objectMapper;
@@ -407,7 +415,11 @@ public class SubscriptionService {
     synchronized void saveSubscriptions() {
         Path file = dataDir.resolve(SUBSCRIPTIONS_FILE);
         try {
-            objectMapper.writeValue(file.toFile(), serializableSubscriptions());
+            ObjectNode envelope = objectMapper.createObjectNode();
+            envelope.put("config_version", SUBSCRIPTIONS_CONFIG_VERSION);
+            envelope.set("subscriptions",
+                    objectMapper.valueToTree(serializableSubscriptions()));
+            objectMapper.writeValue(file.toFile(), envelope);
         } catch (IOException e) {
             log.error("Failed to save subscriptions to {}", file, e);
         }
@@ -465,8 +477,31 @@ public class SubscriptionService {
             return;
         }
         try {
-            List<Subscription> loaded = objectMapper.readValue(
-                    file.toFile(), new TypeReference<List<Subscription>>() {});
+            JsonNode root = objectMapper.readTree(file.toFile());
+            JsonNode items;
+            if (root.isArray()) {
+                // v0: pre-envelope bare array — back up once, upgrade on save.
+                ConfigStore.backupLegacyOnce(file);
+                items = root;
+                log.info("subscriptions.json is the legacy (v0) array format; "
+                        + "it will be upgraded to v{} on the next save",
+                        SUBSCRIPTIONS_CONFIG_VERSION);
+            } else {
+                int version = root.path("config_version").asInt(0);
+                if (version > SUBSCRIPTIONS_CONFIG_VERSION) {
+                    log.warn("subscriptions.json has config_version {} (this "
+                            + "build understands {}); reading best-effort",
+                            version, SUBSCRIPTIONS_CONFIG_VERSION);
+                }
+                // Future incompatible versions dispatch their migrations here.
+                items = root.path("subscriptions");
+            }
+            if (!items.isArray()) {
+                log.error("subscriptions.json has no readable list; leaving it empty");
+                return;
+            }
+            List<Subscription> loaded = objectMapper.convertValue(
+                    items, new TypeReference<List<Subscription>>() {});
             loaded.forEach(this::unsealInPlace);
             subscriptions.addAll(loaded);
             log.info("Loaded {} subscriptions from {}", subscriptions.size(), file);
