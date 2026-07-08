@@ -28,6 +28,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,24 +65,39 @@ public class RoutingViewController {
     public void initialize() {
         routingService = ServiceLocator.get(RoutingService.class);
 
-        presetCombo.getItems().addAll("Route All", "Bypass Domestic", "Custom");
-        presetCombo.setCellFactory(cb -> new ListCell<>() {
+        // Items are the persisted preset ids; the converter renders the
+        // localized names, so display strings never round-trip into logic.
+        presetCombo.getItems().addAll("route_all", "bypass_domestic", "custom");
+        presetCombo.setConverter(new StringConverter<>() {
             @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty || item == null ? null : item);
+            public String toString(String preset) {
+                if (preset == null) {
+                    return "";
+                }
+                // Full key literals keep I18nBundleConsistencyTest able to
+                // verify every reference statically.
+                String key = switch (preset) {
+                    case "bypass_domestic" -> "routing.preset.bypass_domestic";
+                    case "custom" -> "routing.preset.custom";
+                    default -> "routing.preset.route_all";
+                };
+                return I18n.get(key);
+            }
+
+            @Override
+            public String fromString(String string) {
+                return string;
             }
         });
 
         RoutingConfig config = routingService.getConfig();
-        presetCombo.setValue(presetToDisplayName(config.getPreset()));
+        presetCombo.setValue(knownPreset(config.getPreset()));
 
         presetCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
-                String presetValue = displayNameToPreset(newVal);
-                routingService.setPreset(presetValue);
-                updateCustomRulesVisibility(presetValue);
-                updateBypassCountryVisibility(presetValue);
+                routingService.setPreset(newVal);
+                updateCustomRulesVisibility(newVal);
+                updateBypassCountryVisibility(newVal);
             }
         });
 
@@ -326,18 +342,10 @@ public class RoutingViewController {
                 : I18n.get("routing.bypass.count.many", String.valueOf(count)));
     }
 
-    private String presetToDisplayName(String preset) {
+    /** Maps unknown/legacy stored values onto the default preset id. */
+    private static String knownPreset(String preset) {
         return switch (preset) {
-            case "bypass_domestic" -> "Bypass Domestic";
-            case "custom" -> "Custom";
-            default -> "Route All";
-        };
-    }
-
-    private String displayNameToPreset(String displayName) {
-        return switch (displayName) {
-            case "Bypass Domestic" -> "bypass_domestic";
-            case "Custom" -> "custom";
+            case "bypass_domestic", "custom" -> preset;
             default -> "route_all";
         };
     }

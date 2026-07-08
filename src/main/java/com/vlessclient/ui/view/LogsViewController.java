@@ -42,6 +42,7 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
+import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,9 +71,35 @@ public class LogsViewController {
      */
     @FXML
     public void initialize() {
+        // Items are the filter codes buildLevelPredicate() switches on; the
+        // converter renders the localized names, so translating the UI can
+        // never break the filtering logic.
         logLevelFilter.setItems(FXCollections.observableArrayList(
-                "All", "Info", "Warn", "Error", "Debug"));
-        logLevelFilter.getSelectionModel().select("All");
+                "all", "info", "warn", "error", "debug"));
+        logLevelFilter.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(String level) {
+                if (level == null) {
+                    return "";
+                }
+                // Full key literals keep I18nBundleConsistencyTest able to
+                // verify every reference statically.
+                String key = switch (level) {
+                    case "info" -> "logs.level.info";
+                    case "warn" -> "logs.level.warn";
+                    case "error" -> "logs.level.error";
+                    case "debug" -> "logs.level.debug";
+                    default -> "logs.level.all";
+                };
+                return I18n.get(key);
+            }
+
+            @Override
+            public String fromString(String string) {
+                return string;
+            }
+        });
+        logLevelFilter.getSelectionModel().select("all");
         logLevelFilter.setTooltip(new Tooltip(I18n.get("logs.filter.tooltip")));
 
         // Compact icon buttons keep the toolbar from overflowing on a narrow
@@ -263,13 +290,12 @@ public class LogsViewController {
     }
 
     private Predicate<String> buildLevelPredicate(String level) {
-        if (level == null || "All".equals(level)) {
+        if (level == null || "all".equals(level)) {
             return line -> true;
         }
-        String levelLower = level.toLowerCase();
         return line -> {
             String lower = line.toLowerCase();
-            return switch (levelLower) {
+            return switch (level) {
                 case "error" -> lower.contains("error") || lower.contains("fatal");
                 case "warn" -> lower.contains("warn") || lower.contains("error")
                         || lower.contains("fatal");
