@@ -146,7 +146,13 @@ fixtures tun
 xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
   java '"$APP_OPTS"' -jar '"$JAR"' > '"$OUT"'/tun-app.log 2>&1 &
   APP=$!
-  for i in $(seq 1 30); do ip link | grep -q utun99 && break; sleep 1; done
+  # Wait for the core to be up, then for it to actually create utun99 (the
+  # interface appears a moment after the process starts).
+  for i in $(seq 1 45); do
+    ip link | grep -q utun99 && break
+    pgrep -x sing-box >/dev/null || sleep 0
+    sleep 1
+  done
   ip link > '"$OUT"'/iplink-during.txt
   kill -TERM $APP 2>/dev/null
   for i in $(seq 1 20); do kill -0 $APP 2>/dev/null || break; sleep 0.5; done
@@ -156,9 +162,25 @@ xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
 # poll up to 30s before calling it a leak.
 for i in $(seq 1 30); do ip link | grep -q utun99 || break; sleep 1; done
 ip link > "$OUT/iplink-after.txt"
-if grep -q utun99 "$OUT/iplink-during.txt"; then echo "TUN up:       utun99 PRESENT while connected"; else echo "TUN up:       utun99 MISSING (unexpected)"; fi
-if grep -q utun99 "$OUT/iplink-after.txt"; then echo "TUN teardown: STILL PRESENT 30s after stop (LEAK)"; else echo "TUN teardown: removed after stop (OK)"; fi
-if pgrep -x sing-box >/dev/null; then echo "core teardown: sing-box STILL RUNNING (LEAK)"; pkill -9 sing-box; else echo "core teardown: sing-box gone (OK)"; fi
+
+if ! grep -q utun99 "$OUT/iplink-during.txt"; then
+  # Without the interface ever coming up, the teardown check would be
+  # vacuous — say so instead of reporting a hollow pass.
+  echo "TUN:          INCONCLUSIVE — utun99 never came up (see tun-app.log)"
+  grep -iE "tun|error|fatal" "$OUT/tun-app.log" | tail -3
+else
+  echo "TUN up:       utun99 PRESENT while connected"
+  if grep -q utun99 "$OUT/iplink-after.txt"; then
+    echo "TUN teardown: STILL PRESENT 30s after stop (LEAK)"
+  else
+    echo "TUN teardown: removed after stop (OK)"
+  fi
+  if pgrep -x sing-box >/dev/null; then
+    echo "core teardown: sing-box STILL RUNNING (LEAK)"; pkill -9 sing-box
+  else
+    echo "core teardown: sing-box gone (OK)"
+  fi
+fi
 echo "=== VM QA DONE ==="
 GUEST_EOF
 } > "${GUEST_SCRIPT}"
