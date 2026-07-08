@@ -32,6 +32,7 @@ VLESS/VMess/Trojan/Shadowsocks на JavaFX — оборачивает
 | macOS (Apple Silicon) | `vless-client_x.y.z.dmg` | |
 | Windows 10/11 (x64) | `vless-client_x.y.z.msi` | ставится per-user, без прав администратора |
 | Debian/Ubuntu (amd64) | `vless-client_x.y.z_amd64.deb` | |
+| Debian/Ubuntu (arm64) | `vless-client_x.y.z_arm64.deb` | Raspberry Pi 5 и другие ARM-машины |
 
 Сборка самого свежего мержа в `main` (может быть сырой) — в prerelease
 [**dev-latest**](https://github.com/dbelokursky/vless-client/releases/tag/dev-latest).

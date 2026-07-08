@@ -491,6 +491,11 @@ class SingBoxRealBinarySmokeTest {
         org.junit.jupiter.api.Assumptions.assumeFalse(
                 com.vlessclient.platform.SystemProxySupport.current().canAutoConfigure(),
                 "host has the GNOME proxy schema — gnomeless contract not testable here");
+        // The pin covers "gsettings exists but the schema doesn't" (GitHub
+        // runners). With no gsettings binary at all — minimal containers —
+        // upstream takes a different code path and keeps running.
+        org.junit.jupiter.api.Assumptions.assumeTrue(gsettingsOnPath(),
+                "no gsettings binary — the pinned upstream contract does not apply");
 
         AppSettings settings = new AppSettings();
         settings.setProxyMode(ProxyMode.SYSTEM_PROXY);
@@ -520,6 +525,19 @@ class SingBoxRealBinarySmokeTest {
         } finally {
             proc.destroyForcibly();
             Files.deleteIfExists(configFile);
+        }
+    }
+
+    private static boolean gsettingsOnPath() {
+        try {
+            Process p = new ProcessBuilder("gsettings", "--version").start();
+            p.waitFor(5, TimeUnit.SECONDS);
+            return true;
+        } catch (IOException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 

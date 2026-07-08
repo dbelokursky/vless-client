@@ -47,6 +47,18 @@ jobs:
           distribution: 'temurin'
       - run: mvn -B clean verify -Psmoke
 
+  # arm64 twin: GitHub's free arm runners for public repos. Exercises the
+  # arch-aware bundling (linux-arm64 sing-box) with the same smoke gates.
+  test-linux-arm:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25-ea'
+          distribution: 'temurin'
+      - run: mvn -B clean verify -Psmoke
+
   # ========= Packaging: merges to main only, after that OS's tests =========
   # Each produces an installable artifact (14 days) so any main commit can be
   # tried without cutting a release. Tagged releases build their installers
@@ -112,6 +124,26 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+  package-linux-arm:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test-linux-arm
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25-ea'
+          distribution: 'temurin'
+      - run: mvn -B package -DskipTests
+      - name: Package DEB (arm64)
+        run: scripts/package-linux.sh "1.0.0-dev-${GITHUB_SHA:0:7}" "1.0.0+dev${{ github.run_number }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vless-client-linux-arm-${{ github.sha }}
+          path: dist/*.deb
+          retention-days: 14
+          if-no-files-found: error
+
   # Rolling "dev-latest" prerelease: always holds ALL THREE installers
   # (DMG + MSI + DEB) of the newest merge at a stable URL on the Releases page
   # (downloadable without a GitHub login, never expires). Runs after every
@@ -121,7 +153,7 @@ jobs:
   # releases stay untouched — a prerelease is never marked "Latest".
   dev-release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [package-macos, package-windows, package-linux]
+    needs: [package-macos, package-windows, package-linux, package-linux-arm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -141,7 +173,7 @@ jobs:
           git tag -f "$TAG"
           git push --force origin "$TAG"
           {
-            echo "Auto-build of the newest merge to main (macOS DMG + Windows MSI + Linux DEB)."
+            echo "Auto-build of the newest merge to main (macOS DMG + Windows MSI + Linux DEB amd64/arm64)."
             echo
             echo "- Commit: ${GITHUB_SHA}"
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

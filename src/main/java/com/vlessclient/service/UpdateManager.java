@@ -261,17 +261,39 @@ public class UpdateManager {
     }
 
     static String findInstallerAssetUrl(JsonNode assets) {
+        return findInstallerAssetUrl(assets, installerExtension(), currentArchToken());
+    }
+
+    /**
+     * Picks the release asset for this platform: prefers a name carrying the
+     * current architecture token (a release can ship e.g. both an amd64 and
+     * an arm64 deb), falling back to the first extension match for releases
+     * that predate multi-arch assets.
+     */
+    static String findInstallerAssetUrl(JsonNode assets, String extension, String arch) {
         if (assets == null || !assets.isArray()) {
             return "";
         }
-        String extension = installerExtension();
+        String fallback = "";
         for (JsonNode asset : assets) {
             String name = asset.path("name").asText("");
-            if (name.endsWith(extension)) {
+            if (!name.endsWith(extension)) {
+                continue;
+            }
+            if (name.contains(arch)) {
                 return asset.path("browser_download_url").asText("");
             }
+            if (fallback.isEmpty()) {
+                fallback = asset.path("browser_download_url").asText("");
+            }
         }
-        return "";
+        return fallback;
+    }
+
+    /** The architecture token release assets carry: {@code arm64} or {@code amd64}. */
+    static String currentArchToken() {
+        String osArch = System.getProperty("os.arch", "").toLowerCase(java.util.Locale.ROOT);
+        return osArch.contains("aarch64") || osArch.contains("arm64") ? "arm64" : "amd64";
     }
 
     private static String extractFileName(String url) {

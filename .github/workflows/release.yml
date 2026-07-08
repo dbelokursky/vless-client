@@ -78,6 +78,29 @@ jobs:
         with:
           files: dist/*.deb
 
+  # arm64 twin of release-linux on GitHub's free arm runners: same gates
+  # (fat JAR, real-binary smoke on the linux-arm64 core), same script —
+  # jpackage derives the deb architecture from the host.
+  release-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25-ea'
+          distribution: 'temurin'
+      - name: Build fat JAR
+        run: mvn -B clean package -DskipTests
+      - name: Smoke-test the bundled sing-box
+        run: mvn -B test -Psmoke -Dtest=SingBoxRealBinarySmokeTest
+      - name: Create DEB with jpackage
+        run: scripts/package-linux.sh "${GITHUB_REF_NAME#v}"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.deb
+
   # Keep the Releases page tidy: once all three installers are attached, delete
   # every real release older than the 5 newest. The rolling dev-latest
   # prerelease and any draft are never counted or touched. Git tags are kept
@@ -86,7 +109,7 @@ jobs:
   # installers go. Runs after the three release jobs so it never races the
   # upload of the release it's pruning around.
   prune-old-releases:
-    needs: [release-macos, release-windows, release-linux]
+    needs: [release-macos, release-windows, release-linux, release-linux-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
