@@ -64,10 +64,12 @@ public final class MacTunLauncher implements TunLauncher {
         String stopPath = shellQuote(stopSignalFile.toAbsolutePath().toString());
 
         // sudo forwards TERM/INT to its child (sing-box), so killing the
-        // user-owned sudo propagates to root-owned sing-box cleanly.
+        // user-owned sudo propagates to root-owned sing-box cleanly. Trap
+        // TERM/INT (not just EXIT): the engine stops us with SIGTERM, and a
+        // signal-killed shell skips an EXIT-only trap, orphaning the core.
         String shellCommand = String.format(
                 "sudo -n %s run -c %s & SBPID=$!; "
-                        + "trap 'kill $SBPID 2>/dev/null' EXIT; "
+                        + "trap 'kill $SBPID 2>/dev/null; exit 0' EXIT INT TERM; "
                         + "while kill -0 $SBPID 2>/dev/null "
                         + "&& [ ! -f %s ]; do sleep 0.3; done; "
                         + "kill $SBPID 2>/dev/null; "
@@ -99,7 +101,7 @@ public final class MacTunLauncher implements TunLauncher {
 
         String shellCommand = String.format(
                 "%s run -c %s & SBPID=$!; "
-                        + "trap 'kill $SBPID 2>/dev/null' EXIT; "
+                        + "trap 'kill $SBPID 2>/dev/null; exit 0' EXIT INT TERM; "
                         + "while kill -0 $SBPID 2>/dev/null "
                         + "&& kill -0 %d 2>/dev/null "
                         + "&& [ ! -f %s ]; do sleep 0.3; done; "

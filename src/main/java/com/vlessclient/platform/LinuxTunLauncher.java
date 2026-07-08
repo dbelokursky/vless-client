@@ -115,9 +115,14 @@ public final class LinuxTunLauncher implements TunLauncher {
         String configPath = shellQuote(configFile.toAbsolutePath().toString());
         String stopPath = shellQuote(stopSignalFile.toAbsolutePath().toString());
 
+        // Trap TERM/INT as well as EXIT: the engine stops us with
+        // Process.destroy() (SIGTERM), and dash does NOT run an EXIT-only trap
+        // when killed by a signal — it would die mid-`sleep`, leaving sing-box
+        // orphaned with the TUN still up. Handling TERM/INT kills the core
+        // first, then the shell exits through the loop as usual.
         return String.format(
                 "%s run -c %s & SBPID=$!; "
-                        + "trap 'kill $SBPID 2>/dev/null' EXIT; "
+                        + "trap 'kill $SBPID 2>/dev/null; exit 0' EXIT INT TERM; "
                         + "while kill -0 $SBPID 2>/dev/null "
                         + "&& kill -0 %d 2>/dev/null "
                         + "&& [ ! -f %s ]; do sleep 0.3; done; "
