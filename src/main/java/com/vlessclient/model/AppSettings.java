@@ -12,6 +12,17 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AppSettings {
 
+    /**
+     * Schema version of settings.json. Files written before versioning carry
+     * no field and deserialize to this same value — today's format is v1.
+     * Bump on the first incompatible change and migrate in
+     * {@code ConfigStore.loadSettings} before the settings are used.
+     */
+    public static final int CURRENT_CONFIG_VERSION = 1;
+
+    @JsonProperty("config_version")
+    private int configVersion = CURRENT_CONFIG_VERSION;
+
     @JsonProperty("theme")
     private String theme = "auto";
 
@@ -101,6 +112,14 @@ public class AppSettings {
         targets.add(new HealthCheckTarget("Google", "https://www.google.com/generate_204"));
         targets.add(new HealthCheckTarget("X", "https://x.com"));
         return targets;
+    }
+
+    public int getConfigVersion() {
+        return configVersion;
+    }
+
+    public void setConfigVersion(int configVersion) {
+        this.configVersion = configVersion;
     }
 
     public String getTheme() {
