@@ -370,6 +370,7 @@ scripts/
 ├── package-dmg.sh          # DMG (macOS), общий для build.yml и release.yml
 ├── package-windows.ps1     # MSI (Windows)
 ├── package-linux.sh        # DEB (Linux)
+├── linux-qa.sh             # Linux-QA одной командой в Docker (сборка+тесты+скриншот UI)
 └── GenerateAppIcon.java    # генератор иконки приложения
 ```
 
