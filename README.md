@@ -370,6 +370,7 @@ scripts/
 ├── package-windows.ps1     # MSI (Windows)
 ├── package-linux.sh        # DEB (Linux)
 ├── linux-qa.sh             # one-command Linux QA in Docker (build+tests+UI screenshot)
+├── linux-vm-qa.sh          # desktop-VM QA: TUN teardown, tray, GNOME proxy
 └── GenerateAppIcon.java    # app icon generator
 ```
 

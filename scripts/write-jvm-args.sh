@@ -23,8 +23,14 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 -Dvless.log.level=DEBUG
 ARGFILE
 else
+    # JavaFX-first startup leaves AWT headless by default on Linux, which
+    # silently disables the system tray (AWT SystemTray) even where a tray
+    # exists. Force it off so the tray works; the AWT-touching init paths
+    # catch Throwable, so a display-less host degrades to "no tray" instead
+    # of crashing. Found by the Lima desktop-VM QA scenario.
     cat > "${OUT}" <<'ARGFILE'
 -Dvless.log.level=DEBUG
+-Djava.awt.headless=false
 ARGFILE
 fi
 echo "[write-jvm-args] wrote ${OUT}"
