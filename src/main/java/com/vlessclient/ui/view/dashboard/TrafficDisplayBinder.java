@@ -101,7 +101,7 @@ public final class TrafficDisplayBinder {
         if (state == ConnectionState.CONNECTED) {
             try {
                 AppSettings settings = ServiceLocator.get(AppSettings.class);
-                trafficMonitor.start(settings.getClashApiPort());
+                trafficMonitor.start(settings.getClashApiPort(), settings.getClashApiSecret());
             } catch (IllegalArgumentException e) {
                 log.warn("Could not get AppSettings for TrafficMonitor");
             }

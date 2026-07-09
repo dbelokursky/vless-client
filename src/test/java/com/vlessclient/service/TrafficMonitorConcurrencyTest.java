@@ -50,10 +50,10 @@ class TrafficMonitorConcurrencyTest {
         TrafficMonitor monitor = new TrafficMonitor();
 
         try {
-            assertThatCode(() -> monitor.start(DUMMY_PORT)).doesNotThrowAnyException();
+            assertThatCode(() -> monitor.start(DUMMY_PORT, "")).doesNotThrowAnyException();
             // Second call must not throw; per the implementation it logs and
             // returns without starting a second worker thread.
-            assertThatCode(() -> monitor.start(DUMMY_PORT)).doesNotThrowAnyException();
+            assertThatCode(() -> monitor.start(DUMMY_PORT, "")).doesNotThrowAnyException();
         } finally {
             monitor.stop();
         }
@@ -64,14 +64,14 @@ class TrafficMonitorConcurrencyTest {
         TrafficMonitor monitor = new TrafficMonitor();
 
         for (int i = 0; i < 20; i++) {
-            monitor.start(DUMMY_PORT);
+            monitor.start(DUMMY_PORT, "");
             monitor.stop();
         }
 
         // After the final stop the monitor must be in a clean state and a
         // fresh start/stop cycle must still succeed.
         assertThatCode(() -> {
-            monitor.start(DUMMY_PORT);
+            monitor.start(DUMMY_PORT, "");
             monitor.stop();
         }).doesNotThrowAnyException();
 

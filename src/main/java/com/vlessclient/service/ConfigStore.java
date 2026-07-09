@@ -70,6 +70,17 @@ public class ConfigStore {
         ensureDataDir();
         loadServers();
         loadSettings();
+        // Fresh per-run token for the local clash_api control endpoint. Set on
+        // the in-memory settings only (the field is @JsonIgnore), so it never
+        // persists and rotates each run. Shared by the config generator and
+        // TrafficMonitor, which both read this settings instance.
+        settings.setClashApiSecret(newClashApiSecret());
+    }
+
+    private static String newClashApiSecret() {
+        byte[] bytes = new byte[24];
+        new java.security.SecureRandom().nextBytes(bytes);
+        return java.util.HexFormat.of().formatHex(bytes);
     }
 
     public ObservableList<ServerConfig> getServers() {
@@ -166,6 +177,14 @@ public class ConfigStore {
      * @param settings the settings to store
      */
     public synchronized void saveSettings(AppSettings settings) {
+        // The clash_api secret is a runtime-only value (@JsonIgnore, minted at
+        // startup and never persisted). Carry it across a settings swap so a
+        // caller passing a fresh AppSettings can't silently drop the token and
+        // leave the control endpoint open on the next connect.
+        if (settings != this.settings && (settings.getClashApiSecret() == null
+                || settings.getClashApiSecret().isBlank())) {
+            settings.setClashApiSecret(this.settings.getClashApiSecret());
+        }
         this.settings = settings;
         Path file = dataDir.resolve(SETTINGS_FILE);
         try {
