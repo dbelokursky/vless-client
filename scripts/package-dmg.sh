@@ -17,6 +17,12 @@
 #
 # Expects `mvn package` to have produced the shaded JAR already.
 #
+# Code signing (optional, off by default): when MACOS_SIGN_IDENTITY is set,
+# jpackage signs the .app with that Developer ID Application identity (which
+# must already be in an unlocked keychain — the release workflow imports it).
+# Without it the DMG is unsigned exactly as before. Notarization/stapling of
+# the finished DMG is a separate CI step. See docs/SIGNING.md.
+#
 set -euo pipefail
 
 VERSION="${1:?usage: $0 <app-version-label> [cfbundle-version]}"
@@ -43,6 +49,16 @@ rm -rf staging dist
 mkdir -p staging
 cp "target/${JAR_NAME}" staging/
 
+# Optional signing args, appended only when an identity is configured, so the
+# default (unsigned) invocation is byte-for-byte unchanged.
+SIGN_ARGS=()
+if [[ -n "${MACOS_SIGN_IDENTITY:-}" ]]; then
+    echo "[package-dmg] signing with identity: ${MACOS_SIGN_IDENTITY}"
+    SIGN_ARGS=(--mac-sign --mac-signing-key-user-name "${MACOS_SIGN_IDENTITY}")
+    [[ -n "${MACOS_SIGN_KEYCHAIN:-}" ]] \
+        && SIGN_ARGS+=(--mac-signing-keychain "${MACOS_SIGN_KEYCHAIN}")
+fi
+
 jpackage \
     --type dmg \
     --name "VLESS Client" \
@@ -55,6 +71,7 @@ jpackage \
     --mac-package-name "VLESSClient" \
     --java-options "--enable-preview" \
     --java-options "-Dapp.version=${VERSION}" \
+    "${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"}" \
     --verbose
 
 # Normalise the file name. jpackage names the DMG after --name

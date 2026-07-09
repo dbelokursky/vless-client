@@ -74,6 +74,13 @@ VLESS/VMess/Trojan/Shadowsocks на JavaFX — оборачивает
   xattr -d com.apple.quarantine "/Applications/VLESS Client.app"
   ```
 
+Либо через [Homebrew](https://brew.sh), когда tap настроен (см.
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)):
+
+```bash
+brew install --cask dbelokursky/tap/vless-client
+```
+
 ### Windows
 
 1. Запусти MSI. SmartScreen покажет «Система Windows защитила ваш компьютер» —
@@ -93,6 +100,13 @@ sudo apt install ./vless-client_*.deb
 
 Приложение ставится в `/opt/vless-client` и появляется в меню приложений
 (категория «Интернет»/Network).
+
+На Arch-дистрибутивах доступен пакет [AUR](https://aur.archlinux.org) (см.
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)):
+
+```bash
+yay -S vless-client-bin
+```
 
 ---
 

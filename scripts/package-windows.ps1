@@ -87,4 +87,25 @@ if (-not $msi) {
 # page changes -- the installed app's display name stays "VLESS Client".
 $asset = Join-Path 'dist' "vless-client_$MsiVersion.msi"
 Move-Item -Force $msi.FullName $asset
+
+# Code signing (optional, off by default): when WINDOWS_SIGN_PFX points at a
+# .pfx and WINDOWS_SIGN_PASSWORD holds its password, sign the MSI with
+# signtool. Without them the MSI is unsigned exactly as before. The release
+# workflow materializes the .pfx from a secret. See docs/SIGNING.md.
+if ($env:WINDOWS_SIGN_PFX -and (Test-Path $env:WINDOWS_SIGN_PFX)) {
+    Write-Host '[package-windows] signing MSI with signtool'
+    $timestamp = 'http://timestamp.digicert.com'
+    & signtool sign `
+        /f $env:WINDOWS_SIGN_PFX `
+        /p $env:WINDOWS_SIGN_PASSWORD `
+        /fd SHA256 /tr $timestamp /td SHA256 `
+        /d 'VLESS Client' `
+        $asset
+    if ($LASTEXITCODE -ne 0) {
+        throw "[package-windows] signtool failed with exit code $LASTEXITCODE"
+    }
+} else {
+    Write-Host '[package-windows] WINDOWS_SIGN_PFX not set - MSI is unsigned'
+}
+
 Write-Host "[package-windows] built: $asset (app-version=$Version, ProductVersion=$MsiVersion)"

@@ -74,6 +74,13 @@ Notes:
   xattr -d com.apple.quarantine "/Applications/VLESS Client.app"
   ```
 
+Or install via [Homebrew](https://brew.sh) once the tap is set up (see
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)):
+
+```bash
+brew install --cask dbelokursky/tap/vless-client
+```
+
 ### Windows
 
 1. Run the MSI. SmartScreen will show "Windows protected your PC" — click
@@ -92,6 +99,13 @@ sudo apt install ./vless-client_*.deb
 
 The app installs into `/opt/vless-client` and shows up in the application
 menu (Network category).
+
+On Arch-based distros an [AUR](https://aur.archlinux.org) package is available
+(see [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)):
+
+```bash
+yay -S vless-client-bin
+```
 
 ---
 
@@ -346,6 +360,18 @@ before packaging the installers.
 Minor sing-box updates (1.13 → 1.14) break the config schema — first migrate
 [SingBoxConfigGenerator.java](src/main/java/com/vlessclient/service/SingBoxConfigGenerator.java)
 per the [migration guide](https://sing-box.sagernet.org/migration/), then bump.
+
+### Releasing, signing & distribution
+
+- [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) — manual pre-release
+  checks (Windows-heavy, since no CI or VM covers the UAC/tray/proxy paths).
+- [docs/SIGNING.md](docs/SIGNING.md) — activate the dormant macOS notarization
+  and Windows signing by adding the documented secrets; the workflow steps are
+  already in place.
+- [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) — Homebrew cask and AUR (source
+  of truth in [packaging/](packaging/), regenerated on release by
+  [scripts/update-packaging.sh](scripts/update-packaging.sh)); winget/Flatpak
+  deferred with rationale.
 
 ### Layout
 
