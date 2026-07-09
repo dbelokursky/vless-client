@@ -7,6 +7,17 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
+    # Secrets are surfaced as job env because the `secrets` context is not
+    # allowed in step `if:` conditions — the steps gate on env instead. Each
+    # is empty until the secret exists (docs/SIGNING.md), so an unsigned
+    # release builds byte-for-byte as before.
+    env:
+      MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      MACOS_NOTARY_KEY_BASE64: ${{ secrets.MACOS_NOTARY_KEY_BASE64 }}
+      MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+      MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -20,25 +31,23 @@ jobs:
         # real-binary smoke suite (version match, `sing-box check` on every
         # config shape, live run with clash_api + http-inbound probes).
         run: mvn test -Psmoke -Dtest=SingBoxRealBinarySmokeTest
-      # --- Optional code signing (dormant until the secrets exist; see
-      #     docs/SIGNING.md). Every step below is a no-op without its secret,
-      #     so an unsigned release builds byte-for-byte as before. ---
+      # --- Optional code signing (dormant until the secrets exist). ---
       - name: Import Developer ID certificate
-        if: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
-        env:
-          CERT_B64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          CERT_PW: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        if: ${{ env.MACOS_CERTIFICATE_P12_BASE64 != '' }}
         run: |
           KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
           KPW="$(openssl rand -hex 20)"
           security create-keychain -p "$KPW" "$KEYCHAIN"
           security set-keychain-settings -lut 3600 "$KEYCHAIN"
           security unlock-keychain -p "$KPW" "$KEYCHAIN"
-          echo "$CERT_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PW" \
-            -T /usr/bin/codesign
+          echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KPW" "$KEYCHAIN" >/dev/null
+          # Add the signing keychain to the user search list (word-split of the
+          # existing list is intentional).
+          # shellcheck disable=SC2046
           security list-keychains -d user -s "$KEYCHAIN" \
             $(security list-keychains -d user | tr -d '"')
           echo "MACOS_SIGN_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
@@ -46,21 +55,15 @@ jobs:
         # Staging + jpackage live in scripts/package-dmg.sh, shared with the
         # per-merge build in build.yml. sing-box is already baked into the
         # shaded JAR by scripts/bundle-singbox.sh during `mvn package`.
-        # MACOS_SIGN_IDENTITY is empty without the secret → unsigned .app.
-        env:
-          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        # MACOS_SIGN_IDENTITY (job env) is empty without the secret → unsigned.
         run: scripts/package-dmg.sh "${GITHUB_REF_NAME#v}"
       - name: Notarize and staple the DMG
-        if: ${{ secrets.MACOS_NOTARY_KEY_BASE64 != '' }}
-        env:
-          KEY_B64: ${{ secrets.MACOS_NOTARY_KEY_BASE64 }}
-          KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-          ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        if: ${{ env.MACOS_NOTARY_KEY_BASE64 != '' }}
         run: |
-          echo "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          echo "$MACOS_NOTARY_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
           xcrun notarytool submit dist/*.dmg \
-            --key "$RUNNER_TEMP/notary.p8" --key-id "$KEY_ID" --issuer "$ISSUER" \
-            --wait
+            --key "$RUNNER_TEMP/notary.p8" --key-id "$MACOS_NOTARY_KEY_ID" \
+            --issuer "$MACOS_NOTARY_ISSUER_ID" --wait
           xcrun stapler staple dist/*.dmg
       - uses: softprops/action-gh-release@v2
         with:
@@ -73,6 +76,11 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    # Secrets via job env — the `secrets` context can't be used in step `if:`.
+    # Empty until the secret exists; the MSI is then unsigned as before.
+    env:
+      WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+      WINDOWS_SIGN_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -88,17 +96,13 @@ jobs:
       # Optional: materialize the signing cert from a secret; package-windows.ps1
       # signs the MSI only when WINDOWS_SIGN_PFX is set. No-op otherwise.
       - name: Prepare code-signing certificate
-        if: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 != '' }}
+        if: ${{ env.WINDOWS_CERTIFICATE_PFX_BASE64 != '' }}
         shell: pwsh
-        env:
-          CERT_B64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
         run: |
           $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_B64))
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
           "WINDOWS_SIGN_PFX=$pfx" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Create MSI with jpackage
-        env:
-          WINDOWS_SIGN_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -Version "$($env:GITHUB_REF_NAME -replace '^v', '')"
       - uses: softprops/action-gh-release@v2
         with:
