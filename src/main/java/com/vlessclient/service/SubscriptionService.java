@@ -258,7 +258,37 @@ public class SubscriptionService {
         log.info("Stopped subscription auto-refresh");
     }
 
+    /**
+     * Whether {@code url} is fetched over plaintext {@code http}. Such a
+     * subscription is MITM-injectable: a network attacker can rewrite the
+     * returned server list to route the user through their own proxy, and any
+     * token in the URL travels in the clear. The app warns but does not block
+     * — some providers only offer http.
+     */
+    public static boolean isInsecureHttpUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return false;
+        }
+        try {
+            String scheme = URI.create(url.trim()).getScheme();
+            return scheme != null && scheme.equalsIgnoreCase("http");
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     String fetchContent(String url) throws IOException, InterruptedException {
+        if (isInsecureHttpUrl(url)) {
+            // Log the host only — the path/query can carry an account token.
+            String host;
+            try {
+                host = URI.create(url.trim()).getHost();
+            } catch (IllegalArgumentException e) {
+                host = "?";
+            }
+            log.warn("Subscription fetched over plaintext http (MITM/injection "
+                    + "risk; prefer https): host={}", host);
+        }
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .GET()
