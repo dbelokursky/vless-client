@@ -1,6 +1,7 @@
 package com.vlessclient.app;
 
 import com.vlessclient.model.AppSettings;
+import com.vlessclient.model.ProxyMode;
 import com.vlessclient.platform.Autostart;
 import com.vlessclient.service.ConfigStore;
 import com.vlessclient.service.CoreUpdateService;
@@ -50,7 +51,28 @@ public class VlessClientApp extends Application {
         setDockIcon();
         installQuitHandler();
         ServiceLocator.initialize();
+        clearStaleSystemProxy();
         refreshLoginItem();
+    }
+
+    /**
+     * Undoes an OS proxy a previous run left behind after a hard crash (no
+     * shutdown hook could restore it). Runs here — on the launch thread,
+     * before {@code start()} wires auto-connect — so it can never race a
+     * fresh connect re-registering the same endpoint. Skipped outside
+     * SYSTEM_PROXY mode, where no OS proxy is ever set.
+     */
+    private void clearStaleSystemProxy() {
+        try {
+            AppSettings settings = ServiceLocator.get(AppSettings.class);
+            if (settings.getProxyMode() != ProxyMode.SYSTEM_PROXY) {
+                return;
+            }
+            ServiceLocator.get(SingBoxEngine.class)
+                    .clearStaleSystemProxyOnStartup("127.0.0.1", settings.getHttpPort());
+        } catch (IllegalArgumentException e) {
+            log.debug("Skipping stale-proxy cleanup; services unavailable");
+        }
     }
 
     /**

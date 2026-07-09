@@ -231,6 +231,33 @@ class SingBoxEngineTest {
     }
 
     @Test
+    void startupCleanupClearsAStaleProxyWhenNotRunning(@TempDir Path tmp) throws Exception {
+        SingBoxEngine engine = new SingBoxEngine(createFakeSingBox(tmp, "sing-box", 30));
+        List<String> guardCalls = new CopyOnWriteArrayList<>();
+        engine.setSystemProxyGuard((host, port) -> guardCalls.add(host + ":" + port));
+
+        engine.clearStaleSystemProxyOnStartup("127.0.0.1", 1081);
+
+        assertThat(guardCalls).containsExactly("127.0.0.1:1081");
+    }
+
+    @Test
+    void startupCleanupIsSkippedWhileTheCoreRuns(@TempDir Path tmp) throws Exception {
+        SingBoxEngine engine = new SingBoxEngine(createFakeSingBox(tmp, "sing-box", 30));
+        List<String> guardCalls = new CopyOnWriteArrayList<>();
+        engine.setSystemProxyGuard((host, port) -> guardCalls.add(host + ":" + port));
+
+        engine.start(DUMMY_CONFIG, ProxyMode.SYSTEM_PROXY);
+        try {
+            // A live proxy must never be torn down by a stray startup call.
+            engine.clearStaleSystemProxyOnStartup("127.0.0.1", 1081);
+            assertThat(guardCalls).isEmpty();
+        } finally {
+            engine.stop();
+        }
+    }
+
+    @Test
     void tunModeUsesTunLauncherAndStopSignalsTheWrapper(@TempDir Path tmp) throws Exception {
         // Fake privileged wrapper honoring the TunLauncher contract: streams a
         // started line and exits as soon as the stop-signal file appears.
