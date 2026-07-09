@@ -59,7 +59,10 @@ public final class MacTunLauncher implements TunLauncher {
      */
     private Process startViaSudoNoPassword(Path binary, Path configFile,
                                            Path stopSignalFile) throws IOException {
-        String singBoxCmd = shellQuote(binary.toAbsolutePath().toString());
+        // The NOPASSWD rule authorizes the root-owned copy, not the
+        // user-writable binary — invoke that path under sudo -n.
+        String singBoxCmd = shellQuote(
+                PrivilegeHelper.elevatedBinary().toAbsolutePath().toString());
         String configPath = shellQuote(configFile.toAbsolutePath().toString());
         String stopPath = shellQuote(stopSignalFile.toAbsolutePath().toString());
 
