@@ -20,11 +20,48 @@ jobs:
         # real-binary smoke suite (version match, `sing-box check` on every
         # config shape, live run with clash_api + http-inbound probes).
         run: mvn test -Psmoke -Dtest=SingBoxRealBinarySmokeTest
+      # --- Optional code signing (dormant until the secrets exist; see
+      #     docs/SIGNING.md). Every step below is a no-op without its secret,
+      #     so an unsigned release builds byte-for-byte as before. ---
+      - name: Import Developer ID certificate
+        if: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
+        env:
+          CERT_B64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERT_PW: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KPW="$(openssl rand -hex 20)"
+          security create-keychain -p "$KPW" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KPW" "$KEYCHAIN"
+          echo "$CERT_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PW" \
+            -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KPW" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" \
+            $(security list-keychains -d user | tr -d '"')
+          echo "MACOS_SIGN_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
       - name: Create DMG with jpackage
         # Staging + jpackage live in scripts/package-dmg.sh, shared with the
         # per-merge build in build.yml. sing-box is already baked into the
         # shaded JAR by scripts/bundle-singbox.sh during `mvn package`.
+        # MACOS_SIGN_IDENTITY is empty without the secret → unsigned .app.
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
         run: scripts/package-dmg.sh "${GITHUB_REF_NAME#v}"
+      - name: Notarize and staple the DMG
+        if: ${{ secrets.MACOS_NOTARY_KEY_BASE64 != '' }}
+        env:
+          KEY_B64: ${{ secrets.MACOS_NOTARY_KEY_BASE64 }}
+          KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          echo "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          xcrun notarytool submit dist/*.dmg \
+            --key "$RUNNER_TEMP/notary.p8" --key-id "$KEY_ID" --issuer "$ISSUER" \
+            --wait
+          xcrun stapler staple dist/*.dmg
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*.dmg
@@ -48,7 +85,20 @@ jobs:
         # The MSI must never ship a core the generator can't drive: the same
         # real-binary smoke suite as macOS, running the bundled sing-box.exe.
         run: mvn -B test -Psmoke "-Dtest=SingBoxRealBinarySmokeTest"
+      # Optional: materialize the signing cert from a secret; package-windows.ps1
+      # signs the MSI only when WINDOWS_SIGN_PFX is set. No-op otherwise.
+      - name: Prepare code-signing certificate
+        if: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 != '' }}
+        shell: pwsh
+        env:
+          CERT_B64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_B64))
+          "WINDOWS_SIGN_PFX=$pfx" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Create MSI with jpackage
+        env:
+          WINDOWS_SIGN_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1 -Version "$($env:GITHUB_REF_NAME -replace '^v', '')"
       - uses: softprops/action-gh-release@v2
         with:
@@ -100,6 +150,38 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*.deb
+
+  # Fill the Homebrew cask and AUR PKGBUILD templates with this release's
+  # version and asset checksums, and attach the ready-to-use files to the
+  # release. A tap/AUR maintainer copies them into their package repo (see
+  # docs/DISTRIBUTION.md); the repo keeps the templates unfilled.
+  update-packaging:
+    needs: [release-macos, release-windows, release-linux, release-linux-arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate cask + PKGBUILD with release checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          sha_of() {
+            gh release download "$GITHUB_REF_NAME" -p "$1" -O "$RUNNER_TEMP/$1" --clobber
+            sha256sum "$RUNNER_TEMP/$1" | awk '{print $1}'
+          }
+          DMG=$(sha_of "vless-client_${V}.dmg")
+          DEB_AMD64=$(sha_of "vless-client_${V}_amd64.deb")
+          DEB_ARM64=$(sha_of "vless-client_${V}_arm64.deb")
+          scripts/update-packaging.sh "$V" "$DMG" "$DEB_AMD64" "$DEB_ARM64"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            packaging/homebrew/vless-client.rb
+            packaging/aur/PKGBUILD
+            packaging/aur/.SRCINFO
 
   # Keep the Releases page tidy: once all three installers are attached, delete
   # every real release older than the 5 newest. The rolling dev-latest
