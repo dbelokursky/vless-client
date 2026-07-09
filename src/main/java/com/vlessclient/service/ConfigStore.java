@@ -11,6 +11,7 @@ import com.vlessclient.model.ServerConfig;
 import com.vlessclient.platform.PlatformPaths;
 import com.vlessclient.platform.SecretSealer;
 import com.vlessclient.platform.SecretSealers;
+import com.vlessclient.platform.SecureFiles;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -168,7 +169,7 @@ public class ConfigStore {
         this.settings = settings;
         Path file = dataDir.resolve(SETTINGS_FILE);
         try {
-            objectMapper.writeValue(file.toFile(), settings);
+            SecureFiles.writePrivately(file, objectMapper.writeValueAsBytes(settings));
         } catch (IOException e) {
             log.error("Failed to save settings to {}", file, e);
         }
@@ -180,7 +181,7 @@ public class ConfigStore {
             ObjectNode envelope = objectMapper.createObjectNode();
             envelope.put("config_version", SERVERS_CONFIG_VERSION);
             envelope.set("servers", objectMapper.valueToTree(serializableServers()));
-            objectMapper.writeValue(file.toFile(), envelope);
+            SecureFiles.writePrivately(file, objectMapper.writeValueAsBytes(envelope));
         } catch (IOException e) {
             log.error("Failed to save servers to {}", file, e);
         }
@@ -248,7 +249,7 @@ public class ConfigStore {
 
     private void ensureDataDir() {
         try {
-            Files.createDirectories(dataDir);
+            SecureFiles.createPrivateDir(dataDir);
         } catch (IOException e) {
             log.error("Failed to create data directory: {}", dataDir, e);
         }
@@ -260,6 +261,7 @@ public class ConfigStore {
             log.info("No servers file found at {}, starting with empty list", file);
             return;
         }
+        SecureFiles.restrictExisting(file);   // tighten a 0644 file from an older build
         try {
             JsonNode root = objectMapper.readTree(file.toFile());
             JsonNode items;
@@ -343,6 +345,7 @@ public class ConfigStore {
             log.info("No settings file found at {}, using defaults", file);
             return;
         }
+        SecureFiles.restrictExisting(file);
         try {
             this.settings = objectMapper.readValue(file.toFile(), AppSettings.class);
             if (settings.getConfigVersion() > AppSettings.CURRENT_CONFIG_VERSION) {

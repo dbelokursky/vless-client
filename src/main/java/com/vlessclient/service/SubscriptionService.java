@@ -10,6 +10,7 @@ import com.vlessclient.model.Subscription;
 import com.vlessclient.platform.PlatformPaths;
 import com.vlessclient.platform.SecretSealer;
 import com.vlessclient.platform.SecretSealers;
+import com.vlessclient.platform.SecureFiles;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -419,7 +420,7 @@ public class SubscriptionService {
             envelope.put("config_version", SUBSCRIPTIONS_CONFIG_VERSION);
             envelope.set("subscriptions",
                     objectMapper.valueToTree(serializableSubscriptions()));
-            objectMapper.writeValue(file.toFile(), envelope);
+            SecureFiles.writePrivately(file, objectMapper.writeValueAsBytes(envelope));
         } catch (IOException e) {
             log.error("Failed to save subscriptions to {}", file, e);
         }
@@ -476,6 +477,7 @@ public class SubscriptionService {
             log.info("No subscriptions file found at {}, starting with empty list", file);
             return;
         }
+        SecureFiles.restrictExisting(file);
         try {
             JsonNode root = objectMapper.readTree(file.toFile());
             JsonNode items;
