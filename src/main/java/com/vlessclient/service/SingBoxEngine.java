@@ -401,6 +401,25 @@ public class SingBoxEngine {
         return null;
     }
 
+    /**
+     * Clears an OS proxy left pointing at our local endpoint by a previous
+     * run that died before it could restore it — a hard app crash, SIGKILL or
+     * power loss runs no shutdown hook, and unlike a TUN interface (reclaimed
+     * by the kernel) the proxy setting persists in the registry/gsettings/
+     * networksetup across reboots, stranding the machine behind a dead proxy.
+     *
+     * <p>Call once at startup, before any auto-connect. Safe: the guard only
+     * acts when the OS proxy still points at {@code host:port}, so a user or
+     * corporate proxy is never touched, and it is skipped while the core is
+     * running so a live proxy is never disabled.</p>
+     */
+    public void clearStaleSystemProxyOnStartup(String host, int port) {
+        if (isRunning()) {
+            return;
+        }
+        systemProxyGuard.clearIfPointsAt(host, port);
+    }
+
     /** Test seam: replaces the OS proxy guard. */
     void setSystemProxyGuard(SystemProxyGuard guard) {
         this.systemProxyGuard = guard;
