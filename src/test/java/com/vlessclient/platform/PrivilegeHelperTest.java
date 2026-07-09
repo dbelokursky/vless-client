@@ -3,6 +3,8 @@ package com.vlessclient.platform;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,7 +14,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and privileged shell command must authorize a ROOT-OWNED sing-box copy, not
  * the user-writable binary, and the content check must detect a drifted copy.
  * The privileged runtime (osascript, install, sudo -n) is validated manually.
+ *
+ * <p>macOS-only: {@code PrivilegeHelper} is a macOS component and its fixed
+ * POSIX paths render with backslashes via {@code Path.toString()} on Windows,
+ * so the literal-path assertions only hold where the code actually runs.</p>
  */
+@EnabledOnOs(OS.MAC)
 class PrivilegeHelperTest {
 
     @TempDir
