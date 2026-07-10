@@ -24,11 +24,13 @@ class TrafficDisplayBinderTest {
     /** Records lifecycle calls instead of opening real connections. */
     private static final class RecordingMonitor extends TrafficMonitor {
         private int startedPort = -1;
+        private String startedSecret;
         private boolean stopped;
 
         @Override
-        public void start(int clashApiPort) {
+        public void start(int clashApiPort, String secret) {
             startedPort = clashApiPort;
+            startedSecret = secret;
         }
 
         @Override
@@ -66,12 +68,14 @@ class TrafficDisplayBinderTest {
     void connectedStartsMonitorOnConfiguredClashApiPort() {
         AppSettings settings = new AppSettings();
         settings.setClashApiPort(19999);
+        settings.setClashApiSecret("tok-xyz");
         ServiceLocator.register(AppSettings.class, settings);
 
         RecordingMonitor monitor = new RecordingMonitor();
         binderOver(monitor).onConnectionStateChanged(ConnectionState.CONNECTED);
 
         assertThat(monitor.startedPort).isEqualTo(19999);
+        assertThat(monitor.startedSecret).isEqualTo("tok-xyz");
         assertThat(monitor.stopped).isFalse();
     }
 

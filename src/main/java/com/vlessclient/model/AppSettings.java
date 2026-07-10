@@ -1,5 +1,6 @@
 package com.vlessclient.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
@@ -43,6 +44,17 @@ public class AppSettings {
 
     @JsonProperty("clash_api_port")
     private int clashApiPort = 9090;
+
+    /**
+     * Auth token for the local clash_api control endpoint, set into the
+     * generated config's {@code clash_api.secret} and sent by TrafficMonitor.
+     * {@code @JsonIgnore}: a runtime-only value that ConfigStore generates
+     * fresh each app run and never writes to settings.json, so it neither
+     * persists at rest nor lets another local user read traffic stats or
+     * control the core via 127.0.0.1:{@code clash_api_port}.
+     */
+    @JsonIgnore
+    private String clashApiSecret = "";
 
     @JsonProperty("proxy_mode")
     private ProxyMode proxyMode = ProxyMode.SYSTEM_PROXY;
@@ -176,6 +188,14 @@ public class AppSettings {
 
     public void setClashApiPort(int clashApiPort) {
         this.clashApiPort = clashApiPort;
+    }
+
+    public String getClashApiSecret() {
+        return clashApiSecret;
+    }
+
+    public void setClashApiSecret(String clashApiSecret) {
+        this.clashApiSecret = clashApiSecret;
     }
 
     public ProxyMode getProxyMode() {

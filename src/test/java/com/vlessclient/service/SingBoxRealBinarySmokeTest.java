@@ -213,6 +213,65 @@ class SingBoxRealBinarySmokeTest {
         }
     }
 
+    /**
+     * With a clash_api secret set, the real core rejects an unauthenticated
+     * /traffic request (401) and accepts the exact Bearer request
+     * TrafficMonitor builds (200) — proving another local process can't read
+     * the stream. Covers security-review L7.
+     */
+    @Test
+    void securedClashApiRejectsUnauthenticatedTraffic() throws Exception {
+        int clashPort = freePort();
+        String secret = "smoke-clash-secret-token";
+
+        AppSettings settings = new AppSettings();
+        settings.setProxyMode(ProxyMode.SYSTEM_PROXY);
+        settings.setSystemProxyAutoConfig(false);
+        settings.setSocksPort(freePort());
+        settings.setHttpPort(freePort());
+        settings.setClashApiPort(clashPort);
+        settings.setClashApiSecret(secret);
+
+        RoutingConfig routing = new RoutingConfig();
+        routing.setPreset("route_all");
+
+        String config = generator.generate(serverFor(Protocol.VLESS), settings, routing);
+        Path configFile = Files.createTempFile("smoke-clash-", ".json");
+        Files.writeString(configFile, config);
+
+        Process proc = new ProcessBuilder(
+                binary.toString(), "run", "-c", configFile.toString())
+                .redirectErrorStream(true)
+                .redirectOutput(Files.createTempFile("smoke-clash-", ".log").toFile())
+                .start();
+        try {
+            awaitPort(clashPort, proc);
+            HttpClient direct = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(5))
+                    .build();
+
+            // No token → rejected.
+            HttpResponse<Void> unauth = direct.send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create("http://127.0.0.1:" + clashPort + "/traffic"))
+                            .timeout(Duration.ofSeconds(10)).GET().build(),
+                    HttpResponse.BodyHandlers.discarding());
+            assertThat(unauth.statusCode()).isEqualTo(401);
+
+            // The exact request TrafficMonitor builds → accepted.
+            HttpResponse<java.io.InputStream> authed = direct.send(
+                    TrafficMonitor.buildTrafficRequest(clashPort, secret),
+                    HttpResponse.BodyHandlers.ofInputStream());
+            assertThat(authed.statusCode()).isEqualTo(200);
+        } finally {
+            proc.destroy();
+            if (!proc.waitFor(5, TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+            }
+            Files.deleteIfExists(configFile);
+        }
+    }
+
     // ===== helpers =====
 
     private static ServerConfig serverFor(Protocol protocol) {

@@ -771,6 +771,12 @@ public class SingBoxConfigGenerator {
 
         ObjectNode clashApi = mapper.createObjectNode();
         clashApi.put("external_controller", "127.0.0.1:" + settings.getClashApiPort());
+        // Require a token so another local user can't read traffic stats or
+        // control the core over 127.0.0.1:<port>. TrafficMonitor sends it.
+        String clashSecret = settings.getClashApiSecret();
+        if (clashSecret != null && !clashSecret.isBlank()) {
+            clashApi.put("secret", clashSecret);
+        }
         experimental.set("clash_api", clashApi);
 
         // Persist downloaded rule-sets (and other core state) across

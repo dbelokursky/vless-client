@@ -50,6 +50,7 @@ public class TrafficMonitor {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Object lifecycleLock = new Object();
     private volatile Thread sseThread;
+    private volatile String clashApiSecret = "";
 
     // One client for the monitor's lifetime: the reconnect back-off loop can
     // make many attempts, and each HttpClient owns its own executor/selector.
@@ -78,13 +79,16 @@ public class TrafficMonitor {
      * Does nothing if a monitor is already running.
      *
      * @param clashApiPort the port the sing-box Clash API listens on
+     * @param secret the clash_api auth token the core expects (may be blank
+     *               for configs without one); sent as a Bearer header
      */
-    public void start(int clashApiPort) {
+    public void start(int clashApiPort, String secret) {
         synchronized (lifecycleLock) {
             if (running.getAndSet(true)) {
                 log.warn("TrafficMonitor is already running");
                 return;
             }
+            clashApiSecret = secret == null ? "" : secret;
 
             sseThread = Thread.ofVirtual().name("traffic-monitor").start(() -> {
                 log.info("TrafficMonitor started, connecting to Clash API on port {}",
@@ -159,10 +163,7 @@ public class TrafficMonitor {
     }
 
     private void streamOnce(int clashApiPort) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://127.0.0.1:" + clashApiPort + "/traffic"))
-                .GET()
-                .build();
+        HttpRequest request = buildTrafficRequest(clashApiPort, clashApiSecret);
 
         HttpResponse<java.io.InputStream> response = httpClient.send(request,
                 HttpResponse.BodyHandlers.ofInputStream());
@@ -180,6 +181,22 @@ public class TrafficMonitor {
                 processTrafficLine(line);
             }
         }
+    }
+
+    /**
+     * The {@code /traffic} request, carrying {@code Authorization: Bearer
+     * <secret>} when the core's clash_api has a secret set. Without the header
+     * a secured clash_api answers 401, so an eavesdropping local process can't
+     * read the stream.
+     */
+    static HttpRequest buildTrafficRequest(int clashApiPort, String secret) {
+        HttpRequest.Builder b = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + clashApiPort + "/traffic"))
+                .GET();
+        if (secret != null && !secret.isBlank()) {
+            b.header("Authorization", "Bearer " + secret);
+        }
+        return b.build();
     }
 
     void processTrafficLine(String line) {
