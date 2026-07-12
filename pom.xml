@@ -144,9 +144,6 @@
                 <configuration>
                     <source>25</source>
                     <target>25</target>
-                    <compilerArgs>
-                        <arg>--enable-preview</arg>
-                    </compilerArgs>
                 </configuration>
             </plugin>
 
@@ -186,7 +183,7 @@
                     <!-- @{argLine} lets the JaCoCo agent attach (prepare-agent
                          sets the argLine property); a bare literal here
                          silently disables coverage collection. -->
-                    <argLine>@{argLine} --enable-preview</argLine>
+                    <argLine>@{argLine}</argLine>
                     <excludedGroups>${surefire.excludedGroups}</excludedGroups>
                     <systemPropertyVariables>
                         <!--

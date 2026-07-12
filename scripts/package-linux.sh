@@ -61,7 +61,6 @@ jpackage \
     --linux-shortcut \
     --linux-deb-maintainer "dbelokursky@gmail.com" \
     --vendor "VLESS Client" \
-    --java-options "--enable-preview" \
     --java-options "-Dapp.version=${VERSION}" \
     --java-options "-Djava.awt.headless=false" \
     --verbose

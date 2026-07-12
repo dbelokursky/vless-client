@@ -69,7 +69,6 @@ jpackage \
     --icon src/main/resources/icons/app-icon.icns \
     --dest dist \
     --mac-package-name "VLESSClient" \
-    --java-options "--enable-preview" \
     --java-options "-Dapp.version=${VERSION}" \
     "${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"}" \
     --verbose
