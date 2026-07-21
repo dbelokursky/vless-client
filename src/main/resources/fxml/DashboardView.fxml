@@ -11,7 +11,7 @@
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.Priority?>
 <?import javafx.scene.shape.Circle?>
-<?import com.vlessclient.ui.view.Sparkline?>
+<?import com.vlessclient.ui.view.MirroredSparkline?>
 
 <VBox xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml"
@@ -82,38 +82,35 @@
     <!-- Real-time traffic section -->
     <Label text="Real-time traffic" styleClass="section-header"/>
 
-    <!-- Upload above Download so the ↑/↓ arrows line up one under the other
-         and each sparkline gets the full width. -->
-    <VBox spacing="16">
-        <!-- Upload card with sparkline -->
-        <VBox styleClass="card, traffic-card, upload-card" spacing="6"
-              alignment="CENTER_LEFT" maxWidth="Infinity">
-            <padding>
-                <Insets top="14" right="18" bottom="14" left="20"/>
-            </padding>
-            <HBox alignment="CENTER_LEFT" spacing="8">
-                <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
-                <Label text="Upload" styleClass="stats-title"/>
-                <Region HBox.hgrow="ALWAYS"/>
-                <Label fx:id="uploadSpeedLabel" text="0 B/s" styleClass="speed-value"/>
-            </HBox>
-            <Sparkline fx:id="uploadSparkline" prefHeight="52"/>
-        </VBox>
-
-        <!-- Download card with sparkline -->
-        <VBox styleClass="card, traffic-card, download-card" spacing="6"
-              alignment="CENTER_LEFT" maxWidth="Infinity">
-            <padding>
-                <Insets top="14" right="18" bottom="14" left="20"/>
-            </padding>
-            <HBox alignment="CENTER_LEFT" spacing="8">
-                <Label text="&#x2B07;" styleClass="stats-icon-download"/>
+    <!-- Mirrored duplex card: download plots up from the shared dashed axis,
+         upload down, the way router status pages draw a link. Legends and
+         speed readouts float over the chart corners of their halves; the
+         chevron graphics are set from the controller (Icons.chevronDouble*).
+         Overlay children pin to USE_PREF_SIZE so the StackPane doesn't
+         stretch them over the canvas. -->
+    <VBox styleClass="card, traffic-card" maxWidth="Infinity">
+        <padding>
+            <Insets top="12" right="18" bottom="12" left="20"/>
+        </padding>
+        <StackPane>
+            <MirroredSparkline fx:id="trafficSparkline" prefHeight="118"/>
+            <HBox StackPane.alignment="TOP_LEFT" alignment="CENTER_LEFT" spacing="8"
+                  maxWidth="-Infinity" maxHeight="-Infinity" pickOnBounds="false">
+                <Label fx:id="downloadCardIcon" styleClass="stats-icon-download"/>
                 <Label text="Download" styleClass="stats-title"/>
-                <Region HBox.hgrow="ALWAYS"/>
-                <Label fx:id="downloadSpeedLabel" text="0 B/s" styleClass="speed-value"/>
             </HBox>
-            <Sparkline fx:id="downloadSparkline" prefHeight="52"/>
-        </VBox>
+            <Label fx:id="downloadSpeedLabel" text="0 B/s" styleClass="speed-value"
+                   StackPane.alignment="TOP_RIGHT"
+                   maxWidth="-Infinity" maxHeight="-Infinity"/>
+            <HBox StackPane.alignment="BOTTOM_LEFT" alignment="CENTER_LEFT" spacing="8"
+                  maxWidth="-Infinity" maxHeight="-Infinity" pickOnBounds="false">
+                <Label fx:id="uploadCardIcon" styleClass="stats-icon-upload"/>
+                <Label text="Upload" styleClass="stats-title"/>
+            </HBox>
+            <Label fx:id="uploadSpeedLabel" text="0 B/s" styleClass="speed-value"
+                   StackPane.alignment="BOTTOM_RIGHT"
+                   maxWidth="-Infinity" maxHeight="-Infinity"/>
+        </StackPane>
     </VBox>
 
     <!-- Session totals + latency. Session metrics and the Test Latency button
@@ -128,12 +125,12 @@
             <Label text="Session" styleClass="stats-title"/>
 
             <HBox alignment="CENTER_LEFT" spacing="6">
-                <Label text="&#x2B06;" styleClass="stats-icon-upload"/>
+                <Label fx:id="totalUploadIcon" styleClass="stats-icon-upload"/>
                 <Label fx:id="totalUploadLabel" text="—" styleClass="stats-value"/>
             </HBox>
 
             <HBox alignment="CENTER_LEFT" spacing="6">
-                <Label text="&#x2B07;" styleClass="stats-icon-download"/>
+                <Label fx:id="totalDownloadIcon" styleClass="stats-icon-download"/>
                 <Label fx:id="totalDownloadLabel" text="—" styleClass="stats-value"/>
             </HBox>
 

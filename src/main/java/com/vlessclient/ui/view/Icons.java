@@ -85,6 +85,14 @@ public final class Icons {
 
     private static final String DOWNLOAD =
             "M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z";
+    // mdi-chevron-double-up / -down: stacked chevrons read as a continuous
+    // stream in one direction — the dashboard's upload/download markers.
+    private static final String CHEVRON_DOUBLE_UP =
+            "M7.41,18.41L6,17L12,11L18,17L16.59,18.41L12,13.83L7.41,18.41M7.41,"
+                    + "12.41L6,11L12,5L18,11L16.59,12.41L12,7.83L7.41,12.41Z";
+    private static final String CHEVRON_DOUBLE_DOWN =
+            "M16.59,5.59L18,7L12,13L6,7L7.41,5.59L12,10.17L16.59,5.59M16.59,"
+                    + "11.59L18,13L12,19L6,13L7.41,11.59L12,16.17L16.59,11.59Z";
     private static final String TRASH =
             "M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,"
                     + "19V7H6V19Z";
@@ -122,6 +130,14 @@ public final class Icons {
 
     public static Node clear(double size) {
         return make(TRASH, size);
+    }
+
+    public static Node chevronDoubleUp(double size) {
+        return make(CHEVRON_DOUBLE_UP, size);
+    }
+
+    public static Node chevronDoubleDown(double size) {
+        return make(CHEVRON_DOUBLE_DOWN, size);
     }
 
     /**

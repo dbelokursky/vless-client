@@ -61,7 +61,7 @@ class TrafficDisplayBinderTest {
 
     private static TrafficDisplayBinder binderOver(TrafficMonitor monitor) {
         return new TrafficDisplayBinder(monitor,
-                new Label(), new Label(), new Label(), new Label(), null, null);
+                new Label(), new Label(), new Label(), new Label(), null);
     }
 
     @Test
