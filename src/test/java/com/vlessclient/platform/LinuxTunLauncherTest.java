@@ -114,9 +114,21 @@ class LinuxTunLauncherTest {
         assertThat(sh.waitFor(10, java.util.concurrent.TimeUnit.SECONDS))
                 .as("wrapper shell should exit after SIGTERM").isTrue();
 
-        // The child must be gone — an orphaned core is the bug.
-        boolean alive = new ProcessBuilder("kill", "-0", pid).start()
-                .waitFor() == 0;
+        // The child must be gone — an orphaned core is the bug. Its death is
+        // asynchronous to the wrapper's exit: the trap sends SIGTERM and exits
+        // without waiting, so the child can linger in the process table for a
+        // beat (briefly as a zombie until PID 1 reaps it). Poll with a
+        // deadline instead of sampling once; the orphan bug this guards
+        // against keeps the core alive indefinitely, not for milliseconds.
+        boolean alive = true;
+        long reapDeadline = System.currentTimeMillis() + 5_000;
+        while (System.currentTimeMillis() < reapDeadline) {
+            alive = new ProcessBuilder("kill", "-0", pid).start().waitFor() == 0;
+            if (!alive) {
+                break;
+            }
+            Thread.sleep(50);
+        }
         if (alive) {
             new ProcessBuilder("kill", "-9", pid).start().waitFor();
         }
