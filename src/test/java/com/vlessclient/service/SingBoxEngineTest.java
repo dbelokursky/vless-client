@@ -96,15 +96,32 @@ class SingBoxEngineTest {
                                       long timeoutMillis) throws Exception {
         long deadline = System.currentTimeMillis() + timeoutMillis;
         while (System.currentTimeMillis() < deadline) {
-            flushFxEvents();
-            if (engine.connectionStateProperty().get() == expected) {
+            if (stateOnFxThread(engine) == expected) {
                 return;
             }
             Thread.sleep(25);
         }
-        // One last flush so the assertion failure prints the final state
-        flushFxEvents();
-        assertThat(engine.connectionStateProperty().get()).isEqualTo(expected);
+        assertThat(stateOnFxThread(engine)).isEqualTo(expected);
+    }
+
+    /**
+     * Samples the connection state ON the JavaFX thread. A plain get() from
+     * the test thread is a data race: property set() writes the value before
+     * notifying listeners, so a racy read can observe the new state while its
+     * listeners are still mid-dispatch — any listener-dependent assertion
+     * that follows would then race them. A latch-synchronized FX-thread read
+     * happens-after the full set(), listeners included.
+     */
+    private ConnectionState stateOnFxThread(SingBoxEngine engine) throws InterruptedException {
+        java.util.concurrent.atomic.AtomicReference<ConnectionState> seen =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        CountDownLatch latch = new CountDownLatch(1);
+        Platform.runLater(() -> {
+            seen.set(engine.connectionStateProperty().get());
+            latch.countDown();
+        });
+        assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
+        return seen.get();
     }
 
     @Test
@@ -173,6 +190,75 @@ class SingBoxEngineTest {
 
         awaitConnectionState(engine, ConnectionState.ERROR, AWAIT_STATE_TIMEOUT_MS);
         assertThat(engine.errorMessageProperty().get()).contains("exited unexpectedly");
+    }
+
+    @Test
+    void errorMessageIsAlreadySetWhenStateListenersSeeError(@TempDir Path tmp) throws Exception {
+        // Publication-order regression: state listeners fire synchronously
+        // inside connectionState.set(ERROR), so the error message must be
+        // written BEFORE the state flips — a listener (status banner, or a
+        // test polling the state) reads it at that exact moment.
+        Path fake = createCrashingSingBox(tmp, "sing-box");
+        SingBoxEngine engine = new SingBoxEngine(fake);
+
+        java.util.concurrent.atomic.AtomicReference<String> messageAtError =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        // Every observed transition with the message visible at that instant —
+        // printed by the assertion below if this ever flakes again.
+        List<String> transitions = new CopyOnWriteArrayList<>();
+        CountDownLatch registered = new CountDownLatch(1);
+        Platform.runLater(() -> {
+            engine.connectionStateProperty().addListener((obs, oldVal, newVal) -> {
+                transitions.add(oldVal + "->" + newVal
+                        + " msg=" + engine.errorMessageProperty().get());
+                if (newVal == ConnectionState.ERROR) {
+                    messageAtError.set(engine.errorMessageProperty().get());
+                }
+            });
+            registered.countDown();
+        });
+        assertThat(registered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        engine.start(DUMMY_CONFIG, ProxyMode.SYSTEM_PROXY);
+
+        awaitConnectionState(engine, ConnectionState.ERROR, AWAIT_STATE_TIMEOUT_MS);
+        assertThat(messageAtError.get())
+                .as("message captured at the ERROR transition; transitions seen: %s", transitions)
+                .contains("exited unexpectedly");
+    }
+
+    @Test
+    void rapidStartStopCyclesCrashNoMonitorThread(@TempDir Path tmp) throws Exception {
+        // NPE-race canary: a monitor thread scheduled late used to re-read
+        // the process field after stop() nulled it and die on the NPE. The
+        // capture-based monitor must survive any start/stop interleaving;
+        // any uncaught throwable on a monitor thread fails the test.
+        Path fake = createFakeSingBox(tmp, "sing-box", 30);
+        SingBoxEngine engine = new SingBoxEngine(fake);
+
+        List<Throwable> monitorCrashes = new CopyOnWriteArrayList<>();
+        Thread.UncaughtExceptionHandler prior = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            if (t.getName().startsWith("singbox-process-monitor")) {
+                monitorCrashes.add(e);
+            } else if (prior != null) {
+                prior.uncaughtException(t, e);
+            }
+        });
+        try {
+            for (int i = 0; i < 25; i++) {
+                engine.start(DUMMY_CONFIG, ProxyMode.SYSTEM_PROXY);
+                engine.stop();
+            }
+            // Give straggler monitor threads a chance to run into the bug.
+            Thread.sleep(300);
+            flushFxEvents();
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(prior);
+        }
+
+        assertThat(monitorCrashes).isEmpty();
+        assertThat(engine.isRunning()).isFalse();
     }
 
     private static final String SET_SYSTEM_PROXY_CONFIG = """
