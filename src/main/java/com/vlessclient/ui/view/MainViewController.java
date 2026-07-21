@@ -210,10 +210,15 @@ public class MainViewController {
                 // Wrap every loaded view in a ScrollPane so the whole page is
                 // reachable when the window is smaller than the content
                 // (otherwise buttons like Test Latency are clipped off the
-                // bottom and can't be clicked at all).
+                // bottom and can't be clicked at all). fitToHeight stretches
+                // the page to the viewport when the window is taller than the
+                // content, so views with a VBox.vgrow child (the Logs list)
+                // can actually fill it; scrolling still kicks in once the
+                // viewport is smaller than the page's min height.
                 javafx.scene.control.ScrollPane wrapper =
                         new javafx.scene.control.ScrollPane(view);
                 wrapper.setFitToWidth(true);
+                wrapper.setFitToHeight(true);
                 wrapper.setHbarPolicy(
                         javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
                 wrapper.setVbarPolicy(
