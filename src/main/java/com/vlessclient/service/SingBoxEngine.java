@@ -40,7 +40,10 @@ public class SingBoxEngine {
     private final ReadOnlyObjectWrapper<ConnectionState> connectionState;
     private final ReadOnlyStringWrapper errorMessage;
 
-    private Process process;
+    // Written by start()/stop() and read from the monitor/watchdog daemon
+    // threads; volatile so those threads see the current session's process
+    // (or its absence) instead of a stale reference.
+    private volatile Process process;
     private Path tempConfigFile;
     private Path stopSignalFile;
     private LogReader logReader;
@@ -109,6 +112,13 @@ public class SingBoxEngine {
             throw new IllegalStateException("sing-box is already running");
         }
 
+        // Retire the previous session's identity token FIRST. A crashed
+        // process leaves the field populated (stop() never ran), and the
+        // resources below are created before the new process exists — a
+        // stale monitor waking inside that window must see that its session
+        // is over, or it would fire a spurious ERROR into this one.
+        this.process = null;
+
         this.activeProxyMode = proxyMode;
         this.stopRequested = false;
 
@@ -132,11 +142,20 @@ public class SingBoxEngine {
             startDirect();
         }
 
+        // The "started" promotion only applies while THIS session is still
+        // coming up: a buffered log line delivered after a stop() or crash
+        // must not flip a DISCONNECTED/ERROR UI back to CONNECTED.
+        Process sessionProcess = process;
         logReader = new LogReader(
-                process.getInputStream(),
+                sessionProcess.getInputStream(),
                 logLines,
                 MAX_LOG_LINES,
-                line -> Platform.runLater(() -> connectionState.set(ConnectionState.CONNECTED))
+                line -> Platform.runLater(() -> {
+                    if (!stopRequested && sessionProcess == process
+                            && connectionState.get() == ConnectionState.CONNECTING) {
+                        connectionState.set(ConnectionState.CONNECTED);
+                    }
+                })
         );
         logReader.start();
 
@@ -167,6 +186,9 @@ public class SingBoxEngine {
     private static final long TUN_CONNECTED_DELAY_MS = 1800;
 
     private void startTunConnectedWatchdog() {
+        // Same session-capture discipline as the process monitor: a stale
+        // watchdog outliving its session must not promote the next one.
+        Process proc = process;
         Thread watchdog = new Thread(() -> {
             try {
                 Thread.sleep(TUN_CONNECTED_DELAY_MS);
@@ -175,7 +197,8 @@ public class SingBoxEngine {
                 return;
             }
             Platform.runLater(() -> {
-                if (isRunning() && connectionState.get() == ConnectionState.CONNECTING) {
+                if (proc != null && proc == process && proc.isAlive()
+                        && connectionState.get() == ConnectionState.CONNECTING) {
                     connectionState.set(ConnectionState.CONNECTED);
                 }
             });
@@ -224,6 +247,9 @@ public class SingBoxEngine {
     public void stop() {
         stopRequested = true;
         if (!isRunning()) {
+            // A crashed core leaves the dead process in the field; retire it
+            // so the next start() doesn't inherit a stale session token.
+            process = null;
             Platform.runLater(() -> connectionState.set(ConnectionState.DISCONNECTED));
             return;
         }
@@ -233,17 +259,18 @@ public class SingBoxEngine {
             logReader = null;
         }
 
+        Process p = process;
         if (activeProxyMode == ProxyMode.TUN) {
             stopPrivilegedProcess();
-        } else {
-            process.destroy();
+        } else if (p != null) {
+            p.destroy();
             try {
-                if (!process.waitFor(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    process.waitFor(2, TimeUnit.SECONDS);
+                if (!p.waitFor(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    p.destroyForcibly();
+                    p.waitFor(2, TimeUnit.SECONDS);
                 }
             } catch (InterruptedException e) {
-                process.destroyForcibly();
+                p.destroyForcibly();
                 Thread.currentThread().interrupt();
             }
         }
@@ -264,6 +291,7 @@ public class SingBoxEngine {
      * No password prompt.</p>
      */
     private void stopPrivilegedProcess() {
+        Process p = process;
         try {
             if (stopSignalFile != null) {
                 try {
@@ -272,15 +300,15 @@ public class SingBoxEngine {
                     // Already signalled — the wrapper will notice regardless.
                 }
             }
-            if (process != null) {
-                if (!process.waitFor(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    process.waitFor(2, TimeUnit.SECONDS);
+            if (p != null) {
+                if (!p.waitFor(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    p.destroyForcibly();
+                    p.waitFor(2, TimeUnit.SECONDS);
                 }
             }
         } catch (IOException | InterruptedException e) {
-            if (process != null) {
-                process.destroyForcibly();
+            if (p != null) {
+                p.destroyForcibly();
             }
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -303,7 +331,10 @@ public class SingBoxEngine {
      * @return true if the process is running
      */
     public boolean isRunning() {
-        return process != null && process.isAlive();
+        // Single read of the volatile field: a concurrent stop() nulling it
+        // between a check and a use must not turn this into an NPE.
+        Process p = process;
+        return p != null && p.isAlive();
     }
 
     /**
@@ -340,27 +371,57 @@ public class SingBoxEngine {
      * to ERROR with the last log line as the error message.
      */
     private void startProcessMonitor() {
+        // Capture THIS session's state up front. The fields are cleared by
+        // stop() and reassigned by the next start(), and this thread may get
+        // its first CPU slice only after that: re-reading them from the
+        // thread body was an NPE (dead monitor, no ERROR transition), and a
+        // stale monitor's cleanup could delete the NEW session's config file
+        // or clear its OS proxy. A monitor that only ever touches its own
+        // captured session cannot race the field lifecycle at all.
+        Process proc = process;
+        Path sessionConfigFile = tempConfigFile;
+        SystemProxyTarget sessionProxyTarget = systemProxyTarget;
+        if (proc == null) {
+            return;
+        }
         Thread monitor = new Thread(() -> {
             try {
-                int exitCode = process.waitFor();
+                int exitCode = proc.waitFor();
                 Platform.runLater(() -> {
                     if (!stopRequested
+                            && proc == process
                             && connectionState.get() != ConnectionState.DISCONNECTED) {
                         String lastLine = logLines.isEmpty()
                                 ? "sing-box exited with code " + exitCode
                                 : logLines.getLast();
-                        connectionState.set(ConnectionState.ERROR);
+                        // Message before state: state listeners fire
+                        // synchronously inside set(), and they read the
+                        // message the moment they see ERROR.
                         errorMessage.set("Process exited unexpectedly (code "
                                 + exitCode + "): " + lastLine);
+                        connectionState.set(ConnectionState.ERROR);
                     }
                 });
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
-                cleanupConfigFile();
-                // The core is definitely dead here — every exit path (stop,
-                // hard kill, crash) funnels through this monitor.
-                restoreSystemProxyIfNeeded();
+                // Every exit path of OUR process (stop, hard kill, crash)
+                // funnels through here. Deleting our own config file is
+                // always safe — temp names are unique per session. The OS
+                // proxy is cleared only while no newer session has taken
+                // over: a reconnect typically reuses the same local port, and
+                // the successor's live proxy must not be ripped out from
+                // under it.
+                try {
+                    Files.deleteIfExists(sessionConfigFile);
+                } catch (IOException ignored) {
+                    // best-effort cleanup
+                }
+                Process current = process;
+                if (sessionProxyTarget != null && (current == null || current == proc)) {
+                    systemProxyGuard.clearIfPointsAt(
+                            sessionProxyTarget.host(), sessionProxyTarget.port());
+                }
             }
         }, "singbox-process-monitor");
         monitor.setDaemon(true);
@@ -446,16 +507,17 @@ public class SingBoxEngine {
                 // already exists or can't create — best effort
             }
         }
+        Process p = process;
         try {
-            if (process != null && process.isAlive()) {
-                process.destroy();
-                if (!process.waitFor(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
+            if (p != null && p.isAlive()) {
+                p.destroy();
+                if (!p.waitFor(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    p.destroyForcibly();
                 }
             }
         } catch (InterruptedException e) {
-            if (process != null) {
-                process.destroyForcibly();
+            if (p != null) {
+                p.destroyForcibly();
             }
             Thread.currentThread().interrupt();
         }
