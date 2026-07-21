@@ -14,9 +14,8 @@ import org.testfx.util.WaitForAsyncUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Smoke tests for MainView. Disabled by default because TestFX + JavaFX 25
- * with --enable-preview has known compatibility issues. Skeleton kept for
- * future enablement.
+ * Headless TestFX smoke tests for MainView: the FXML loads and sidebar
+ * navigation marks the selected button active.
  */
 public class MainViewTest extends ApplicationTest {
 

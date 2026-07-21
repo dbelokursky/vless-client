@@ -71,7 +71,6 @@ Copy-Item "target/$jarName" staging/
     --win-menu-group 'VLESS Client' `
     --win-shortcut `
     --win-per-user-install `
-    --java-options '--enable-preview' `
     --java-options "-Dapp.version=$Version"
 if ($LASTEXITCODE -ne 0) {
     throw "[package-windows] jpackage failed with exit code $LASTEXITCODE"

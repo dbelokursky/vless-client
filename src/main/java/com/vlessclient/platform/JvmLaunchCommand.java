@@ -11,8 +11,8 @@ import java.util.List;
  * repeat it at the next login. Shared by the platform-specific {@link Autostart}
  * implementations.
  *
- * <p>The same {@code java} executable, VM options (so {@code --enable-preview}
- * and the macOS dock-name flags survive), classpath and
+ * <p>The same {@code java} executable, VM options (so the macOS dock-name
+ * flags survive), classpath and
  * {@link com.vlessclient.app.Launcher} main class are used. Classpath entries
  * are made absolute because a login-launched process may run with a different
  * working directory. Debugger and profiler agents are stripped: they make no
