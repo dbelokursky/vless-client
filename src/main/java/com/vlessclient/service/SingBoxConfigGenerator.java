@@ -529,30 +529,38 @@ public class SingBoxConfigGenerator {
         String preset = routingConfig.getPreset();
 
         if ("bypass_domestic".equals(preset)) {
-            String country = routingConfig.getBypassCountry();
-            if (country == null || country.isBlank()) {
-                country = "ru";
+            List<String> countries = routingConfig.getBypassCountries();
+            if (countries == null || countries.isEmpty()) {
+                countries = List.of("ru");
             }
 
-            // geosite aggregate — only some countries have one (see
-            // geositeTagFor). Countries without a geosite set still get the
-            // geoip rule below, which is enough for IP-level routing.
-            String geositeTag = geositeTagFor(country);
-            if (geositeTag != null) {
-                ruleSetTags.add(geositeTag);
+            // One geosite rule and one geoip rule cover every selected
+            // country: entries of a rule's rule_set list are OR-ed by
+            // sing-box, so a single rule per kind keeps the config flat no
+            // matter how many countries are picked. geosite aggregates exist
+            // only for some countries (see geositeTagFor); the rest match by
+            // geoip alone, which is still useful at the IP level.
+            ArrayNode geositeRefs = mapper.createArrayNode();
+            ArrayNode geoipRefs = mapper.createArrayNode();
+            for (String country : countries) {
+                String geositeTag = geositeTagFor(country);
+                if (geositeTag != null && ruleSetTags.add(geositeTag)) {
+                    geositeRefs.add(geositeTag);
+                }
+                String geoipTag = "geoip-" + country;
+                if (ruleSetTags.add(geoipTag)) {
+                    geoipRefs.add(geoipTag);
+                }
+            }
+
+            if (!geositeRefs.isEmpty()) {
                 ObjectNode geositeRule = mapper.createObjectNode();
-                ArrayNode geositeRefs = mapper.createArrayNode();
-                geositeRefs.add(geositeTag);
                 geositeRule.set("rule_set", geositeRefs);
                 geositeRule.put("outbound", "direct");
                 rules.add(geositeRule);
             }
 
-            String geoipTag = "geoip-" + country;
-            ruleSetTags.add(geoipTag);
             ObjectNode geoipRule = mapper.createObjectNode();
-            ArrayNode geoipRefs = mapper.createArrayNode();
-            geoipRefs.add(geoipTag);
             geoipRule.set("rule_set", geoipRefs);
             geoipRule.put("outbound", "direct");
             rules.add(geoipRule);

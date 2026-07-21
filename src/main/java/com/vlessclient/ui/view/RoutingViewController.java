@@ -43,6 +43,7 @@ public class RoutingViewController {
 
     @FXML private ComboBox<String> presetCombo;
     @FXML private HBox bypassCountryRow;
+    @FXML private javafx.scene.layout.FlowPane bypassCountryChips;
     @FXML private ComboBox<String> bypassCountryCombo;
     @FXML private Label bypassCountryHint;
     @FXML private VBox customRulesSection;
@@ -101,7 +102,7 @@ public class RoutingViewController {
             }
         });
 
-        initBypassCountryCombo(config);
+        initBypassCountryChips(config);
 
         rulesListView.setItems(rulesList);
         rulesListView.setCellFactory(list -> new RuleListCell());
@@ -118,36 +119,91 @@ public class RoutingViewController {
     }
 
     /**
-     * Populates the country ComboBox with a handful of commonly-requested ISO
-     * codes, binds the current routing config's value, and persists changes.
-     * The combo is editable so users who need anything exotic can just type
-     * the ISO code (sing-box accepts any that its geoip/geosite database
-     * supports — the dropdown is just a convenience).
+     * Renders the selected bypass countries as removable chips in front of an
+     * "add" ComboBox. The combo offers a handful of commonly-requested ISO
+     * codes and stays editable so users who need anything exotic can just
+     * type the code (sing-box accepts any that its geoip/geosite rule sets
+     * support — the dropdown is just a convenience). Committing a value
+     * (Enter, item pick, or focus loss) appends a chip; the model setter
+     * normalises and de-duplicates, so committing junk is harmless.
      */
-    private void initBypassCountryCombo(RoutingConfig config) {
-        if (bypassCountryCombo == null) {
+    private void initBypassCountryChips(RoutingConfig config) {
+        if (bypassCountryCombo == null || bypassCountryChips == null) {
             return;
         }
         bypassCountryCombo.getItems().addAll("ru", "cn", "ir", "us", "de", "gb", "jp", "kr");
-        bypassCountryCombo.setValue(config.getBypassCountry());
 
-        Runnable saveCountry = () -> {
-            String value = bypassCountryCombo.getEditor() != null
-                    ? bypassCountryCombo.getEditor().getText()
-                    : bypassCountryCombo.getValue();
-            RoutingConfig current = routingService.getConfig();
-            current.setBypassCountry(value);
-            routingService.saveConfig(current);
-        };
-
-        bypassCountryCombo.valueProperty().addListener((obs, oldVal, newVal) -> saveCountry.run());
+        bypassCountryCombo.setOnAction(e -> commitCountryFromCombo());
         if (bypassCountryCombo.getEditor() != null) {
             bypassCountryCombo.getEditor().focusedProperty().addListener((obs, was, isNow) -> {
                 if (!isNow) {
-                    saveCountry.run();
+                    commitCountryFromCombo();
                 }
             });
         }
+
+        renderCountryChips(config.getBypassCountries());
+    }
+
+    /** Adds the combo's current text to the country list and clears it. */
+    private void commitCountryFromCombo() {
+        String raw = bypassCountryCombo.getEditor() != null
+                ? bypassCountryCombo.getEditor().getText()
+                : bypassCountryCombo.getValue();
+        if (raw == null || raw.isBlank()) {
+            return;
+        }
+        RoutingConfig current = routingService.getConfig();
+        List<String> countries = new ArrayList<>(current.getBypassCountries());
+        countries.add(raw);
+        current.setBypassCountries(countries);
+        routingService.saveConfig(current);
+
+        // Clearing value fires onAction again; the isBlank guard above makes
+        // that re-entry a no-op.
+        bypassCountryCombo.setValue(null);
+        if (bypassCountryCombo.getEditor() != null) {
+            bypassCountryCombo.getEditor().clear();
+        }
+        renderCountryChips(current.getBypassCountries());
+    }
+
+    private void removeCountry(String code) {
+        RoutingConfig current = routingService.getConfig();
+        List<String> countries = new ArrayList<>(current.getBypassCountries());
+        countries.remove(code);
+        current.setBypassCountries(countries);
+        routingService.saveConfig(current);
+        renderCountryChips(current.getBypassCountries());
+    }
+
+    /**
+     * Rebuilds the chip nodes, keeping the add-combo as the last child. The
+     * remove cross is hidden on the last remaining chip: an empty selection
+     * would silently degrade bypass_domestic to route_all (the model would
+     * also snap back to [ru], which reads as a glitch).
+     */
+    private void renderCountryChips(List<String> countries) {
+        List<javafx.scene.Node> chips = new ArrayList<>();
+        for (String code : countries) {
+            HBox chip = new HBox(6);
+            chip.getStyleClass().add("country-chip");
+            chip.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+            Label codeLabel = new Label(code);
+            codeLabel.getStyleClass().add("country-chip-label");
+            chip.getChildren().add(codeLabel);
+
+            if (countries.size() > 1) {
+                Label remove = new Label("✕");
+                remove.getStyleClass().add("country-chip-remove");
+                remove.setOnMouseClicked(e -> removeCountry(code));
+                chip.getChildren().add(remove);
+            }
+            chips.add(chip);
+        }
+        chips.add(bypassCountryCombo);
+        bypassCountryChips.getChildren().setAll(chips);
     }
 
     private void loadBypassList() {

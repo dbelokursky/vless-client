@@ -107,7 +107,7 @@ class SingBoxRealBinarySmokeTest {
         // `sing-box check` does not download them, so this is CI-safe).
         RoutingConfig domestic = new RoutingConfig();
         domestic.setPreset("bypass_domestic");
-        domestic.setBypassCountry("ru");
+        domestic.setBypassCountries(List.of("ru"));
 
         for (RoutingConfig routing : List.of(custom, domestic)) {
             for (ProxyMode mode : ProxyMode.values()) {

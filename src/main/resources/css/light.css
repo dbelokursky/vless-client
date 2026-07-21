@@ -534,6 +534,28 @@
 }
 
 /* Small pill showing a live count (e.g. bypass-list entries). */
+/* Removable bypass-country chips on the Routing page. */
+.country-chip {
+    -fx-background-color: #eceef0;
+    -fx-background-radius: 12;
+    -fx-padding: 3 10 3 12;
+}
+
+.country-chip-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #3c4043;
+}
+
+.country-chip-remove {
+    -fx-font-size: 11px;
+    -fx-text-fill: #6b7078;
+    -fx-cursor: hand;
+}
+
+.country-chip-remove:hover {
+    -fx-text-fill: #c62828;
+}
+
 .count-badge {
     -fx-font-size: 11px;
     -fx-font-weight: bold;
