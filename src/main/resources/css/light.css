@@ -180,16 +180,6 @@
     -fx-min-height: 96;
 }
 
-.upload-card {
-    -fx-border-color: -c-border;
-    -fx-background-color: -c-surface;
-}
-
-.download-card {
-    -fx-border-color: -c-border;
-    -fx-background-color: -c-surface;
-}
-
 /* ===== Dashboard Status =====
    Solid tint discs instead of radial gradients — the colour reads the same
    but stays flat against the card. */
@@ -730,14 +720,14 @@
 }
 
 /* ===== Upload/Download Icons ===== */
-.stats-icon-upload {
-    -fx-font-size: 18px;
-    -fx-text-fill: -c-warn;
+/* The chevron SVGs come from Icons.chevronDouble*; the parent label's class
+   picks the direction color, same contextual pattern as .nav-button icons. */
+.stats-icon-upload .nav-icon-glyph {
+    -fx-fill: -c-warn;
 }
 
-.stats-icon-download {
-    -fx-font-size: 18px;
-    -fx-text-fill: -c-info;
+.stats-icon-download .nav-icon-glyph {
+    -fx-fill: -c-info;
 }
 
 /* ===== Latency Result ===== */

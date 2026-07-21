@@ -4,7 +4,7 @@ import com.vlessclient.app.ServiceLocator;
 import com.vlessclient.model.AppSettings;
 import com.vlessclient.model.ConnectionState;
 import com.vlessclient.service.TrafficMonitor;
-import com.vlessclient.ui.view.Sparkline;
+import com.vlessclient.ui.view.MirroredSparkline;
 import javafx.scene.control.Label;
 import javafx.scene.paint.Color;
 import org.slf4j.Logger;
@@ -12,8 +12,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Formats {@link TrafficMonitor} readings into the Dashboard's speed/total
- * labels and sparklines, and starts/stops the monitor as the tunnel goes up
- * and down. Extracted from
+ * labels and the mirrored traffic sparkline, and starts/stops the monitor as
+ * the tunnel goes up and down. Extracted from
  * {@link com.vlessclient.ui.view.DashboardViewController}, which stays the
  * FXML endpoint and passes its injected controls in.
  */
@@ -26,8 +26,7 @@ public final class TrafficDisplayBinder {
     private final Label downloadSpeedLabel;
     private final Label totalUploadLabel;
     private final Label totalDownloadLabel;
-    private final Sparkline uploadSparkline;
-    private final Sparkline downloadSparkline;
+    private final MirroredSparkline trafficSparkline;
 
     /**
      * Creates the binder over the controller's traffic readouts.
@@ -39,25 +38,22 @@ public final class TrafficDisplayBinder {
     public TrafficDisplayBinder(TrafficMonitor trafficMonitor,
                                 Label uploadSpeedLabel, Label downloadSpeedLabel,
                                 Label totalUploadLabel, Label totalDownloadLabel,
-                                Sparkline uploadSparkline, Sparkline downloadSparkline) {
+                                MirroredSparkline trafficSparkline) {
         this.trafficMonitor = trafficMonitor;
         this.uploadSpeedLabel = uploadSpeedLabel;
         this.downloadSpeedLabel = downloadSpeedLabel;
         this.totalUploadLabel = totalUploadLabel;
         this.totalDownloadLabel = totalDownloadLabel;
-        this.uploadSparkline = uploadSparkline;
-        this.downloadSparkline = downloadSparkline;
+        this.trafficSparkline = trafficSparkline;
     }
 
-    /** Applies the upload/download accent colours to the sparklines. */
+    /** Applies the download/upload accent colours to the mirrored chart. */
     public void initSparklines() {
-        if (uploadSparkline != null) {
-            uploadSparkline.setLineColor(Color.web("#ef6c00"));
-            uploadSparkline.setFillColor(Color.web("#ef6c00", 0.18));
-        }
-        if (downloadSparkline != null) {
-            downloadSparkline.setLineColor(Color.web("#1565c0"));
-            downloadSparkline.setFillColor(Color.web("#1565c0", 0.18));
+        if (trafficSparkline != null) {
+            trafficSparkline.setDownLineColor(Color.web("#1565c0"));
+            trafficSparkline.setDownFillColor(Color.web("#1565c0", 0.18));
+            trafficSparkline.setUpLineColor(Color.web("#ef6c00"));
+            trafficSparkline.setUpFillColor(Color.web("#ef6c00", 0.18));
         }
     }
 
@@ -67,19 +63,17 @@ public final class TrafficDisplayBinder {
      * when a {@link TrafficMonitor} is available.
      */
     public void bindLabels() {
-        trafficMonitor.uploadSpeedProperty().addListener((obs, oldVal, newVal) -> {
-            long v = newVal.longValue();
-            uploadSpeedLabel.setText(TrafficMonitor.formatSpeed(v));
-            if (uploadSparkline != null) {
-                uploadSparkline.addSample(v);
-            }
-        });
+        trafficMonitor.uploadSpeedProperty().addListener((obs, oldVal, newVal) ->
+                uploadSpeedLabel.setText(TrafficMonitor.formatSpeed(newVal.longValue())));
 
         trafficMonitor.downloadSpeedProperty().addListener((obs, oldVal, newVal) -> {
-            long v = newVal.longValue();
-            downloadSpeedLabel.setText(TrafficMonitor.formatSpeed(v));
-            if (downloadSparkline != null) {
-                downloadSparkline.addSample(v);
+            long down = newVal.longValue();
+            downloadSpeedLabel.setText(TrafficMonitor.formatSpeed(down));
+            if (trafficSparkline != null) {
+                // The monitor publishes upload before download on each poll
+                // tick, so reading the upload property here pairs the two
+                // values measured together.
+                trafficSparkline.addSample(down, trafficMonitor.uploadSpeedProperty().get());
             }
         });
 
@@ -107,11 +101,8 @@ public final class TrafficDisplayBinder {
             }
         } else if (state == ConnectionState.DISCONNECTED || state == ConnectionState.ERROR) {
             trafficMonitor.stop();
-            if (uploadSparkline != null) {
-                uploadSparkline.clear();
-            }
-            if (downloadSparkline != null) {
-                downloadSparkline.clear();
+            if (trafficSparkline != null) {
+                trafficSparkline.clear();
             }
         }
     }

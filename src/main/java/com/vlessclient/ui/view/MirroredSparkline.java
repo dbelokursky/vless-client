@@ -18,33 +18,41 @@ import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.shape.StrokeLineJoin;
 
 /**
- * A lightweight sparkline chart for the Dashboard's real-time traffic
- * readout. Holds a rolling buffer of up to {@link #maxSamples} numeric
- * samples and renders them as a smooth spline with a soft gradient fill
- * underneath and a gently pulsing dot pinned to the most recent value.
+ * A two-series mirrored sparkline for the Dashboard's real-time traffic
+ * readout: download samples plot upward from a shared horizontal axis and
+ * upload samples plot downward, the way router status pages and nload draw
+ * a duplex link. Each half auto-scales to its own rolling maximum so a busy
+ * downlink cannot flatten the (typically much smaller) uplink.
  *
- * <p>Implementation detail: drawing happens on a {@link Canvas} via a single
- * {@code redraw} call, not a scene graph of per-sample nodes. The curve and
- * fill only change when a sample arrives (1 Hz); the endpoint's pulse is
- * driven by an {@link AnimationTimer} that repaints at ~35 fps, but only while
- * the sparkline is actually on screen — it idles when the window is hidden to
- * the tray or the buffer is empty.</p>
+ * <p>Rendering follows the retired single-series {@code Sparkline}: a rolling
+ * buffer of up to {@link #maxSamples} sample pairs drawn on a {@link Canvas}
+ * in one {@code redraw} pass — Catmull-Rom splines, a soft gradient fill
+ * fading toward the axis, and a gently pulsing dot pinned to each series'
+ * most recent value. The curve only changes when a sample arrives (1 Hz); the
+ * endpoint pulse is driven by an {@link AnimationTimer} at ~35 fps that idles
+ * whenever the chart is hidden or empty.</p>
  */
-public class Sparkline extends Region {
+public class MirroredSparkline extends Region {
 
     private static final int DEFAULT_MAX_SAMPLES = 60;
     private static final double MIN_DISPLAY_RANGE = 1.0;
     private static final long PULSE_PERIOD_NS = 1_600_000_000L;
     private static final long FRAME_MIN_NS = 28_000_000L;
+    private static final Color AXIS_COLOR = Color.gray(0.5, 0.35);
 
     private final Canvas canvas = new Canvas();
-    private final Deque<Double> samples = new ArrayDeque<>();
+    /** Rolling buffer of {download, upload} pairs, oldest first. */
+    private final Deque<double[]> samples = new ArrayDeque<>();
     private final int maxSamples;
 
-    private final ObjectProperty<Color> lineColor =
+    private final ObjectProperty<Color> downLineColor =
             new SimpleObjectProperty<>(Color.web("#1565c0"));
-    private final ObjectProperty<Color> fillColor =
+    private final ObjectProperty<Color> downFillColor =
             new SimpleObjectProperty<>(Color.web("#1565c0", 0.18));
+    private final ObjectProperty<Color> upLineColor =
+            new SimpleObjectProperty<>(Color.web("#ef6c00"));
+    private final ObjectProperty<Color> upFillColor =
+            new SimpleObjectProperty<>(Color.web("#ef6c00", 0.18));
 
     private double pulse;
     private boolean pulseRunning;
@@ -65,23 +73,25 @@ public class Sparkline extends Region {
         }
     };
 
-    public Sparkline() {
+    public MirroredSparkline() {
         this(DEFAULT_MAX_SAMPLES);
     }
 
     /**
-     * Creates a sparkline with the given rolling-buffer capacity.
+     * Creates a mirrored sparkline with the given rolling-buffer capacity.
      *
-     * @param maxSamples maximum number of samples retained; clamped to a
+     * @param maxSamples maximum number of sample pairs retained; clamped to a
      *     minimum of 8
      */
-    public Sparkline(int maxSamples) {
+    public MirroredSparkline(int maxSamples) {
         this.maxSamples = Math.max(8, maxSamples);
         getChildren().add(canvas);
-        setMinHeight(36);
-        setPrefHeight(56);
-        lineColor.addListener((obs, o, n) -> redraw());
-        fillColor.addListener((obs, o, n) -> redraw());
+        setMinHeight(72);
+        setPrefHeight(112);
+        downLineColor.addListener((obs, o, n) -> redraw());
+        downFillColor.addListener((obs, o, n) -> redraw());
+        upLineColor.addListener((obs, o, n) -> redraw());
+        upFillColor.addListener((obs, o, n) -> redraw());
         widthProperty().addListener((obs, o, n) -> {
             canvas.setWidth(n.doubleValue());
             redraw();
@@ -100,10 +110,12 @@ public class Sparkline extends Region {
         });
     }
 
-    /** Appends one sample and redraws. Non-finite/negative values clamp to 0. */
-    public void addSample(double value) {
-        double clean = Double.isFinite(value) && value > 0 ? value : 0.0;
-        samples.addLast(clean);
+    /**
+     * Appends one download/upload sample pair and redraws. Non-finite or
+     * negative values clamp to 0.
+     */
+    public void addSample(double download, double upload) {
+        samples.addLast(new double[] {clean(download), clean(upload)});
         while (samples.size() > maxSamples) {
             samples.removeFirst();
         }
@@ -111,7 +123,7 @@ public class Sparkline extends Region {
         redraw();
     }
 
-    /** Clears all samples and redraws empty. */
+    /** Clears both series and redraws the empty axis. */
     public void clear() {
         samples.clear();
         stopPulse();
@@ -119,20 +131,40 @@ public class Sparkline extends Region {
         redraw();
     }
 
-    public ObjectProperty<Color> lineColorProperty() {
-        return lineColor;
+    public ObjectProperty<Color> downLineColorProperty() {
+        return downLineColor;
     }
 
-    public void setLineColor(Color c) {
-        lineColor.set(c);
+    public void setDownLineColor(Color c) {
+        downLineColor.set(c);
     }
 
-    public ObjectProperty<Color> fillColorProperty() {
-        return fillColor;
+    public ObjectProperty<Color> downFillColorProperty() {
+        return downFillColor;
     }
 
-    public void setFillColor(Color c) {
-        fillColor.set(c);
+    public void setDownFillColor(Color c) {
+        downFillColor.set(c);
+    }
+
+    public ObjectProperty<Color> upLineColorProperty() {
+        return upLineColor;
+    }
+
+    public void setUpLineColor(Color c) {
+        upLineColor.set(c);
+    }
+
+    public ObjectProperty<Color> upFillColorProperty() {
+        return upFillColor;
+    }
+
+    public void setUpFillColor(Color c) {
+        upFillColor.set(c);
+    }
+
+    private static double clean(double value) {
+        return Double.isFinite(value) && value > 0 ? value : 0.0;
     }
 
     private void startPulse() {
@@ -149,7 +181,7 @@ public class Sparkline extends Region {
         }
     }
 
-    /** True only when visible in a showing window with a line to draw. */
+    /** True only when visible in a showing window with lines to draw. */
     private boolean canAnimate() {
         Scene s = getScene();
         return isVisible() && getWidth() > 0 && samples.size() >= 2
@@ -162,23 +194,42 @@ public class Sparkline extends Region {
         GraphicsContext g = canvas.getGraphicsContext2D();
         g.clearRect(0, 0, w, h);
 
-        if (w <= 0 || h <= 0 || samples.size() < 2) {
+        if (w <= 0 || h <= 0) {
             return;
         }
 
-        // Y scale: pad by a hair so the current max doesn't kiss the top.
-        double max = MIN_DISPLAY_RANGE;
-        for (double v : samples) {
-            if (v > max) {
-                max = v;
+        double pad = 2;
+        double axisY = Math.round(h / 2) + 0.5;
+
+        // The shared axis is part of the empty state too: it shows the card's
+        // structure before the first samples arrive.
+        g.setStroke(AXIS_COLOR);
+        g.setLineWidth(1);
+        g.setLineDashes(4, 6);
+        g.strokeLine(pad, axisY, w - pad, axisY);
+        g.setLineDashes((double[]) null);
+
+        if (samples.size() < 2) {
+            return;
+        }
+
+        // Each half scales to its own max, padded by a hair so the peak
+        // doesn't kiss the edge.
+        double maxDown = MIN_DISPLAY_RANGE;
+        double maxUp = MIN_DISPLAY_RANGE;
+        for (double[] s : samples) {
+            if (s[0] > maxDown) {
+                maxDown = s[0];
+            }
+            if (s[1] > maxUp) {
+                maxUp = s[1];
             }
         }
-        max *= 1.1;
+        maxDown *= 1.1;
+        maxUp *= 1.1;
 
-        double pad = 2;
         double chartW = w - pad * 2;
-        double chartH = h - pad * 2;
-
+        double halfH = axisY - pad;
         int count = samples.size();
         double stepX = chartW / (maxSamples - 1);
         // Right-align the most recent sample so older points scroll off the
@@ -186,30 +237,42 @@ public class Sparkline extends Region {
         double startX = pad + chartW - stepX * (count - 1);
 
         double[] xs = new double[count];
-        double[] ys = new double[count];
+        double[] downYs = new double[count];
+        double[] upYs = new double[count];
         int i = 0;
-        for (double v : samples) {
+        for (double[] s : samples) {
             xs[i] = startX + stepX * i;
-            ys[i] = pad + chartH - (v / max) * chartH;
+            downYs[i] = axisY - (s[0] / maxDown) * halfH;
+            upYs[i] = axisY + (s[1] / maxUp) * halfH;
             i++;
         }
 
-        // Soft gradient fill under a smooth spline through the samples.
-        double baseY = pad + chartH;
+        drawHalf(g, xs, downYs, count, axisY, pad,
+                downLineColor.get(), downFillColor.get());
+        drawHalf(g, xs, upYs, count, axisY, h - pad,
+                upLineColor.get(), upFillColor.get());
+    }
+
+    /**
+     * Draws one series: a gradient fill between the spline and the axis
+     * (strongest at the outer edge {@code farY}, fading to almost nothing at
+     * the axis), the spline stroke, and the pulsing endpoint dot.
+     */
+    private void drawHalf(GraphicsContext g, double[] xs, double[] ys, int count,
+                          double axisY, double farY, Color line, Color fill) {
         g.beginPath();
         traceSpline(g, xs, ys, count);
-        g.lineTo(xs[count - 1], baseY);
-        g.lineTo(xs[0], baseY);
+        g.lineTo(xs[count - 1], axisY);
+        g.lineTo(xs[0], axisY);
         g.closePath();
         LinearGradient gradient = new LinearGradient(
-                0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
-                new Stop(0, fillColor.get()),
-                new Stop(1, fillColor.get().deriveColor(0, 1, 1, 0.05))
+                0, farY, 0, axisY, false, CycleMethod.NO_CYCLE,
+                new Stop(0, fill),
+                new Stop(1, fill.deriveColor(0, 1, 1, 0.05))
         );
         g.setFill(gradient);
         g.fill();
 
-        Color line = lineColor.get();
         g.beginPath();
         traceSpline(g, xs, ys, count);
         g.setStroke(line);

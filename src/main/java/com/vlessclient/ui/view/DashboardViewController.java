@@ -54,13 +54,16 @@ public class DashboardViewController {
     @FXML private Label statusTitle;
     @FXML private Label statusLabel;
     @FXML private Label serverNameLabel;
-    @FXML private Sparkline uploadSparkline;
-    @FXML private Sparkline downloadSparkline;
+    @FXML private MirroredSparkline trafficSparkline;
     @FXML private Button connectButton;
     @FXML private Label uploadSpeedLabel;
     @FXML private Label downloadSpeedLabel;
     @FXML private Label totalUploadLabel;
     @FXML private Label totalDownloadLabel;
+    @FXML private Label uploadCardIcon;
+    @FXML private Label downloadCardIcon;
+    @FXML private Label totalUploadIcon;
+    @FXML private Label totalDownloadIcon;
     @FXML private Button testLatencyButton;
     @FXML private VBox latencyResultList;
     @FXML private ComboBox<ProxyMode> proxyModeCombo;
@@ -96,6 +99,11 @@ public class DashboardViewController {
      */
     @FXML
     public void initialize() {
+        uploadCardIcon.setGraphic(Icons.chevronDoubleUp(16));
+        downloadCardIcon.setGraphic(Icons.chevronDoubleDown(16));
+        totalUploadIcon.setGraphic(Icons.chevronDoubleUp(16));
+        totalDownloadIcon.setGraphic(Icons.chevronDoubleDown(16));
+
         try {
             singBoxEngine = ServiceLocator.get(SingBoxEngine.class);
         } catch (IllegalArgumentException e) {
@@ -129,7 +137,7 @@ public class DashboardViewController {
 
         trafficDisplay = new TrafficDisplayBinder(trafficMonitor,
                 uploadSpeedLabel, downloadSpeedLabel, totalUploadLabel, totalDownloadLabel,
-                uploadSparkline, downloadSparkline);
+                trafficSparkline);
         latencySession = new LatencyTestSession(latencyTester, testLatencyButton,
                 latencyResultList);
         // The engine is supplied lazily because onRetryInstallClicked can swap
