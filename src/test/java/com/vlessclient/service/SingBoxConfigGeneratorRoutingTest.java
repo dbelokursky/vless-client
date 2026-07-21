@@ -221,7 +221,7 @@ class SingBoxConfigGeneratorRoutingTest {
         // CN is the one country with a bare 'geosite-cn.srs' aggregate.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
-        routingConfig.setBypassCountry("cn");
+        routingConfig.setBypassCountries(List.of("cn"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode route = parse(json).get("route");
@@ -239,7 +239,7 @@ class SingBoxConfigGeneratorRoutingTest {
         // generator must drop the geosite rule rather than emit a 404 URL.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
-        routingConfig.setBypassCountry("DE");
+        routingConfig.setBypassCountries(List.of("DE"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode route = parse(json).get("route");
@@ -255,6 +255,44 @@ class SingBoxConfigGeneratorRoutingTest {
         assertThat(ruleSet.size()).isEqualTo(1);
         assertThat(ruleSet.get(0).get("tag").asText()).isEqualTo("geoip-de");
         assertThat(ruleSet.get(0).get("url").asText()).endsWith("/geoip-de.srs");
+    }
+
+    @Test
+    void bypassDomestic_multipleCountriesShareTwoRules() throws Exception {
+        // Multi-select stays flat: one geosite rule and one geoip rule OR the
+        // selected countries' rule sets together. kz has no sing-geosite
+        // aggregate and contributes only its geoip set.
+        RoutingConfig routingConfig = new RoutingConfig();
+        routingConfig.setPreset("bypass_domestic");
+        routingConfig.setBypassCountries(List.of("ru", "kz", "cn"));
+
+        String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
+        JsonNode route = parse(json).get("route");
+
+        // [ local-domain, private-ip, geosite (ru+cn), geoip (ru+kz+cn) ]
+        JsonNode rules = route.get("rules");
+        assertThat(rules.size()).isEqualTo(4);
+
+        JsonNode geositeRule = rules.get(2);
+        assertThat(geositeRule.get("rule_set").get(0).asText())
+                .isEqualTo("geosite-category-ru");
+        assertThat(geositeRule.get("rule_set").get(1).asText()).isEqualTo("geosite-cn");
+        assertThat(geositeRule.get("outbound").asText()).isEqualTo("direct");
+
+        JsonNode geoipRule = rules.get(3);
+        assertThat(geoipRule.get("rule_set").get(0).asText()).isEqualTo("geoip-ru");
+        assertThat(geoipRule.get("rule_set").get(1).asText()).isEqualTo("geoip-kz");
+        assertThat(geoipRule.get("rule_set").get(2).asText()).isEqualTo("geoip-cn");
+        assertThat(geoipRule.get("outbound").asText()).isEqualTo("direct");
+
+        // route.rule_set declares each tag exactly once, in insertion order.
+        JsonNode ruleSet = route.get("rule_set");
+        assertThat(ruleSet.size()).isEqualTo(5);
+        assertThat(ruleSet.get(0).get("tag").asText()).isEqualTo("geosite-category-ru");
+        assertThat(ruleSet.get(1).get("tag").asText()).isEqualTo("geoip-ru");
+        assertThat(ruleSet.get(2).get("tag").asText()).isEqualTo("geoip-kz");
+        assertThat(ruleSet.get(3).get("tag").asText()).isEqualTo("geosite-cn");
+        assertThat(ruleSet.get(4).get("tag").asText()).isEqualTo("geoip-cn");
     }
 
     @Test
@@ -435,7 +473,7 @@ class SingBoxConfigGeneratorRoutingTest {
         // must NOT double-emit it.
         RoutingConfig routingConfig = new RoutingConfig();
         routingConfig.setPreset("bypass_domestic");
-        routingConfig.setBypassCountry("ru");
+        routingConfig.setBypassCountries(List.of("ru"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");

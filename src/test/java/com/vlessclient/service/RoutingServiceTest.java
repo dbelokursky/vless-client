@@ -49,6 +49,44 @@ class RoutingServiceTest {
     }
 
     @Test
+    void legacySingleBypassCountry_foldsIntoTheList() throws Exception {
+        // Pre-multi routing.json carries a single "bypass_country" string;
+        // it must seed the bypass_countries list so the user's choice
+        // survives the upgrade.
+        Path file = tempDir.resolve("routing.json");
+        java.nio.file.Files.writeString(file,
+                "{\"preset\":\"bypass_domestic\",\"bypass_country\":\"KZ\"}");
+
+        RoutingService loaded = new RoutingService(tempDir);
+        assertThat(loaded.getConfig().getBypassCountries()).containsExactly("kz");
+    }
+
+    @Test
+    void bypassCountries_normalizeDedupeAndDefault() {
+        RoutingConfig config = new RoutingConfig();
+        assertThat(config.getBypassCountries()).containsExactly("ru");
+
+        config.setBypassCountries(List.of(" RU ", "kz", "ru", "", "By"));
+        assertThat(config.getBypassCountries()).containsExactly("ru", "kz", "by");
+
+        // Emptying the list snaps back to the default instead of silently
+        // degrading bypass_domestic to route_all.
+        config.setBypassCountries(List.of());
+        assertThat(config.getBypassCountries()).containsExactly("ru");
+    }
+
+    @Test
+    void bypassCountries_roundTripThroughDisk() {
+        RoutingConfig config = new RoutingConfig();
+        config.setPreset("bypass_domestic");
+        config.setBypassCountries(List.of("ru", "kz"));
+        routingService.saveConfig(config);
+
+        RoutingService reloaded = new RoutingService(tempDir);
+        assertThat(reloaded.getConfig().getBypassCountries()).containsExactly("ru", "kz");
+    }
+
+    @Test
     void saveAndLoadConfig_roundTrip() {
         RoutingConfig config = new RoutingConfig();
         config.setPreset("custom");

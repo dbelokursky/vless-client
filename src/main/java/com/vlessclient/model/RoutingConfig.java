@@ -16,13 +16,17 @@ public class RoutingConfig {
     private String preset = "route_all";
 
     /**
-     * ISO-3166 country code (lowercase) used by the {@code bypass_domestic}
-     * preset to decide which geosite / geoip region stays off the VPN.
-     * Defaults to {@code ru} — matches the typical user of this build.
-     * Ignored for other presets.
+     * ISO-3166 country codes (lowercase) used by the {@code bypass_domestic}
+     * preset to decide which geosite / geoip regions stay off the VPN.
+     * Defaults to {@code [ru]} — matches the typical user of this build.
+     * Ignored for other presets. Normalised through
+     * {@link #setBypassCountries(List)}: lowercase, trimmed, deduped, never
+     * empty. Persisted as {@code bypass_countries}; the pre-multi
+     * {@code bypass_country} string is still read (see
+     * {@link #setLegacyBypassCountry(String)}) so existing routing.json files
+     * keep their setting.
      */
-    @JsonProperty("bypass_country")
-    private String bypassCountry = "ru";
+    private List<String> bypassCountries = new ArrayList<>(List.of("ru"));
 
     @JsonProperty("rules")
     private List<RoutingRule> rules = new ArrayList<>();
@@ -78,20 +82,45 @@ public class RoutingConfig {
         this.preset = preset;
     }
 
-    public String getBypassCountry() {
-        return bypassCountry;
+    @JsonProperty("bypass_countries")
+    public List<String> getBypassCountries() {
+        return bypassCountries;
     }
 
     /**
-     * Sets the bypass country, normalising to a lowercase ISO code and
-     * falling back to {@code ru} when the value is null or blank.
+     * Sets the bypass countries, normalising each entry to a lowercase ISO
+     * code (sing-box's geosite/geoip lookups are case-sensitive and the
+     * shipped databases use lowercase keys), dropping blanks, de-duplicating
+     * while keeping first-seen order, and falling back to {@code [ru]} when
+     * nothing valid remains — an empty list would silently turn the
+     * bypass_domestic preset into route_all.
      */
-    public void setBypassCountry(String bypassCountry) {
-        // Normalise to lowercase ISO code; sing-box's geosite/geoip lookups
-        // are case-sensitive and the shipped databases use lowercase keys.
-        this.bypassCountry = bypassCountry == null || bypassCountry.isBlank()
-                ? "ru"
-                : bypassCountry.trim().toLowerCase(java.util.Locale.ROOT);
+    @JsonProperty("bypass_countries")
+    public void setBypassCountries(List<String> countries) {
+        java.util.LinkedHashSet<String> clean = new java.util.LinkedHashSet<>();
+        if (countries != null) {
+            for (String c : countries) {
+                if (c != null && !c.isBlank()) {
+                    clean.add(c.trim().toLowerCase(java.util.Locale.ROOT));
+                }
+            }
+        }
+        this.bypassCountries = clean.isEmpty()
+                ? new ArrayList<>(List.of("ru"))
+                : new ArrayList<>(clean);
+    }
+
+    /**
+     * Read-only bridge for the pre-multi {@code bypass_country} string field:
+     * legacy routing.json files carry a single code, which folds into the
+     * list form. Never written back — serialization emits only
+     * {@code bypass_countries}.
+     */
+    @JsonProperty("bypass_country")
+    private void setLegacyBypassCountry(String country) {
+        if (country != null && !country.isBlank()) {
+            setBypassCountries(List.of(country));
+        }
     }
 
     public List<RoutingRule> getRules() {

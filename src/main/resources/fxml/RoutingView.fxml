@@ -6,6 +6,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.layout.Priority?>
@@ -33,17 +34,23 @@
             <ComboBox fx:id="presetCombo" prefWidth="220"/>
         </HBox>
 
-        <!-- Bypass country: shown only for the Bypass Domestic preset.
-             Editable so power users can type ISO codes beyond the common list. -->
+        <!-- Bypass countries: shown only for the Bypass Domestic preset.
+             Selected codes render as removable chips (added by the controller
+             in front of the combo); the combo stays editable so power users
+             can type ISO codes beyond the common list. -->
         <HBox fx:id="bypassCountryRow" alignment="CENTER_LEFT" spacing="12"
               managed="false" visible="false">
-            <Label text="Bypass country" styleClass="field-label" minWidth="130" prefWidth="130"/>
-            <ComboBox fx:id="bypassCountryCombo" prefWidth="220" editable="true"/>
+            <Label text="Bypass countries" styleClass="field-label" minWidth="130" prefWidth="130"/>
+            <FlowPane fx:id="bypassCountryChips" hgap="6" vgap="6"
+                      alignment="CENTER_LEFT" HBox.hgrow="ALWAYS">
+                <ComboBox fx:id="bypassCountryCombo" prefWidth="110" editable="true"
+                          promptText="add..."/>
+            </FlowPane>
         </HBox>
 
         <Label fx:id="bypassCountryHint" styleClass="hint-label" wrapText="true"
                managed="false" visible="false"
-               text="Geosite/geoip rules for this country and the private LAN go direct; everything else is routed through the VPN."/>
+               text="Geosite/geoip rules for these countries and the private LAN go direct; everything else is routed through the VPN. Countries without a sing-geosite aggregate (most, apart from ru/cn/ir) match by IP ranges only."/>
     </VBox>
 
     <!-- Bypass list: patterns matching these are sent direct, skipping the proxy -->
