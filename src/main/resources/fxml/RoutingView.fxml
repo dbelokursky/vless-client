@@ -20,37 +20,26 @@
     <!-- Header -->
     <Label text="Routing" styleClass="view-title"/>
 
-    <!-- Routing mode card: preset + (optional) bypass country, aligned in a
-         single label column so the controls line up. -->
-    <VBox styleClass="card" spacing="12">
+    <!-- Bypass countries: selected codes render as removable chips (added by
+         the controller in front of the combo). The combo lists every ISO
+         country as "code — name" and stays editable; committed input is
+         validated against the ISO catalog, so a typo can never become a
+         broken rule-set URL. Empty selection = no country bypass. -->
+    <VBox styleClass="card" spacing="8">
         <padding>
             <Insets top="16" right="18" bottom="16" left="18"/>
         </padding>
 
-        <Label text="Routing mode" styleClass="section-title"/>
+        <Label text="Bypass countries" styleClass="section-title"/>
 
-        <HBox alignment="CENTER_LEFT" spacing="12">
-            <Label text="Preset" styleClass="field-label" minWidth="130" prefWidth="130"/>
-            <ComboBox fx:id="presetCombo" prefWidth="220"/>
-        </HBox>
-
-        <!-- Bypass countries: shown only for the Bypass Domestic preset.
-             Selected codes render as removable chips (added by the controller
-             in front of the combo); the combo stays editable so power users
-             can type ISO codes beyond the common list. -->
-        <HBox fx:id="bypassCountryRow" alignment="CENTER_LEFT" spacing="12"
-              managed="false" visible="false">
-            <Label text="Bypass countries" styleClass="field-label" minWidth="130" prefWidth="130"/>
-            <FlowPane fx:id="bypassCountryChips" hgap="6" vgap="6"
-                      alignment="CENTER_LEFT" HBox.hgrow="ALWAYS">
-                <ComboBox fx:id="bypassCountryCombo" prefWidth="110" editable="true"
-                          promptText="add..."/>
-            </FlowPane>
-        </HBox>
+        <FlowPane fx:id="bypassCountryChips" hgap="6" vgap="6"
+                  alignment="CENTER_LEFT">
+            <ComboBox fx:id="bypassCountryCombo" prefWidth="200" editable="true"
+                      promptText="add country..."/>
+        </FlowPane>
 
         <Label fx:id="bypassCountryHint" styleClass="hint-label" wrapText="true"
-               managed="false" visible="false"
-               text="Geosite/geoip rules for these countries and the private LAN go direct; everything else is routed through the VPN. Countries without a sing-geosite aggregate (most, apart from ru/cn/ir) match by IP ranges only."/>
+               text="Traffic of these countries goes direct, past the VPN; empty means everything is routed through the VPN. Countries without a sing-geosite aggregate (most, apart from ru/cn/ir) match by IP ranges only."/>
     </VBox>
 
     <!-- Bypass list: patterns matching these are sent direct, skipping the proxy -->
@@ -72,9 +61,8 @@
                   promptText="*.github.com&#10;api.openai.com&#10;192.168.0.0/16&#10;# legacy in-house services&#10;.corp.local"/>
     </VBox>
 
-    <!-- Custom rules section (visible only when preset is Custom) -->
-    <VBox fx:id="customRulesSection" spacing="8" styleClass="card" VBox.vgrow="ALWAYS"
-          managed="false" visible="false">
+    <!-- Custom rules: always active, composing with the sections above -->
+    <VBox fx:id="customRulesSection" spacing="8" styleClass="card" VBox.vgrow="ALWAYS">
         <padding>
             <Insets top="14" right="16" bottom="16" left="16"/>
         </padding>

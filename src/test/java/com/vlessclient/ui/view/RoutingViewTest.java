@@ -41,8 +41,9 @@ public class RoutingViewTest extends ApplicationTest {
 
     @Test
     void redesignedControlsExist() {
-        assertThat(lookup("#presetCombo").tryQuery()).isPresent();
         assertThat(lookup("#bypassCountryCombo").tryQuery()).isPresent();
+        assertThat(lookup("#bypassCountryChips").tryQuery()).isPresent();
+        assertThat(lookup("#customRulesSection").tryQuery()).isPresent();
         assertThat(lookup("#bypassListArea").tryQuery()).isPresent();
         assertThat(lookup("#bypassCountLabel").tryQuery()).isPresent();
         assertThat(lookup("#saveBypassButton").tryQuery()).isPresent();

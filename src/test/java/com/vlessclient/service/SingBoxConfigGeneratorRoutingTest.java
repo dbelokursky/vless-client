@@ -67,7 +67,6 @@ class SingBoxConfigGeneratorRoutingTest {
     @Test
     void bypassList_mergedIntoDirectRule() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
         routingConfig.setBypassList(List.of(
                 "example.com",           // DOMAIN
                 "*.github.com",          // DOMAIN_SUFFIX → github.com
@@ -117,7 +116,6 @@ class SingBoxConfigGeneratorRoutingTest {
     @Test
     void bypassList_emptyProducesNoBypassRule() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
         // bypassList is empty by default
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
@@ -132,7 +130,6 @@ class SingBoxConfigGeneratorRoutingTest {
     @Test
     void routeAll_generatesMinimalRouteSection() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode root = parse(json);
@@ -157,7 +154,6 @@ class SingBoxConfigGeneratorRoutingTest {
         // rule only catches them once resolved to an IP, which never happens
         // in system-proxy mode (the app hands the hostname to the proxy).
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");
@@ -171,9 +167,9 @@ class SingBoxConfigGeneratorRoutingTest {
     }
 
     @Test
-    void bypassDomestic_defaultsToRussianRuleSets() throws Exception {
+    void countryBypass_emitsRussianRuleSets() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("bypass_domestic");
+        routingConfig.setBypassCountries(List.of("ru"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode root = parse(json);
@@ -220,7 +216,6 @@ class SingBoxConfigGeneratorRoutingTest {
     void bypassDomestic_chinaUsesPlainGeositeTag() throws Exception {
         // CN is the one country with a bare 'geosite-cn.srs' aggregate.
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("bypass_domestic");
         routingConfig.setBypassCountries(List.of("cn"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
@@ -238,7 +233,6 @@ class SingBoxConfigGeneratorRoutingTest {
         // Germany (and most others) has no sing-geosite aggregate; the
         // generator must drop the geosite rule rather than emit a 404 URL.
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("bypass_domestic");
         routingConfig.setBypassCountries(List.of("DE"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
@@ -263,7 +257,6 @@ class SingBoxConfigGeneratorRoutingTest {
         // selected countries' rule sets together. kz has no sing-geosite
         // aggregate and contributes only its geoip set.
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("bypass_domestic");
         routingConfig.setBypassCountries(List.of("ru", "kz", "cn"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
@@ -298,7 +291,6 @@ class SingBoxConfigGeneratorRoutingTest {
     @Test
     void customRules_generateCorrectSingBoxRouteEntries() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("custom");
         routingConfig.setRules(List.of(
                 new RoutingRule(RoutingRule.RuleType.DOMAIN_SUFFIX, ".google.com",
                         RoutingRule.RuleAction.PROXY),
@@ -366,7 +358,7 @@ class SingBoxConfigGeneratorRoutingTest {
     @Test
     void legacyGeoFields_neverEmitted() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("bypass_domestic");
+        routingConfig.setBypassCountries(List.of("ru"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode route = parse(json).get("route");
@@ -379,7 +371,6 @@ class SingBoxConfigGeneratorRoutingTest {
     @Test
     void routeAll_emitsNoRuleSetOrLegacyGeoBlocks() throws Exception {
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode route = parse(json).get("route");
@@ -411,7 +402,6 @@ class SingBoxConfigGeneratorRoutingTest {
         // The unconditional local bypass is what makes "all local traffic
         // goes around the VPN" true for route_all in system-proxy mode.
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");
@@ -430,7 +420,6 @@ class SingBoxConfigGeneratorRoutingTest {
         // able to drag LAN traffic through the proxy. The local bypass is
         // prepended so it wins first.
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("custom");
         routingConfig.setRules(List.of(
                 new RoutingRule(RoutingRule.RuleType.IP_CIDR, "10.0.0.0/8",
                         RoutingRule.RuleAction.PROXY)
@@ -452,7 +441,6 @@ class SingBoxConfigGeneratorRoutingTest {
         // The user's bypass list is the most explicit signal — it must come
         // before the local-bypass rules so the ordering is deterministic.
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
         routingConfig.setBypassList(List.of("internal.example.com"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
@@ -472,7 +460,6 @@ class SingBoxConfigGeneratorRoutingTest {
         // rule. After the move to the universal local-bypass block, the preset
         // must NOT double-emit it.
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("bypass_domestic");
         routingConfig.setBypassCountries(List.of("ru"));
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
@@ -493,7 +480,6 @@ class SingBoxConfigGeneratorRoutingTest {
         // Even with no user-defined rules in custom preset, the local-bypass
         // rules keep local services reachable.
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("custom");
 
         String json = generator.generate(createVlessServer(), defaultSettings, routingConfig);
         JsonNode route = parse(json).get("route");

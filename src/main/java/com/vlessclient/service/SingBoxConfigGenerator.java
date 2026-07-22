@@ -526,14 +526,18 @@ public class SingBoxConfigGenerator {
         // block once at the end (deduped, in insertion order).
         Set<String> ruleSetTags = new LinkedHashSet<>();
 
-        String preset = routingConfig.getPreset();
-
-        if ("bypass_domestic".equals(preset)) {
-            List<String> countries = routingConfig.getBypassCountries();
-            if (countries == null || countries.isEmpty()) {
-                countries = List.of("ru");
+        // Sections compose: custom rules first (most specific — the user
+        // wrote them), then the country bypass. An empty section simply
+        // contributes nothing; everything empty = route all through the VPN.
+        List<RoutingRule> customRules = routingConfig.getRules();
+        if (customRules != null) {
+            for (RoutingRule rule : customRules) {
+                rules.add(buildCustomRule(rule, ruleSetTags));
             }
+        }
 
+        List<String> countries = routingConfig.getBypassCountries();
+        if (countries != null && !countries.isEmpty()) {
             // One geosite rule and one geoip rule cover every selected
             // country: entries of a rule's rule_set list are OR-ed by
             // sing-box, so a single rule per kind keeps the config flat no
@@ -567,23 +571,15 @@ public class SingBoxConfigGenerator {
 
             // The dedicated ip_is_private rule lives in the universal
             // LAN-bypass block below; not duplicated here.
-        } else if ("custom".equals(preset)) {
-            List<RoutingRule> customRules = routingConfig.getRules();
-            if (customRules != null) {
-                for (RoutingRule rule : customRules) {
-                    rules.add(buildCustomRule(rule, ruleSetTags));
-                }
-            }
         }
-        // "route_all" — no special rules, everything goes through proxy via final
 
-        // Universal LAN-bypass rule. Unconditional and independent of preset,
-        // so route_all / custom in system-proxy mode also keep local traffic
-        // off the VPN. Prepended so it precedes preset/custom rules, but the
-        // user's bypass list still wins above it. There is no toggle for
-        // this — sending LAN through a remote VPN dead-ends in TUN and
-        // breaks local services in any mode, and no realistic use case for
-        // this client justifies the breakage.
+        // Universal LAN-bypass rule. Unconditional, so system-proxy mode
+        // also keeps local traffic off the VPN whatever the sections say.
+        // Prepended so it precedes the section rules, but the user's bypass
+        // list still wins above it. There is no toggle for this — sending
+        // LAN through a remote VPN dead-ends in TUN and breaks local
+        // services in any mode, and no realistic use case for this client
+        // justifies the breakage.
         rules.insert(0, buildPrivateIpDirectRule());
 
         // Local hostnames (localhost, *.local) also go direct, above the
@@ -591,8 +587,8 @@ public class SingBoxConfigGenerator {
         // system-proxy case) still bypasses the tunnel.
         rules.insert(0, buildLocalDomainDirectRule());
 
-        // User bypass list is honored in every preset: matching hosts always
-        // go direct regardless of route_all / bypass_domestic / custom.
+        // User bypass list: matching hosts always go direct, above every
+        // other rule.
         ObjectNode bypassRule = buildBypassRule(routingConfig.getBypassList());
         if (bypassRule != null) {
             rules.insert(0, bypassRule);

@@ -13,8 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Loads and persists the routing configuration (preset and rules) as JSON in
- * the application data directory.
+ * Loads and persists the routing configuration (bypass countries, bypass
+ * list, and custom rules) as JSON in the application data directory,
+ * migrating pre-composition preset files on first load.
  */
 public class RoutingService {
 
@@ -56,11 +57,6 @@ public class RoutingService {
         } catch (IOException e) {
             log.error("Failed to save routing config to {}", file, e);
         }
-    }
-
-    public synchronized void setPreset(String preset) {
-        config.setPreset(preset);
-        saveConfig(config);
     }
 
     public synchronized void addRule(RoutingRule rule) {
@@ -119,9 +115,48 @@ public class RoutingService {
         try {
             this.config = objectMapper.readValue(file.toFile(), RoutingConfig.class);
             log.info("Loaded routing config from {}", file);
+            migrateLegacyPreset(file);
         } catch (IOException e) {
             log.error("Failed to load routing config from {}", file, e);
             this.config = new RoutingConfig();
         }
+    }
+
+    /**
+     * One-time migration from the preset era to section composition. The
+     * presets made the sections mutually exclusive, so a file can carry data
+     * the old build never applied (the default bypass country under
+     * route_all, experimental custom rules outside the custom preset).
+     * Migration is conservative: whatever was in effect stays in effect,
+     * whatever was dormant is dropped — silently enabling a dormant bypass
+     * or rule set would change where the user's traffic goes. The original
+     * file is kept as routing.json.bak before the rewrite.
+     */
+    private void migrateLegacyPreset(Path file) {
+        String preset = config.getLegacyPreset();
+        if (preset == null) {
+            return;
+        }
+        try {
+            Files.copy(file, file.resolveSibling(ROUTING_FILE + ".bak"),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            log.warn("Could not back up {} before preset migration", file, e);
+        }
+        if ("bypass_domestic".equals(preset)) {
+            // Pre-multi files could omit the country entirely; the old
+            // generator treated that as "ru", so the migration must too.
+            if (config.getBypassCountries().isEmpty()) {
+                config.setBypassCountries(List.of("ru"));
+            }
+        } else {
+            config.setBypassCountries(List.of());
+        }
+        if (!"custom".equals(preset)) {
+            config.setRules(new ArrayList<>());
+        }
+        config.clearLegacyPreset();
+        saveConfig(config);
+        log.info("Migrated routing config from preset '{}' to section composition", preset);
     }
 }

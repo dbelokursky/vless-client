@@ -24,11 +24,12 @@ class RoutingServiceTest {
     }
 
     @Test
-    void defaultConfig_hasRouteAllPreset() {
+    void defaultConfig_hasEmptySections() {
         RoutingConfig config = routingService.getConfig();
 
-        assertThat(config.getPreset()).isEqualTo("route_all");
+        assertThat(config.getBypassCountries()).isEmpty();
         assertThat(config.getRules()).isEmpty();
+        assertThat(config.getBypassList()).isEmpty();
     }
 
     @Test
@@ -36,8 +37,9 @@ class RoutingServiceTest {
         // routing.json files saved by v0.1.6 carry "bypass_lan" plus
         // "geoip_path" / "geosite_path" that v0.1.7 no longer models. The
         // loader must silently accept and ignore them via
-        // @JsonIgnoreProperties — no parse error, no forced re-save,
-        // just a clean load.
+        // @JsonIgnoreProperties. The bypass_domestic preset without an
+        // explicit country meant "ru" to the old generator, so migration
+        // keeps that behavior.
         Path file = tempDir.resolve("routing.json");
         java.nio.file.Files.writeString(file,
                 "{\"preset\":\"bypass_domestic\",\"bypass_lan\":false,"
@@ -45,7 +47,7 @@ class RoutingServiceTest {
                         + "\"geosite_path\":\"/old/geosite.db\"}");
 
         RoutingService loaded = new RoutingService(tempDir);
-        assertThat(loaded.getConfig().getPreset()).isEqualTo("bypass_domestic");
+        assertThat(loaded.getConfig().getBypassCountries()).containsExactly("ru");
     }
 
     @Test
@@ -62,23 +64,23 @@ class RoutingServiceTest {
     }
 
     @Test
-    void bypassCountries_normalizeDedupeAndDefault() {
+    void bypassCountries_normalizeDedupeAndValidate() {
         RoutingConfig config = new RoutingConfig();
-        assertThat(config.getBypassCountries()).containsExactly("ru");
+        assertThat(config.getBypassCountries()).isEmpty();
 
-        config.setBypassCountries(List.of(" RU ", "kz", "ru", "", "By"));
+        // "zz" is not an ISO country — it would become a 404 rule-set URL —
+        // and must be dropped along with blanks and duplicates.
+        config.setBypassCountries(List.of(" RU ", "kz", "ru", "", "By", "zz"));
         assertThat(config.getBypassCountries()).containsExactly("ru", "kz", "by");
 
-        // Emptying the list snaps back to the default instead of silently
-        // degrading bypass_domestic to route_all.
+        // Empty is a legal state: no country bypass.
         config.setBypassCountries(List.of());
-        assertThat(config.getBypassCountries()).containsExactly("ru");
+        assertThat(config.getBypassCountries()).isEmpty();
     }
 
     @Test
     void bypassCountries_roundTripThroughDisk() {
         RoutingConfig config = new RoutingConfig();
-        config.setPreset("bypass_domestic");
         config.setBypassCountries(List.of("ru", "kz"));
         routingService.saveConfig(config);
 
@@ -89,7 +91,6 @@ class RoutingServiceTest {
     @Test
     void saveAndLoadConfig_roundTrip() {
         RoutingConfig config = new RoutingConfig();
-        config.setPreset("custom");
         config.setRules(List.of(
                 new RoutingRule(RoutingRule.RuleType.DOMAIN_SUFFIX, "google.com",
                         RoutingRule.RuleAction.PROXY),
@@ -103,7 +104,6 @@ class RoutingServiceTest {
         RoutingService reloaded = new RoutingService(tempDir);
         RoutingConfig loaded = reloaded.getConfig();
 
-        assertThat(loaded.getPreset()).isEqualTo("custom");
         assertThat(loaded.getRules()).hasSize(2);
         assertThat(loaded.getRules().get(0).getType()).isEqualTo(RoutingRule.RuleType.DOMAIN_SUFFIX);
         assertThat(loaded.getRules().get(0).getValue()).isEqualTo("google.com");
@@ -158,25 +158,63 @@ class RoutingServiceTest {
     }
 
     @Test
-    void setPreset_switchesBetweenPresets() {
-        assertThat(routingService.getConfig().getPreset()).isEqualTo("route_all");
+    void migration_routeAllDropsDormantCountriesAndRules() throws Exception {
+        // Under route_all neither the (default) bypass country nor the
+        // experimental custom rules were applied — silently enabling them
+        // on migration would change where the user's traffic goes.
+        Path file = tempDir.resolve("routing.json");
+        java.nio.file.Files.writeString(file,
+                "{\"preset\":\"route_all\",\"bypass_countries\":[\"ru\"],"
+                        + "\"rules\":[{\"type\":\"domain\",\"value\":\"x.com\","
+                        + "\"action\":\"proxy\"}],"
+                        + "\"bypass_list\":[\"*.github.com\"]}");
 
-        routingService.setPreset("bypass_domestic");
-        assertThat(routingService.getConfig().getPreset()).isEqualTo("bypass_domestic");
+        RoutingService loaded = new RoutingService(tempDir);
 
-        routingService.setPreset("custom");
-        assertThat(routingService.getConfig().getPreset()).isEqualTo("custom");
-
-        routingService.setPreset("route_all");
-        assertThat(routingService.getConfig().getPreset()).isEqualTo("route_all");
+        assertThat(loaded.getConfig().getBypassCountries()).isEmpty();
+        assertThat(loaded.getConfig().getRules()).isEmpty();
+        // The always-active bypass list survives untouched.
+        assertThat(loaded.getConfig().getBypassList()).containsExactly("*.github.com");
+        // The original file is preserved next to the migrated one.
+        assertThat(java.nio.file.Files.exists(tempDir.resolve("routing.json.bak"))).isTrue();
+        // The rewritten file carries no preset — migration happens once.
+        assertThat(java.nio.file.Files.readString(file)).doesNotContain("preset");
     }
 
     @Test
-    void setPreset_persistsToFile() {
-        routingService.setPreset("bypass_domestic");
+    void migration_customKeepsRulesDropsCountries() throws Exception {
+        Path file = tempDir.resolve("routing.json");
+        java.nio.file.Files.writeString(file,
+                "{\"preset\":\"custom\",\"bypass_countries\":[\"ru\"],"
+                        + "\"rules\":[{\"type\":\"domain\",\"value\":\"x.com\","
+                        + "\"action\":\"proxy\"}]}");
 
-        RoutingService reloaded = new RoutingService(tempDir);
-        assertThat(reloaded.getConfig().getPreset()).isEqualTo("bypass_domestic");
+        RoutingService loaded = new RoutingService(tempDir);
+
+        assertThat(loaded.getConfig().getRules()).hasSize(1);
+        assertThat(loaded.getConfig().getBypassCountries()).isEmpty();
+    }
+
+    @Test
+    void migration_bypassDomesticKeepsCountries() throws Exception {
+        Path file = tempDir.resolve("routing.json");
+        java.nio.file.Files.writeString(file,
+                "{\"preset\":\"bypass_domestic\",\"bypass_countries\":[\"ru\",\"kz\"]}");
+
+        RoutingService loaded = new RoutingService(tempDir);
+
+        assertThat(loaded.getConfig().getBypassCountries()).containsExactly("ru", "kz");
+    }
+
+    @Test
+    void migration_skippedForNewFormatFiles() throws Exception {
+        Path file = tempDir.resolve("routing.json");
+        java.nio.file.Files.writeString(file, "{\"bypass_countries\":[\"kz\"]}");
+
+        RoutingService loaded = new RoutingService(tempDir);
+
+        assertThat(loaded.getConfig().getBypassCountries()).containsExactly("kz");
+        assertThat(java.nio.file.Files.exists(tempDir.resolve("routing.json.bak"))).isFalse();
     }
 
     @Test

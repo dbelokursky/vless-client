@@ -308,7 +308,6 @@ class SingBoxConfigGeneratorTunTest {
         // dedup and not prepend a second copy. Sniff and hijack-dns are
         // always added regardless.
         RoutingConfig routingConfig = new RoutingConfig();
-        routingConfig.setPreset("route_all");
 
         String json = generator.generate(createVlessServer(), tunSettings(), routingConfig);
         JsonNode rules = parse(json).get("route").get("rules");
