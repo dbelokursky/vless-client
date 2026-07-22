@@ -28,21 +28,19 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Controller for the Routing view. Manages the routing preset, the
- * bypass-domestic country, the editable bypass list, and the custom
- * per-domain/IP routing rules.
+ * Controller for the Routing view. The three sections — bypass countries,
+ * the editable bypass list, and custom per-domain/IP rules — are always
+ * active and compose; routing everything through the VPN is simply all of
+ * them empty.
  */
 public class RoutingViewController {
 
     private static final Logger log = LoggerFactory.getLogger(RoutingViewController.class);
 
-    @FXML private ComboBox<String> presetCombo;
-    @FXML private HBox bypassCountryRow;
     @FXML private javafx.scene.layout.FlowPane bypassCountryChips;
     @FXML private ComboBox<String> bypassCountryCombo;
     @FXML private Label bypassCountryHint;
@@ -58,50 +56,14 @@ public class RoutingViewController {
     private final ObservableList<RoutingRule> rulesList = FXCollections.observableArrayList();
 
     /**
-     * Loads the routing config, populates the preset and bypass-country
-     * combos, binds the rules list and bypass textarea, and shows the sections
-     * that apply to the current preset.
+     * Loads the routing config, populates the country chips and their ISO
+     * catalog, and binds the rules list and bypass textarea.
      */
     @FXML
     public void initialize() {
         routingService = ServiceLocator.get(RoutingService.class);
 
-        // Items are the persisted preset ids; the converter renders the
-        // localized names, so display strings never round-trip into logic.
-        presetCombo.getItems().addAll("route_all", "bypass_domestic", "custom");
-        presetCombo.setConverter(new StringConverter<>() {
-            @Override
-            public String toString(String preset) {
-                if (preset == null) {
-                    return "";
-                }
-                // Full key literals keep I18nBundleConsistencyTest able to
-                // verify every reference statically.
-                String key = switch (preset) {
-                    case "bypass_domestic" -> "routing.preset.bypass_domestic";
-                    case "custom" -> "routing.preset.custom";
-                    default -> "routing.preset.route_all";
-                };
-                return I18n.get(key);
-            }
-
-            @Override
-            public String fromString(String string) {
-                return string;
-            }
-        });
-
         RoutingConfig config = routingService.getConfig();
-        presetCombo.setValue(knownPreset(config.getPreset()));
-
-        presetCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null) {
-                routingService.setPreset(newVal);
-                updateCustomRulesVisibility(newVal);
-                updateBypassCountryVisibility(newVal);
-            }
-        });
-
         initBypassCountryChips(config);
 
         rulesListView.setItems(rulesList);
@@ -114,24 +76,48 @@ public class RoutingViewController {
                     (obs, oldText, newText) -> updateBypassCount());
         }
         updateBypassCount();
-        updateCustomRulesVisibility(config.getPreset());
-        updateBypassCountryVisibility(config.getPreset());
+        updateEmptyState();
     }
 
     /**
-     * Renders the selected bypass countries as removable chips in front of an
-     * "add" ComboBox. The combo offers a handful of commonly-requested ISO
-     * codes and stays editable so users who need anything exotic can just
-     * type the code (sing-box accepts any that its geoip/geosite rule sets
-     * support — the dropdown is just a convenience). Committing a value
-     * (Enter, item pick, or focus loss) appends a chip; the model setter
-     * normalises and de-duplicates, so committing junk is harmless.
+     * Maps "code — display name" catalog entries back to the bare code. The
+     * catalog answers "which countries CAN I pick": every ISO-3166 country
+     * the JDK knows, with a human-readable name, so nobody has to guess
+     * two-letter codes. Committed input is validated against the same
+     * catalog — an invalid code would otherwise become a remote rule-set
+     * URL that 404s and keeps sing-box from starting.
+     */
+    private static String countryCodeOf(String catalogEntry) {
+        int sep = catalogEntry.indexOf(" — ");
+        return (sep > 0 ? catalogEntry.substring(0, sep) : catalogEntry)
+                .trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static String catalogEntryFor(String code) {
+        String upper = code.toUpperCase(java.util.Locale.ROOT);
+        String name = java.util.Locale.of("", upper)
+                .getDisplayCountry(java.util.Locale.ENGLISH);
+        return code + (name.isEmpty() || name.equals(upper) ? "" : " — " + name);
+    }
+
+    /**
+     * Renders the selected bypass countries as removable chips in front of
+     * an "add" ComboBox listing the full ISO catalog. Committing a value
+     * (Enter, item pick, or focus loss) appends a chip; input that resolves
+     * to no ISO code is dropped by the model setter and simply doesn't
+     * stick. Empty selection is valid — it means no country bypass.
      */
     private void initBypassCountryChips(RoutingConfig config) {
         if (bypassCountryCombo == null || bypassCountryChips == null) {
             return;
         }
-        bypassCountryCombo.getItems().addAll("ru", "cn", "ir", "us", "de", "gb", "jp", "kr");
+        List<String> catalog = new ArrayList<>();
+        for (String iso : java.util.Locale.getISOCountries()) {
+            catalog.add(catalogEntryFor(iso.toLowerCase(java.util.Locale.ROOT)));
+        }
+        catalog.sort(String.CASE_INSENSITIVE_ORDER);
+        bypassCountryCombo.getItems().addAll(catalog);
+        bypassCountryCombo.setVisibleRowCount(12);
 
         bypassCountryCombo.setOnAction(e -> commitCountryFromCombo());
         if (bypassCountryCombo.getEditor() != null) {
@@ -145,7 +131,7 @@ public class RoutingViewController {
         renderCountryChips(config.getBypassCountries());
     }
 
-    /** Adds the combo's current text to the country list and clears it. */
+    /** Adds the combo's current selection/text to the country list. */
     private void commitCountryFromCombo() {
         String raw = bypassCountryCombo.getEditor() != null
                 ? bypassCountryCombo.getEditor().getText()
@@ -155,7 +141,7 @@ public class RoutingViewController {
         }
         RoutingConfig current = routingService.getConfig();
         List<String> countries = new ArrayList<>(current.getBypassCountries());
-        countries.add(raw);
+        countries.add(countryCodeOf(raw));
         current.setBypassCountries(countries);
         routingService.saveConfig(current);
 
@@ -177,12 +163,7 @@ public class RoutingViewController {
         renderCountryChips(current.getBypassCountries());
     }
 
-    /**
-     * Rebuilds the chip nodes, keeping the add-combo as the last child. The
-     * remove cross is hidden on the last remaining chip: an empty selection
-     * would silently degrade bypass_domestic to route_all (the model would
-     * also snap back to [ru], which reads as a glitch).
-     */
+    /** Rebuilds the chip nodes, keeping the add-combo as the last child. */
     private void renderCountryChips(List<String> countries) {
         List<javafx.scene.Node> chips = new ArrayList<>();
         for (String code : countries) {
@@ -192,14 +173,14 @@ public class RoutingViewController {
 
             Label codeLabel = new Label(code);
             codeLabel.getStyleClass().add("country-chip-label");
+            javafx.scene.control.Tooltip.install(chip,
+                    new javafx.scene.control.Tooltip(catalogEntryFor(code)));
             chip.getChildren().add(codeLabel);
 
-            if (countries.size() > 1) {
-                Label remove = new Label("✕");
-                remove.getStyleClass().add("country-chip-remove");
-                remove.setOnMouseClicked(e -> removeCountry(code));
-                chip.getChildren().add(remove);
-            }
+            Label remove = new Label("✕");
+            remove.getStyleClass().add("country-chip-remove");
+            remove.setOnMouseClicked(e -> removeCountry(code));
+            chip.getChildren().add(remove);
             chips.add(chip);
         }
         chips.add(bypassCountryCombo);
@@ -356,25 +337,6 @@ public class RoutingViewController {
         rulesListView.setManaged(!empty);
     }
 
-    private void updateCustomRulesVisibility(String preset) {
-        boolean isCustom = "custom".equals(preset);
-        customRulesSection.setVisible(isCustom);
-        customRulesSection.setManaged(isCustom);
-    }
-
-    private void updateBypassCountryVisibility(String preset) {
-        if (bypassCountryRow == null) {
-            return;
-        }
-        boolean show = "bypass_domestic".equals(preset);
-        bypassCountryRow.setVisible(show);
-        bypassCountryRow.setManaged(show);
-        if (bypassCountryHint != null) {
-            bypassCountryHint.setVisible(show);
-            bypassCountryHint.setManaged(show);
-        }
-    }
-
     /**
      * Refreshes the "N entries" badge from the textarea, counting only
      * non-blank, non-comment lines (matching what {@link #onSaveBypassClicked()}
@@ -396,14 +358,6 @@ public class RoutingViewController {
         bypassCountLabel.setText(count == 1
                 ? I18n.get("routing.bypass.count.one")
                 : I18n.get("routing.bypass.count.many", String.valueOf(count)));
-    }
-
-    /** Maps unknown/legacy stored values onto the default preset id. */
-    private static String knownPreset(String preset) {
-        return switch (preset) {
-            case "bypass_domestic", "custom" -> preset;
-            default -> "route_all";
-        };
     }
 
     private String formatAction(RoutingRule.RuleAction action) {

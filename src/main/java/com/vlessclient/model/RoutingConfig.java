@@ -6,27 +6,38 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Persisted routing configuration: the active preset, per-country bypass,
- * a user bypass list, and any custom routing rules.
+ * Persisted routing configuration: per-country bypass, a user bypass list,
+ * and custom routing rules. All three sections compose — each contributes
+ * its rules whenever it is non-empty, and "route everything through the
+ * VPN" is simply all of them empty. The pre-composition {@code preset}
+ * field (route_all / bypass_domestic / custom made the sections mutually
+ * exclusive) is still read so {@link
+ * com.vlessclient.service.RoutingService} can migrate old files
+ * conservatively.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RoutingConfig {
 
-    @JsonProperty("preset")
-    private String preset = "route_all";
+    /**
+     * The retired preset from pre-composition routing.json files, captured
+     * for migration only: never applied at runtime, never written back.
+     */
+    private transient String legacyPreset;
 
     /**
-     * ISO-3166 country codes (lowercase) used by the {@code bypass_domestic}
-     * preset to decide which geosite / geoip regions stay off the VPN.
-     * Defaults to {@code [ru]} — matches the typical user of this build.
-     * Ignored for other presets. Normalised through
-     * {@link #setBypassCountries(List)}: lowercase, trimmed, deduped, never
-     * empty. Persisted as {@code bypass_countries}; the pre-multi
+     * ISO-3166 country codes (lowercase) whose geosite / geoip regions stay
+     * off the VPN. Empty means no country bypass — all traffic through the
+     * tunnel. Normalised through {@link #setBypassCountries(List)}:
+     * lowercase, trimmed, deduped, and restricted to real ISO codes so a
+     * typo can never become a 404 rule-set URL that stops sing-box from
+     * starting. Persisted as {@code bypass_countries}; the pre-multi
      * {@code bypass_country} string is still read (see
-     * {@link #setLegacyBypassCountry(String)}) so existing routing.json files
-     * keep their setting.
+     * {@link #setLegacyBypassCountry(String)}).
      */
-    private List<String> bypassCountries = new ArrayList<>(List.of("ru"));
+    private List<String> bypassCountries = new ArrayList<>();
+
+    private static final java.util.Set<String> ISO_COUNTRIES = java.util.Set.of(
+            java.util.Locale.getISOCountries());
 
     @JsonProperty("rules")
     private List<RoutingRule> rules = new ArrayList<>();
@@ -74,12 +85,24 @@ public class RoutingConfig {
         this.bypassList = bypassList != null ? bypassList : new ArrayList<>();
     }
 
-    public String getPreset() {
-        return preset;
+    /**
+     * Captures the retired {@code preset} field from pre-composition files;
+     * {@link com.vlessclient.service.RoutingService} uses it to migrate.
+     * Write-only for Jackson, so it is never serialized back.
+     */
+    @JsonProperty("preset")
+    private void setLegacyPreset(String preset) {
+        this.legacyPreset = preset;
     }
 
-    public void setPreset(String preset) {
-        this.preset = preset;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String getLegacyPreset() {
+        return legacyPreset;
+    }
+
+    /** Clears the migration marker once the config has been migrated. */
+    public void clearLegacyPreset() {
+        this.legacyPreset = null;
     }
 
     @JsonProperty("bypass_countries")
@@ -90,24 +113,27 @@ public class RoutingConfig {
     /**
      * Sets the bypass countries, normalising each entry to a lowercase ISO
      * code (sing-box's geosite/geoip lookups are case-sensitive and the
-     * shipped databases use lowercase keys), dropping blanks, de-duplicating
-     * while keeping first-seen order, and falling back to {@code [ru]} when
-     * nothing valid remains — an empty list would silently turn the
-     * bypass_domestic preset into route_all.
+     * shipped databases use lowercase keys), dropping blanks and anything
+     * that is not a real ISO-3166 code — an invalid code would become a
+     * remote rule-set URL that 404s and stops sing-box from starting —
+     * and de-duplicating while keeping first-seen order. Empty is a valid
+     * result: no country bypass.
      */
     @JsonProperty("bypass_countries")
     public void setBypassCountries(List<String> countries) {
         java.util.LinkedHashSet<String> clean = new java.util.LinkedHashSet<>();
         if (countries != null) {
             for (String c : countries) {
-                if (c != null && !c.isBlank()) {
-                    clean.add(c.trim().toLowerCase(java.util.Locale.ROOT));
+                if (c == null || c.isBlank()) {
+                    continue;
+                }
+                String code = c.trim().toLowerCase(java.util.Locale.ROOT);
+                if (ISO_COUNTRIES.contains(code.toUpperCase(java.util.Locale.ROOT))) {
+                    clean.add(code);
                 }
             }
         }
-        this.bypassCountries = clean.isEmpty()
-                ? new ArrayList<>(List.of("ru"))
-                : new ArrayList<>(clean);
+        this.bypassCountries = new ArrayList<>(clean);
     }
 
     /**

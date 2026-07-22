@@ -97,16 +97,14 @@ class SingBoxRealBinarySmokeTest {
     void checkAcceptsRoutingConfigs() throws Exception {
         // Custom rules + user bypass list.
         RoutingConfig custom = new RoutingConfig();
-        custom.setPreset("custom");
         custom.setBypassList(List.of("*.local", "192.168.0.0/16", "example.com"));
         RoutingRule rule = new RoutingRule(RoutingRule.RuleType.DOMAIN_SUFFIX,
                 "corp.example.com", RoutingRule.RuleAction.DIRECT);
         custom.setRules(List.of(rule));
 
-        // Country-bypass preset — emits remote rule_set references (verified:
+        // Country bypass — emits remote rule_set references (verified:
         // `sing-box check` does not download them, so this is CI-safe).
         RoutingConfig domestic = new RoutingConfig();
-        domestic.setPreset("bypass_domestic");
         domestic.setBypassCountries(List.of("ru"));
 
         for (RoutingConfig routing : List.of(custom, domestic)) {
@@ -116,7 +114,9 @@ class SingBoxRealBinarySmokeTest {
                 String config = generator.generate(
                         serverFor(Protocol.VLESS), settings, routing);
 
-                assertCheckPasses(config, routing.getPreset() + "/" + mode);
+                String label = routing.getBypassCountries().isEmpty()
+                        ? "custom-rules" : "country-bypass";
+                assertCheckPasses(config, label + "/" + mode);
             }
         }
     }
@@ -156,7 +156,6 @@ class SingBoxRealBinarySmokeTest {
         settings.setClashApiPort(clashPort);
 
         RoutingConfig routing = new RoutingConfig();
-        routing.setPreset("route_all");
         routing.setBypassList(List.of("127.0.0.1/32"));
 
         String config = generator.generate(serverFor(Protocol.VLESS), settings, routing);
@@ -233,7 +232,6 @@ class SingBoxRealBinarySmokeTest {
         settings.setClashApiSecret(secret);
 
         RoutingConfig routing = new RoutingConfig();
-        routing.setPreset("route_all");
 
         String config = generator.generate(serverFor(Protocol.VLESS), settings, routing);
         Path configFile = Files.createTempFile("smoke-clash-", ".json");
