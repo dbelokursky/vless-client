@@ -8,6 +8,7 @@
   <a href="https://github.com/dbelokursky/vless-client/actions/workflows/build.yml"><img src="https://github.com/dbelokursky/vless-client/actions/workflows/build.yml/badge.svg" alt="Build"/></a>
   <a href="https://github.com/dbelokursky/vless-client/releases/latest"><img src="https://img.shields.io/github/v/release/dbelokursky/vless-client" alt="Latest release"/></a>
   <a href="https://github.com/dbelokursky/vless-client/releases"><img src="https://img.shields.io/github/downloads/dbelokursky/vless-client/total" alt="Downloads"/></a>
+  <a href="https://github.com/dbelokursky/vless-client/releases/latest"><img src="https://img.shields.io/github/downloads/dbelokursky/vless-client/latest/total?label=downloads@latest" alt="Latest release downloads"/></a>
 </p>
 
 <p align="center">🇬🇧 <a href="README.md">English</a> · 🇷🇺 <b>Русский</b></p>
