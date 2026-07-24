@@ -730,7 +730,7 @@
 
 /* ===== Speed Value (large) ===== */
 .speed-value {
-    -fx-font-size: 28px;
+    -fx-font-size: 20px;
     -fx-font-weight: bold;
     -fx-text-fill: -c-text;
     -fx-font-family: "SF Pro Display", "Helvetica Neue", "System";
