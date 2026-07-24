@@ -93,7 +93,7 @@
             <Insets top="12" right="18" bottom="12" left="20"/>
         </padding>
         <StackPane>
-            <MirroredSparkline fx:id="trafficSparkline" prefHeight="118"/>
+            <MirroredSparkline fx:id="trafficSparkline" prefHeight="150"/>
             <HBox StackPane.alignment="TOP_LEFT" alignment="CENTER_LEFT" spacing="8"
                   maxWidth="-Infinity" maxHeight="-Infinity" pickOnBounds="false">
                 <Label fx:id="downloadCardIcon" styleClass="stats-icon-download"/>

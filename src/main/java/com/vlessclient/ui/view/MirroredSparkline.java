@@ -39,6 +39,18 @@ public class MirroredSparkline extends Region {
     private static final long PULSE_PERIOD_NS = 1_600_000_000L;
     private static final long FRAME_MIN_NS = 28_000_000L;
     private static final Color AXIS_COLOR = Color.gray(0.5, 0.35);
+    /**
+     * Outer strip, in px, kept clear on each half so a plotted curve can never
+     * rise into the legend and speed-readout overlays pinned to the card's top
+     * and bottom corners. Because each half scales to its own rolling max, the
+     * peak sample lands exactly on this band's inner edge — so no sample, at any
+     * horizontal position, reaches the text. Sized to clear the tallest overlay
+     * (the speed value) plus a little slack for Catmull-Rom overshoot near a
+     * spike. Raise the card's height if you want a livelier curve with the band.
+     */
+    private static final double LABEL_BAND = 30.0;
+    /** Floor for the plotting radius when the card is too short for the band. */
+    private static final double MIN_HALF_HEIGHT = 8.0;
 
     private final Canvas canvas = new Canvas();
     /** Rolling buffer of {download, upload} pairs, oldest first. */
@@ -86,8 +98,10 @@ public class MirroredSparkline extends Region {
     public MirroredSparkline(int maxSamples) {
         this.maxSamples = Math.max(8, maxSamples);
         getChildren().add(canvas);
-        setMinHeight(72);
-        setPrefHeight(112);
+        // Keep the min above ~80px so axisY - pad - LABEL_BAND stays positive and
+        // the text band survives even when a short window compresses the card.
+        setMinHeight(84);
+        setPrefHeight(150);
         downLineColor.addListener((obs, o, n) -> redraw());
         downFillColor.addListener((obs, o, n) -> redraw());
         upLineColor.addListener((obs, o, n) -> redraw());
@@ -229,7 +243,14 @@ public class MirroredSparkline extends Region {
         maxUp *= 1.1;
 
         double chartW = w - pad * 2;
-        double halfH = axisY - pad;
+        // Plot into a reduced radius so the rolling max lands on the reserved
+        // band's inner edge instead of the card edge, keeping the curve out of
+        // the corner overlays. Only a card too short to hold the band falls back
+        // to the full half-height.
+        double halfH = axisY - pad - LABEL_BAND;
+        if (halfH < MIN_HALF_HEIGHT) {
+            halfH = axisY - pad;
+        }
         int count = samples.size();
         double stepX = chartW / (maxSamples - 1);
         // Right-align the most recent sample so older points scroll off the
@@ -247,9 +268,9 @@ public class MirroredSparkline extends Region {
             i++;
         }
 
-        drawHalf(g, xs, downYs, count, axisY, pad,
+        drawHalf(g, xs, downYs, count, axisY, axisY - halfH,
                 downLineColor.get(), downFillColor.get());
-        drawHalf(g, xs, upYs, count, axisY, h - pad,
+        drawHalf(g, xs, upYs, count, axisY, axisY + halfH,
                 upLineColor.get(), upFillColor.get());
     }
 
